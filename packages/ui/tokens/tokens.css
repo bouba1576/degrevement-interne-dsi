@@ -4,7 +4,153 @@
    corrections d'accessibilité (voir docs/design/DIVERGENCES.md).
    Les composants de packages/ui ne consomment QUE les variables de la
    section « Sémantique » ci-dessous, jamais celles de « Primitives ».
+
+   Migration Tailwind v3 → v4 (Phase 9.1bis) : ce fichier porte maintenant
+   AUSSI le bloc @theme qui remplaçait apps/web/tailwind.config.ts (supprimé).
+   Ordre d'import requis dans apps/web/app/globals.css : ce fichier doit
+   être importé APRÈS le bloc @theme inline de shadcn (généré par
+   `shadcn init`), sans quoi une déclaration ultérieure de shadcn pourrait
+   regagner la main sur une clé partagée — vérifié en pratique pour
+   --font-sans (cf. commentaire dans globals.css : la ligne posée par
+   shadcn init a été retirée plutôt que doublée, pour ne dépendre que
+   d'une seule déclaration, non ambiguë).
    ==================================================================== */
+
+@theme {
+  /* Neutraliser le nuancier par défaut de Tailwind — sans ce reset,
+     `bg-gray-100` continuerait de résoudre vers LE gris par défaut de
+     Tailwind (valeur différente de notre `gris100`), un nom d'utilitaire
+     plausible mais silencieusement faux — exactement le bug rencontré
+     deux fois en construisant Modal/SlaTimer (nuancier gris, puis
+     font-mono). Vérifié en réel (build Tailwind CLI isolé) avant
+     application : après ce reset, `bg-gray-100`/`text-black` ne génèrent
+     plus AUCUNE classe — un échec visible (rien ne s'applique), jamais un
+     échec silencieux (une couleur plausible mais fausse).
+     Cf. docs/design/DIVERGENCES.md. */
+  --color-*: initial;
+
+  /* ---------- Couleurs — palette primitive complète ---------- */
+  /* Noms EXACTEMENT ceux de packages/ui/tokens/primitives.ts (couleurs) :
+     camelCase, jamais de tiret — `bg-gris100`, pas `bg-gris-100` — pour
+     rester compatible avec les classNames déjà écrits dans Modal.tsx,
+     WorkflowStepper.tsx, SlaTimer.tsx. */
+  --color-orange: #FF7900;
+  --color-orange600: #E96B00;
+  --color-orange50: #FFF3E8;
+  --color-orange100: #FFE3C7;
+  --color-orangeTexteSurClair: #9a4a00;
+
+  --color-noir: #000000;
+  --color-blanc: #ffffff;
+  --color-encre: #0a0a0a;
+  --color-gris900: #141414;
+  --color-gris800: #242424;
+  --color-gris700: #595959;
+  --color-gris600: #767676;
+  --color-gris500: #999999;
+  --color-gris400: #b3b3b3;
+  --color-gris300: #cccccc;
+  --color-gris200: #e0e0e0;
+  --color-gris100: #eeeeee;
+  --color-gris75: #f3f3f3;
+  --color-gris50: #f8f8f8;
+
+  --color-vert: #32C832;
+  --color-vertFond: #E7F8E7;
+  --color-vert700: #23901f;
+  --color-vertTexteSurClair: #148110;
+  --color-rouge: #CD3C14;
+  --color-rougeFond: #FCEBE6;
+  --color-rouge700: #a52f0f;
+  --color-jaune: #FFCC00;
+  --color-jauneFond: #FFF6D6;
+  --color-jaune700: #8a6d00;
+  --color-bleu: #4BB4E6;
+  --color-bleuFond: #E7F4FB;
+  --color-bleu700: #1a6f99;
+  --color-violet: #A885D8;
+  --color-violetFond: #F1ECF9;
+  --color-violetTexte: #6b3fa0;
+
+  /* ---------- Tailles de texte (échelle consolidée, cf. primitives.ts) ---- */
+  --text-10: 10px;
+  --text-11: 11px;
+  --text-12: 12px;
+  --text-13: 13px;
+  --text-14: 14px;
+  --text-17: 17px;
+  --text-18: 18px;
+
+  /* ---------- Rayons — seuls r4/r5 n'ont pas d'équivalent standard ---- */
+  --radius-9: 9px;
+  --radius-10: 10px;
+
+  /* ---------- Point de rupture réel (deux media queries de la maquette) --
+     ATTENTION vérifiée en réel : --breakpoint-* génère par défaut un
+     variant MIN-width (`compact:` ⇒ `@media (width >= 1100px)`), l'inverse
+     de l'usage voulu (la maquette bascule EN DESSOUS de 1100px). Tailwind
+     v4 dérive aussi automatiquement un variant MAX-width sur le même
+     jeton : utiliser `max-compact:`, jamais `compact:` seul, dans les
+     composants. */
+  --breakpoint-compact: 1100px;
+
+  /* ---------- Base de l'échelle d'espacement dynamique ----------------
+     TOUTES les classes numériques (p-*, m-*, gap-*, w-*, h-*...) compilent
+     en `calc(var(--spacing) * N)` — vérifié en réel (build CLI) sur
+     chaque classe consommée par les composants (gap-4, px-2.5, p-6,
+     py-5...). Sans cette ligne, --spacing prend la valeur par défaut de
+     Tailwind (0.25rem = 4px), qui coïncide AUJOURD'HUI avec notre palier
+     de base (e4) — mais par coïncidence, pas par garantie : rien
+     n'empêchait un futur changement de défaut Tailwind, ou une autre
+     feuille important sa propre valeur de --spacing plus tard dans la
+     cascade, de décaler silencieusement les 8 paliers ensemble. Déclarer
+     --spacing explicitement transforme la coïncidence en garantie —
+     c'est la même clé de lecture que --spacing-38 juste en dessous,
+     appliquée à l'échelle entière plutôt qu'à une seule valeur.
+     1·1.5·2·2.5·3·4·5·6 × 4px = 4·6·8·10·12·16·20·24px — les 8 paliers
+     consolidés (Phase 9, étape 3bis), confirmés un par un dans le build
+     réel : gap-1.5→6px, gap-2→8px, gap-2.5→10px, gap-3→12px, gap-4→16px,
+     pb-5→20px, p-6→24px. */
+  --spacing: 4px;
+
+  /* ---------- Conteneurs carrés fixes (icônes/avatars) ----------------
+     Clés hors échelle courante (34/38), déclarées à part : vérifié en
+     réel que les DEUX valeurs doivent être explicites. Une clé numérique
+     non déclarée (ex. `w-38` sans --spacing-38) ne tombe PAS en erreur :
+     elle se résout silencieusement vers l'échelle dynamique (38 × 4px =
+     152px, pas 38px) — un nom plausible, une valeur fausse, la même
+     famille de bug que le nuancier gris. */
+  --spacing-34: 34px;
+  --spacing-38: 38px;
+
+  /* ---------- Empilement (z-index) — nommé par RÔLE, jamais par rang --
+     Pas de namespace --z-index-* documenté nativement en v4 ; le
+     @utility ci-dessous (hors bloc @theme, cf. plus bas) enregistre ces
+     valeurs comme une vraie échelle thématique, vérifié en réel : génère
+     `z-superposition { z-index: var(--z-index-superposition) }`, etc. */
+  --z-index-entete: 20;
+  --z-index-navigation: 30;
+  --z-index-notification: 50;
+  --z-index-superposition: 100;
+  --z-index-alerte-ephemere: 200;
+
+  /* ---------- Polices — valeur directe, jamais une indirection var() --
+     `next/font/google` (Geist) posé par `shadcn init` dans layout.tsx a
+     été retiré : la maquette n'utilise que des polices système, aucune
+     police web à charger. Une valeur directe ici élimine tout risque de
+     référence circulaire ou de dépendance à une classe injectée par un
+     loader de police. */
+  --font-sans: "Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif;
+  --font-mono: "SF Mono", ui-monospace, "Roboto Mono", Menlo, monospace;
+}
+
+/* z-index par rôle — --value() lit --z-index-* déclaré ci-dessus ;
+   accepte aussi un entier arbitraire (`z-[999]`) en complément, jamais en
+   remplacement des 5 paliers nommés. */
+@utility z-* {
+  z-index: --value(--z-index-*, [integer]);
+}
+
 :root {
   /* ---------- Primitives : marque ---------- */
   --pgd-orange: #FF7900;
