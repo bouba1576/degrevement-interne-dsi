@@ -30,6 +30,24 @@ CLAUDE.md affirmait que la maquette « fait foi » pour les codes couleur de sta
 
 À confirmer avec le métier si une convention visuelle différente existe déjà côté production (aucune source ne la documente à ce jour).
 
+### Avatar — couleur par hachage déterministe (Phase 9.1bis)
+La maquette (`ui.jsx`, `Avatar`) lit `user.couleur` et `user.initiales` depuis sa propre couche de données fictive (`DATA`) — aucun des deux champs n'existe sur `Utilisateur` (`packages/contracts/src/auth.ts`, vérifié : seuls `identifiantAd` et `nom` sont présents). Une invention, pas une extraction, au même titre que le statut de ligne ci-dessus.
+
+**Décision assumée** (`packages/ui/src/components/Avatar.tsx`) : couleur dérivée par hachage déterministe de `nom` vers une palette fixe de 6 teintes déjà présentes dans `primitives.ts` (`orangeTexteSurClair`, `vertTexteSurClair`, `rouge700`, `bleu700`, `violetTexte`, `gris700`) — jamais une couleur inventée pour l'occasion. Chaque teinte **vérifiée** ≥ 4,5:1 de contraste avec du texte blanc avant d'être retenue (la maquette fixe `color:#fff` sans condition) :
+
+| Teinte | Contraste vs blanc |
+|---|---|
+| `orangeTexteSurClair` | 6,26:1 |
+| `vertTexteSurClair` | 5,03:1 |
+| `rouge700` | 6,97:1 |
+| `bleu700` | 5,56:1 |
+| `violetTexte` | 7,38:1 |
+| `gris700` | 7,00:1 |
+
+Écartées de cette palette (échec du contraste blanc, calculé) : `orange` (2,63:1), `orange600` (3,20:1), `vert` (2,22:1), `vert700` (4,13:1), `jaune` (1,51:1), `jaune700` (4,92:1, passe de justesse mais écarté pour rester dans un ensemble de teintes clairement distinctes), `bleu` (2,34:1), `violet` (3,00:1).
+
+**Limite fonctionnelle connue, pas un bug** : le hachage n'est pas une garantie d'unicité — deux agents d'une même corbeille peuvent obtenir la même teinte, auquel cas l'avatar seul ne les distingue plus visuellement. Les initiales, elles, restent distinctes (sauf homonymie complète), donc l'identification reste possible. Ce n'est pas une régression à corriger : consigné ici pour qu'un signalement futur retrouve l'arbitrage plutôt que de découvrir un « bug » déjà connu.
+
 ## Écarts tranchés (PRD l'emporte, rien à porter)
 
 ### SLA de correction sur dossier rejeté (`rejetSla()`, `CONFIG.rejets`)

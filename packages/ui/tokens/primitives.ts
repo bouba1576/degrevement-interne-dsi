@@ -74,21 +74,29 @@ export const ombres = {
 } as const;
 
 // Échelle typographique — CONSOLIDÉE (validée explicitement, Phase 9, étape
-// 3bis). La maquette porte 11 paliers bruts entre 10px et 17px (accrétion
-// organique, pas une échelle voulue) ; ramenée à 6 paliers, écart maximal 1px.
+// 3bis ; corrigée en Phase 9.1bis, voir NOTE plus bas). La maquette porte
+// 12 paliers bruts entre 10px et 17px (accrétion organique, pas une échelle
+// voulue) ; ramenée à 7 paliers, écart maximal 1px.
 // Mapping (valeur d'origine → palier retenu, occurrences dans la maquette) :
 //   10px→10px (2, Δ0) · 10.5px→11px (2, Δ+0.5) · 11px→11px (16, Δ0)
 //   11.5px→12px (6, Δ+0.5) · 12px→12px (14, Δ0) · 12.5px→13px (9, Δ+0.5)
 //   13px→13px (12, Δ0) · 13.5px→14px (9, Δ+0.5) · 14px→14px (3, Δ0)
-//   15px→14px (4, Δ−1) · 17px→17px (3, Δ0)
+//   15px→15px (4, Δ0) · 17px→17px (3, Δ0)
 // Choix conscient, pas un effet de bord : les quatre arrondis de demi-pixel
 // vont systématiquement vers le HAUT (10.5→11, 11.5→12, 12.5→13, 13.5→14),
 // soit 26 occurrences au total très légèrement agrandies. Sans conséquence
 // visuelle à 0,5px près ; l'alternative (arrondir vers le bas) aurait réduit
 // la lisibilité, jamais l'inverse.
-// Écart 14→17 SANS palier intermédiaire, volontaire : aucune valeur de la
-// maquette ne le justifierait (rule 4, aucun token inventé) — split corps de
-// texte (10-14px) / titres (17px), pas un oubli.
+// NOTE (Phase 9.1bis) — cette ligne disait auparavant « 15px→14px (4, Δ−1) »
+// et le paragraphe suivant déclarait l'écart 14→17 volontaire. Les deux
+// affirmations étaient fausses : la conclusion « intentionnel » n'a pas été
+// invalidée par relecture, mais en construisant Empty et en découvrant que
+// .empty h4 (15px) n'avait nulle part où se ranger proprement — t15 comble
+// exactement ce vide avec les 4 mêmes occurrences déjà comptées ici, elles
+// n'ont simplement jamais été vérifiées en usage réel avant ce moment.
+// Aucun composant déjà construit ne consommait le chemin 15px→14px (vérifié :
+// seul WorkflowStepper utilise text-14, sourcé de 13.5px — .step-body .t —
+// donc rien à corriger dans le code, seule cette note l'était).
 // POINT DE VIGILANCE (à surveiller au rendu des écrans, pas une action ici) :
 // t10/t11 sont les paliers où les corrections de contraste comptent le plus.
 // Un gris secondaire à 4,5:1 passe l'exigence WCAG AA pour du texte courant,
