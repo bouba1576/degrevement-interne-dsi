@@ -14,3 +14,4 @@ export * from "./BarChart";
 export * from "./Donut";
 export * from "./Sidebar";
 export * from "./Topbar";
+export * from "./KpiCarte";

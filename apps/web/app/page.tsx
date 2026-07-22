@@ -1,33 +1,68 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
+import { HomeScreen } from "@/components/screens/HomeScreen";
+import { ApiError, deconnecter, fetchSession } from "@/lib/api";
 import type { SessionUtilisateur } from "@pgd/contracts";
 
-// Session simulée en attendant le câblage réel de l'authentification web
-// (LDAP/MFA côté apps/api existent déjà, Phase 2 — il manque la page de
-// connexion et la gestion de session côté apps/web, hors périmètre de la
-// coquille). Forme réelle de SessionUtilisateur (packages/contracts/src/
-// auth.ts), aucun champ inventé.
-const UTILISATEUR_SIMULE: SessionUtilisateur = {
-  id: "00000000-0000-0000-0000-000000000000",
-  identifiantAd: "a.kouassi",
-  nom: "Awa Kouassi",
-  roles: ["ADMIN_PGD"],
-  mfaMethode: "TOTP"
-};
-
+// Premier écran réellement connecté (Phase 9.2) : la session simulée posée
+// pour la coquille statique est retirée — GET /api/auth/session (réel,
+// Phase 2) porte maintenant l'identité affichée. Pas de page de connexion
+// pour l'instant (hors périmètre de cette étape) : un 401 ici signifie
+// simplement qu'aucun cookie de session n'existe encore dans ce navigateur,
+// affiché lisiblement plutôt que planté.
 export default function Page() {
+  const [utilisateur, setUtilisateur] = useState<SessionUtilisateur | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [route, setRoute] = useState("home");
+
+  useEffect(() => {
+    fetchSession()
+      .then(setUtilisateur)
+      .catch((e: unknown) =>
+        setErreur(e instanceof ApiError ? e.message : "Impossible de contacter l'API.")
+      );
+  }, []);
+
+  async function onDeconnexion() {
+    await deconnecter().catch(() => {});
+    setUtilisateur(null);
+  }
+
+  if (erreur) {
+    return (
+      <main className="flex min-h-screen items-center justify-center p-26">
+        <p className="text-13 text-gris600">
+          {erreur} — aucune page de connexion n'existe encore côté apps/web (Phase 9.2 : coquille et HomeScreen
+          uniquement). Une session valide (cookie posé par POST /api/auth/login) est nécessaire.
+        </p>
+      </main>
+    );
+  }
+
+  if (!utilisateur) {
+    return (
+      <main className="flex min-h-screen items-center justify-center p-26">
+        <p className="text-13 text-gris600">Chargement de la session…</p>
+      </main>
+    );
+  }
+
   return (
     <AppShell
-      utilisateur={UTILISATEUR_SIMULE}
-      libelleRole="Administrateur PGD"
+      utilisateur={utilisateur}
       titre="Tableau de bord"
       sousTitre="Vue d'ensemble de l'activité"
-      compteMesDemandes={3}
-      compteCorbeilles={12}
-      onDeconnexion={() => {}}
+      routeActuelle={route}
+      onNaviguer={setRoute}
+      onDeconnexion={onDeconnexion}
     >
-      <p className="text-13 text-gris600">Écran réel à partir de HomeScreen (Phase 9.2, prochaine étape).</p>
+      {route === "home" ? (
+        <HomeScreen utilisateur={utilisateur} onNaviguer={setRoute} />
+      ) : (
+        <p className="text-13 text-gris600">Écran « {route} » à construire (Phase 9.2, étapes suivantes).</p>
+      )}
     </AppShell>
   );
 }
