@@ -1,0 +1,792 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [btree_gist]
+}
+
+// ============================================================
+// Énumérations (17)
+// ============================================================
+
+enum EnumCircuit {
+  DOBB
+  DXC
+  DF
+
+  @@map("enum_circuit")
+}
+
+enum EnumStatutDemande {
+  BROUILLON
+  SOUMIS
+  EN_COURS
+  VALIDE
+  REJETE
+  ABANDONNE
+
+  @@map("enum_statut_demande")
+}
+
+enum EnumEtatTache {
+  EN_ATTENTE
+  EN_CORBEILLE
+  RECLAMEE
+  APPROUVEE
+  REJETEE
+  POST_CLOTURE
+
+  @@map("enum_etat_tache")
+}
+
+enum EnumTypeActeur {
+  V
+  A
+  C
+
+  @@map("enum_type_acteur")
+}
+
+enum EnumAffectation {
+  PULL
+
+  @@map("enum_affectation")
+}
+
+enum EnumOrigine {
+  CREATION
+  MODIFICATION
+  RECALCUL
+
+  @@map("enum_origine")
+}
+
+enum EnumLocalisation {
+  NATIONAL
+  INTERNATIONAL
+
+  @@map("enum_localisation")
+}
+
+enum EnumNiveauControle {
+  FRA
+  N1
+  N2
+
+  @@map("enum_niveau_controle")
+}
+
+enum EnumConstat {
+  CONFORME
+  ANOMALIE
+
+  @@map("enum_constat")
+}
+
+enum EnumTypeNotification {
+  NOUVELLE_TACHE
+  AVANCEMENT
+  REJET
+  VALIDATION
+  ESCALADE
+  ERREUR_SI
+
+  @@map("enum_type_notification")
+}
+
+enum EnumUniteKpi {
+  MONTANT
+  VOLUME
+  TAUX
+
+  @@map("enum_unite_kpi")
+}
+
+enum EnumTypeRole {
+  METIER
+  PIVOT
+  SYSTEME
+
+  @@map("enum_type_role")
+}
+
+enum EnumEvenementSecurite {
+  LOGIN
+  LOGOUT
+  MFA_CHALLENGE
+  RBAC_REFUS
+  SOD_REFUS
+
+  @@map("enum_evenement_securite")
+}
+
+enum EnumFacteurAuth {
+  AD
+  DUO
+  TOTP
+  SESSION
+
+  @@map("enum_facteur_auth")
+}
+
+enum EnumStatutLigne {
+  ACTIF
+  SUSPENDU
+  RESILIE
+
+  @@map("enum_statut_ligne")
+}
+
+enum EnumEtatSi {
+  EN_ATTENTE
+  ENVOYE
+  CONFIRME
+  ERREUR
+
+  @@map("enum_etat_si")
+}
+
+enum EnumMethodeMfa {
+  DUO
+  TOTP
+
+  @@map("enum_methode_mfa")
+}
+
+// ============================================================
+// Identité & sécurité
+// ============================================================
+
+model Utilisateur {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  identifiantAd String    @unique @map("identifiant_ad")
+  nom           String
+  matricule     String?
+  duoUserId     String?   @map("duo_user_id")
+  actif         Boolean   @default(true)
+  mfaMethode    EnumMethodeMfa @default(DUO) @map("mfa_methode")
+  totpSecret    String?   @map("totp_secret")
+  totpActiveLe  DateTime? @map("totp_active_le") @db.Timestamptz
+
+  membresRole                     MembreRole[]
+  demandesInitiees                Demande[]           @relation("DemandeInitiateur")
+  tachesReclamees                 Tache[]             @relation("TacheAgentClaim")
+  delegationsEnTantQueDelegant    Delegation[]        @relation("DelegationDelegant")
+  delegationsEnTantQueDelegataire Delegation[]        @relation("DelegationDelegataire")
+  journalSecurite                 JournalSecurite[]
+  historiqueMontants              HistoriqueMontant[]
+  controles                       Controle[]
+  notifications                   Notification[]
+
+  @@map("utilisateur")
+}
+
+model Role {
+  code        String       @id
+  libelle     String
+  groupeAd    String       @map("groupe_ad")
+  niveau      Int
+  type        EnumTypeRole
+  dansMatrice Boolean      @default(false) @map("dans_matrice")
+  requiertMfa Boolean      @default(false) @map("requiert_mfa")
+
+  membres     MembreRole[]
+  taches      Tache[]
+  etapesRegle EtapeRegle[]
+  slaProfil   SlaProfil?
+  delegations Delegation[]
+
+  @@map("role")
+}
+
+model MembreRole {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  utilisateurId   String   @map("utilisateur_id") @db.Uuid
+  roleCode        String   @map("role_code")
+  dateAffectation DateTime @default(now()) @map("date_affectation") @db.Timestamptz
+
+  utilisateur Utilisateur @relation(fields: [utilisateurId], references: [id], onDelete: Cascade)
+  role        Role        @relation(fields: [roleCode], references: [code])
+
+  @@unique([utilisateurId, roleCode])
+  @@index([roleCode])
+  @@map("membre_role")
+}
+
+model Delegation {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  delegantId    String   @map("delegant_id") @db.Uuid
+  delegataireId String   @map("delegataire_id") @db.Uuid
+  roleCode      String   @map("role_code")
+  debut         DateTime @db.Timestamptz
+  fin           DateTime @db.Timestamptz
+  noteInterim   String   @map("note_interim")
+  active        Boolean  @default(true)
+
+  delegant    Utilisateur @relation("DelegationDelegant", fields: [delegantId], references: [id])
+  delegataire Utilisateur @relation("DelegationDelegataire", fields: [delegataireId], references: [id])
+  role        Role        @relation(fields: [roleCode], references: [code])
+
+  // CHECK (fin > debut), CHECK (delegant_id <> delegataire_id) — SQL manuel
+  // EXCLUDE USING gist (delegant_id WITH =, role_code WITH =, tstzrange(debut, fin) WITH &&)
+  //   WHERE (active) — SQL manuel, garantit R22 en base (pas seulement en service)
+
+  @@index([roleCode, active, debut, fin])
+  @@map("delegation")
+}
+
+model JournalAudit {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  demandeId   String?  @map("demande_id") @db.Uuid
+  tacheId     String?  @map("tache_id") @db.Uuid
+  // Chaîne libre, volontairement PAS une FK vers Utilisateur : l'audit doit survivre à la
+  // suppression d'un utilisateur (rétention 10 ans, SOX). Snapshot au moment de l'action.
+  acteur      String
+  action      String
+  detail      Json?
+  commentaire String?
+  horodatage  DateTime @default(now()) @db.Timestamptz
+
+  demande Demande? @relation(fields: [demandeId], references: [id])
+  tache   Tache?   @relation(fields: [tacheId], references: [id])
+
+  @@index([demandeId, horodatage])
+  @@index([action])
+  @@map("journal_audit")
+}
+
+model JournalSecurite {
+  id            String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  utilisateurId String?               @map("utilisateur_id") @db.Uuid
+  evenement     EnumEvenementSecurite
+  succes        Boolean
+  facteur       EnumFacteurAuth
+  ip            String?
+  horodatage    DateTime              @default(now()) @db.Timestamptz
+
+  utilisateur Utilisateur? @relation(fields: [utilisateurId], references: [id])
+
+  @@index([utilisateurId, horodatage])
+  @@map("journal_securite")
+}
+
+// ============================================================
+// Configuration
+// ============================================================
+
+model Circuit {
+  code        EnumCircuit @id
+  libelle     String
+  segment     String
+  processCode String?     @map("process_code")
+
+  configurationsCircuit ConfigurationCircuit[]
+  sousFlux              SousFlux[]
+  motifs                Motif[]
+  parametresCalcul      ParametreCalcul[]
+  demandes              Demande[]
+
+  @@map("circuit")
+}
+
+model SousFlux {
+  id      String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  circuit EnumCircuit
+  libelle String
+
+  circuitRef Circuit @relation(fields: [circuit], references: [code])
+
+  @@unique([circuit, libelle])
+  @@map("sous_flux")
+}
+
+model ConfigurationCircuit {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  circuit         EnumCircuit
+  segment         String
+  sousFlux        String?   @map("sous_flux")
+  borneMin        Decimal   @default(0) @map("borne_min") @db.Decimal(15, 2)
+  borneMax        Decimal   @map("borne_max") @db.Decimal(15, 2)
+  actif           Boolean   @default(true)
+  datePublication DateTime  @default(now()) @map("date_publication") @db.Timestamptz
+  labelPalier     String?   @map("label_palier")
+  sourceFiche     String?   @map("source_fiche")
+  dateEffet       DateTime? @map("date_effet") @db.Date
+
+  circuitRef  Circuit      @relation(fields: [circuit], references: [code])
+  etapesRegle EtapeRegle[]
+
+  // CHECK (borne_min < borne_max) — SQL manuel
+  // EXCLUDE USING gist (circuit WITH =, segment WITH =, coalesce(sous_flux,'') WITH =,
+  //   numrange(borne_min, borne_max, '[]') WITH &&) WHERE (actif) — SQL manuel
+
+  @@index([circuit, segment, sousFlux, actif])
+  @@map("configuration_circuit")
+}
+
+model EtapeRegle {
+  id                     String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  configurationCircuitId String          @map("config_id") @db.Uuid
+  ordre                  Int
+  roleCode               String          @map("role_code")
+  typeActeur             EnumTypeActeur  @map("type_acteur")
+  bloquant               Boolean
+  slaHeures              Int             @map("sla_heures")
+  modeAffectation        EnumAffectation @default(PULL) @map("mode_affectation")
+
+  configurationCircuit ConfigurationCircuit @relation(fields: [configurationCircuitId], references: [id], onDelete: Cascade)
+  role                 Role                 @relation(fields: [roleCode], references: [code])
+
+  @@unique([configurationCircuitId, ordre])
+  @@map("etape_regle")
+}
+
+model Motif {
+  id      String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  circuit EnumCircuit
+  libelle String
+  actif   Boolean     @default(true)
+
+  circuitRef       Circuit           @relation(fields: [circuit], references: [code])
+  piecesAfferentes PieceAfferente[]
+  demandes         Demande[]
+
+  @@unique([circuit, libelle])
+  @@map("motif")
+}
+
+model PieceAfferente {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  motifId     String  @map("motif_id") @db.Uuid
+  libelle     String
+  obligatoire Boolean @default(false)
+
+  motif         Motif         @relation(fields: [motifId], references: [id], onDelete: Cascade)
+  piecesJointes PieceJointe[]
+
+  @@map("piece_afferente")
+}
+
+model ParametreCalcul {
+  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  circuit         EnumCircuit @unique
+  tauxTsc         Decimal     @default(0.03) @map("taux_tsc") @db.Decimal(5, 4)
+  tauxTva         Decimal     @default(0.18) @map("taux_tva") @db.Decimal(5, 4)
+  tscActiveDefaut Boolean     @default(true) @map("tsc_active_defaut")
+  tvaActiveDefaut Boolean     @default(true) @map("tva_active_defaut")
+  devise          String      @default("XOF")
+
+  circuitRef Circuit @relation(fields: [circuit], references: [code])
+
+  @@map("parametre_calcul")
+}
+
+model ParametreGlobal {
+  cle             String   @id
+  valeur          Json
+  libelle         String?
+  modifiableAdmin Boolean  @default(true) @map("modifiable_admin")
+  dateMaj         DateTime @updatedAt @map("date_maj") @db.Timestamptz
+
+  @@map("parametre_global")
+}
+
+model SlaProfil {
+  roleCode         String  @id @map("role_code")
+  slaHeures        Int     @map("sla_heures")
+  minuteurBloquant Boolean @default(true) @map("minuteur_bloquant")
+  commentaire      String?
+
+  role Role @relation(fields: [roleCode], references: [code])
+
+  @@map("sla_profil")
+}
+
+model CalendrierSla {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  libelle     String
+  joursOuvres Json     @default("[1,2,3,4,5]") @map("jours_ouvres")
+  heureDebut  DateTime @default(dbgenerated("'08:00'")) @map("heure_debut") @db.Time
+  heureFin    DateTime @default(dbgenerated("'18:00'")) @map("heure_fin") @db.Time
+  actif       Boolean  @default(true)
+
+  joursFeries JourFerie[]
+
+  @@map("calendrier_sla")
+}
+
+model JourFerie {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  calendrierId String   @map("calendrier_id") @db.Uuid
+  jour         DateTime @db.Date
+  libelle      String?
+
+  calendrier CalendrierSla @relation(fields: [calendrierId], references: [id], onDelete: Cascade)
+
+  @@unique([calendrierId, jour])
+  @@map("jour_ferie")
+}
+
+model Module {
+  code    String  @id
+  libelle String
+  coeur   Boolean @default(false)
+  actif   Boolean @default(true)
+
+  @@map("module")
+}
+
+// ============================================================
+// Référentiels analytiques
+// ============================================================
+
+model UniversFmi {
+  code    String @id
+  libelle String
+
+  lignes   Ligne[]
+  demandes Demande[]
+
+  @@map("univers_fmi")
+}
+
+model FacteurDegrevement {
+  code    String @id
+  libelle String
+
+  demandes Demande[]
+
+  @@map("facteur_degrevement")
+}
+
+model DirectionResponsabilite {
+  id      String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  libelle String  @unique
+  actif   Boolean @default(true)
+
+  services ServiceResponsabilite[]
+  demandes Demande[]
+
+  @@map("direction_responsabilite")
+}
+
+model ServiceResponsabilite {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  directionId String  @map("direction_id") @db.Uuid
+  libelle     String
+  actif       Boolean @default(true)
+
+  direction DirectionResponsabilite @relation(fields: [directionId], references: [id])
+  demandes  Demande[]
+
+  @@unique([directionId, libelle])
+  @@map("service_responsabilite")
+}
+
+model KpiDefinition {
+  code               String       @id
+  famille            String
+  libelle            String
+  unite              EnumUniteKpi
+  dimensions         Json         @default("[]")
+  surDossiersTraites Boolean      @default(false) @map("sur_dossiers_traites")
+
+  @@map("kpi_definition")
+}
+
+// ============================================================
+// Registre client — lignes et formules (lot 2, v2.0)
+// ============================================================
+
+model CompteClient {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  numeroCompte String    @unique @map("numero_compte")
+  nomClient    String    @map("nom_client")
+  segment      String?
+  crmRef       String?   @map("crm_ref")
+  dateSyncCrm  DateTime? @map("date_sync_crm") @db.Timestamptz
+  actif        Boolean   @default(true)
+
+  lignes Ligne[]
+
+  @@index([nomClient])
+  // Index trigramme (pg_trgm) sur numero_compte et nom_client — SQL manuel
+  // (migration 20260721131646) : accélère l'ILIKE '%…%' de la recherche
+  // compte (SF-PGD-052), qu'aucun index btree ne peut servir.
+  @@map("compte_client")
+}
+
+model Ligne {
+  id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  compteId          String          @map("compte_id") @db.Uuid
+  nd                String
+  libelleLigne      String?         @map("libelle_ligne")
+  statut            EnumStatutLigne @default(ACTIF)
+  formuleCouranteId String?         @unique @map("formule_courante_id") @db.Uuid
+  // Prisma ne peut pas contraindre formuleCourante.ligneId = this.id (FK inter-lignes non
+  // exprimable en schema.prisma). LigneService DOIT vérifier cette cohérence avant écriture.
+  universFmiCode    String?         @map("univers_fmi_code")
+  historiquePartiel Boolean         @default(false) @map("historique_partiel")
+  dateSyncCrm       DateTime?       @map("date_sync_crm") @db.Timestamptz
+
+  compte          CompteClient   @relation(fields: [compteId], references: [id], onDelete: Cascade)
+  universFmi      UniversFmi?    @relation(fields: [universFmiCode], references: [code])
+  formules        Formule[]      @relation("LigneFormules")
+  formuleCourante Formule?       @relation("FormuleCouranteDeLigne", fields: [formuleCouranteId], references: [id], onDelete: SetNull)
+  demandeLignes   DemandeLigne[]
+
+  @@unique([compteId, nd])
+  @@index([nd])
+  // Index fonctionnel LOWER(nd) — SQL manuel (migration 20260721131646) :
+  // la recherche par ND (SF-PGD-310, insensible casse/espaces) compare
+  // LOWER(nd) = LOWER($1) et non ILIKE, précisément pour rester servie par
+  // un index — @@index([nd]) seul ne suffit pas dès qu'une comparaison
+  // insensible à la casse est faite dessus.
+  @@index([statut])
+  @@map("ligne")
+}
+
+model Formule {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ligneId            String    @map("ligne_id") @db.Uuid
+  libelle            String
+  recurrentMensuelHt Decimal   @map("recurrent_mensuel_ht") @db.Decimal(15, 2)
+  dateDebut          DateTime  @map("date_debut") @db.Date
+  dateFin            DateTime? @map("date_fin") @db.Date
+  courante           Boolean   @default(false)
+
+  ligne             Ligne          @relation("LigneFormules", fields: [ligneId], references: [id], onDelete: Cascade)
+  ligneCourantePour Ligne?         @relation("FormuleCouranteDeLigne")
+  demandeLignes     DemandeLigne[]
+
+  // Index unique partiel ON formule(ligne_id) WHERE courante — SQL manuel
+
+  @@index([ligneId, courante])
+  @@map("formule")
+}
+
+// ============================================================
+// Métier — demandes, corbeilles, contrôle
+// ============================================================
+
+model Demande {
+  id                     String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reference              String            @unique
+  circuit                EnumCircuit
+  segment                String
+  sousFlux               String?           @map("sous_flux")
+  nomClient              String            @map("nom_client")
+  compteClient           String?           @map("compte_client")
+  // Nom saisi sur la fiche papier — peut différer de l'utilisateur PGD connecté (initiateurId
+  // ci-dessous). Ne pas fusionner : fidélité à la source historique DOBB/DXC/DF.
+  agentInitiateur        String?           @map("agent_initiateur")
+  matriculeInitiateur    String?           @map("matricule_initiateur")
+  agentSaisie            String?           @map("agent_saisie")
+  localisation           EnumLocalisation?
+  canalRemontee          String?           @map("canal_remontee")
+  dateReceptionBo        DateTime?         @map("date_reception_bo") @db.Date
+  dateReceptionOci       DateTime?         @map("date_reception_oci") @db.Date
+  formuleAbonnement      String?           @map("formule_abonnement")
+  numeroAppel            String?           @map("numero_appel")
+  debutPeriodeContestee  DateTime?         @map("debut_periode_contestee") @db.Date
+  finPeriodeContestee    DateTime?         @map("fin_periode_contestee") @db.Date
+  periodeContesteeJours  Int?              @map("periode_contestee_jours")
+  recurrentMensuel       Boolean           @default(false) @map("recurrent_mensuel")
+  champsCircuit          Json              @default("{}") @map("champs_circuit")
+  montantHt              Decimal           @default(0) @map("montant_ht") @db.Decimal(15, 2)
+  montantTsc             Decimal           @default(0) @map("montant_tsc") @db.Decimal(15, 2)
+  montantTva             Decimal           @default(0) @map("montant_tva") @db.Decimal(15, 2)
+  montantTtc             Decimal           @default(0) @map("montant_ttc") @db.Decimal(15, 2)
+  tscActive              Boolean           @default(true) @map("tsc_active")
+  tvaActive              Boolean           @default(true) @map("tva_active")
+  tauxTsc                Decimal           @default(0.03) @map("taux_tsc") @db.Decimal(5, 4)
+  tauxTva                Decimal           @default(0.18) @map("taux_tva") @db.Decimal(5, 4)
+  libelle                String?
+  motifId                String?           @map("motif_id") @db.Uuid
+  universFmiCode         String?           @map("univers_fmi_code")
+  facteurCode            String?           @map("facteur_code")
+  directionRespId        String?           @map("direction_resp_id") @db.Uuid
+  serviceRespId           String?          @map("service_resp_id") @db.Uuid
+  agentResponsable        String?          @map("agent_responsable")
+  statut                  EnumStatutDemande @default(BROUILLON)
+  etapeCourante            Int              @default(0) @map("etape_courante")
+  initiateurId             String           @map("initiateur_id") @db.Uuid
+  // Utilisateur PGD réellement connecté à la création — distinct d'agentInitiateur (texte libre).
+  crmRef                   String?          @map("crm_ref")
+  dateDemande              DateTime         @default(now()) @map("date_demande") @db.Timestamptz
+  dateSoumission           DateTime?        @map("date_soumission") @db.Timestamptz
+  dateCloture              DateTime?        @map("date_cloture") @db.Timestamptz
+
+  // v2.0
+  commentaire                String?
+  responsabiliteServiceAutre String?    @map("responsabilite_service_autre")
+  siEtat                     EnumEtatSi @default(EN_ATTENTE) @map("si_etat")
+  siRef                      String?    @map("si_ref")
+  siHorodatage                DateTime? @map("si_horodatage") @db.Timestamptz
+  siMessage                   String?   @map("si_message")
+  siTentatives                 Int      @default(0) @map("si_tentatives")
+  siAdaptateur                 String?  @map("si_adaptateur")
+  siIdempotencyKey              String? @unique @map("si_idempotency_key")
+
+  circuitRef              Circuit                  @relation(fields: [circuit], references: [code])
+  initiateur               Utilisateur              @relation("DemandeInitiateur", fields: [initiateurId], references: [id])
+  motif                    Motif?                   @relation(fields: [motifId], references: [id])
+  universFmi               UniversFmi?              @relation(fields: [universFmiCode], references: [code])
+  facteur                  FacteurDegrevement?      @relation(fields: [facteurCode], references: [code])
+  directionResponsabilite  DirectionResponsabilite? @relation(fields: [directionRespId], references: [id])
+  serviceResponsabilite    ServiceResponsabilite?   @relation(fields: [serviceRespId], references: [id])
+
+  lignes             DemandeLigne[]
+  pieces             PieceJointe[]
+  historiqueMontants HistoriqueMontant[]
+  taches             Tache[]
+  controles          Controle[]
+  journalAudit       JournalAudit[]
+  notifications      Notification[]
+
+  // CHECK (montant_ht >= 0), (montant_tsc >= 0), (montant_tva >= 0), (montant_ttc >= 0) — SQL manuel
+
+  @@index([statut])
+  @@index([circuit, segment])
+  @@index([initiateurId])
+  @@index([universFmiCode, facteurCode, siEtat, dateCloture])
+  @@index([motifId])
+  @@index([directionRespId, serviceRespId])
+  @@index([siEtat, siHorodatage])
+  @@map("demande")
+}
+
+model DemandeLigne {
+  id                    String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  demandeId             String          @map("demande_id") @db.Uuid
+  ligneId               String          @map("ligne_id") @db.Uuid
+  nd                    String
+  formuleId             String          @map("formule_id") @db.Uuid
+  recurrent             Decimal         @db.Decimal(15, 2)
+  recurrentModifie      Boolean         @default(false) @map("recurrent_modifie")
+  statutLigne           EnumStatutLigne @map("statut_ligne")
+  montantHtLigne        Decimal         @default(0) @map("montant_ht_ligne") @db.Decimal(15, 2)
+  debutPeriodeContestee DateTime?       @map("debut_periode_contestee") @db.Date
+  finPeriodeContestee   DateTime?       @map("fin_periode_contestee") @db.Date
+  periodeContesteeJours Int?            @map("periode_contestee_jours")
+
+  demande Demande @relation(fields: [demandeId], references: [id], onDelete: Cascade)
+  ligne   Ligne   @relation(fields: [ligneId], references: [id])
+  formule Formule @relation(fields: [formuleId], references: [id])
+
+  historiqueMontants HistoriqueMontant[]
+
+  @@unique([demandeId, ligneId])
+  @@index([demandeId])
+  @@index([statutLigne])
+  @@map("demande_ligne")
+}
+
+model PieceJointe {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  demandeId        String   @map("demande_id") @db.Uuid
+  pieceAfferenteId String?  @map("piece_afferente_id") @db.Uuid
+  nomFichier       String   @map("nom_fichier")
+  typeMime         String   @map("type_mime")
+  tailleOctets     Int      @map("taille_octets")
+  gedRef           String?  @map("ged_ref")
+  dateAjout        DateTime @default(now()) @map("date_ajout") @db.Timestamptz
+
+  demande        Demande         @relation(fields: [demandeId], references: [id], onDelete: Cascade)
+  pieceAfferente PieceAfferente? @relation(fields: [pieceAfferenteId], references: [id])
+
+  @@index([demandeId])
+  @@map("piece_jointe")
+}
+
+model HistoriqueMontant {
+  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  demandeId      String      @map("demande_id") @db.Uuid
+  demandeLigneId String?     @map("demande_ligne_id") @db.Uuid
+  ht             Decimal     @db.Decimal(15, 2)
+  tsc            Decimal     @db.Decimal(15, 2)
+  tva            Decimal     @db.Decimal(15, 2)
+  ttc            Decimal     @db.Decimal(15, 2)
+  tauxTsc        Decimal     @map("taux_tsc") @db.Decimal(5, 4)
+  tauxTva        Decimal     @map("taux_tva") @db.Decimal(5, 4)
+  origine        EnumOrigine
+  acteurId       String?     @map("acteur_id") @db.Uuid
+  horodatage     DateTime    @default(now()) @db.Timestamptz
+
+  demande      Demande       @relation(fields: [demandeId], references: [id], onDelete: Cascade)
+  demandeLigne DemandeLigne? @relation(fields: [demandeLigneId], references: [id], onDelete: Cascade)
+  acteur       Utilisateur?  @relation(fields: [acteurId], references: [id])
+
+  // CHECK (acteur_id IS NOT NULL OR origine = 'RECALCUL') — SQL manuel
+  //   (un recalcul déclenché par un utilisateur porte un acteur ; un recalcul système n'en porte pas ;
+  //    CREATION/MODIFICATION exigent toujours un acteur)
+
+  @@index([demandeId, horodatage])
+  @@map("historique_montant")
+}
+
+model Tache {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  demandeId       String          @map("demande_id") @db.Uuid
+  roleCorbeille   String          @map("role_corbeille")
+  ordre           Int
+  typeActeur      EnumTypeActeur  @map("type_acteur")
+  bloquant        Boolean
+  slaHeures       Int             @map("sla_heures")
+  modeAffectation EnumAffectation @default(PULL) @map("mode_affectation")
+  etat            EnumEtatTache   @default(EN_ATTENTE)
+  agentClaimId    String?         @map("agent_claim") @db.Uuid
+  dateClaim       DateTime?       @map("date_claim") @db.Timestamptz
+  verrouExpireAt  DateTime?       @map("verrou_expire_at") @db.Timestamptz
+  echeanceSla     DateTime?       @map("echeance_sla") @db.Timestamptz
+  niveauEscalade  Int             @default(0) @map("niveau_escalade")
+  dateDecision    DateTime?       @map("date_decision") @db.Timestamptz
+
+  demande    Demande      @relation(fields: [demandeId], references: [id], onDelete: Cascade)
+  role       Role         @relation(fields: [roleCorbeille], references: [code])
+  agentClaim Utilisateur? @relation("TacheAgentClaim", fields: [agentClaimId], references: [id])
+
+  journalAudit JournalAudit[]
+
+  @@index([roleCorbeille, etat])
+  @@index([demandeId, ordre])
+  @@index([etat, echeanceSla])
+  @@index([etat, verrouExpireAt])
+  @@map("tache")
+}
+
+model Controle {
+  id           String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  demandeId    String             @map("demande_id") @db.Uuid
+  niveau       EnumNiveauControle
+  constat      EnumConstat
+  commentaire  String?
+  controleurId String             @map("controleur_id") @db.Uuid
+  horodatage   DateTime           @default(now()) @db.Timestamptz
+
+  demande    Demande     @relation(fields: [demandeId], references: [id], onDelete: Cascade)
+  controleur Utilisateur @relation(fields: [controleurId], references: [id])
+
+  @@index([demandeId])
+  @@map("controle")
+}
+
+model Notification {
+  id             String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  demandeId      String?              @map("demande_id") @db.Uuid
+  destinataireId String               @map("destinataire_id") @db.Uuid
+  type           EnumTypeNotification
+  canal          String               @default("in_app")
+  lu             Boolean              @default(false)
+  horodatage     DateTime             @default(now()) @db.Timestamptz
+
+  demande      Demande?    @relation(fields: [demandeId], references: [id], onDelete: Cascade)
+  destinataire Utilisateur @relation(fields: [destinataireId], references: [id])
+
+  @@index([destinataireId, lu])
+  @@map("notification")
+}

@@ -1,0 +1,56 @@
+import type { PrismaClient } from "@prisma/client";
+
+// Clés et valeurs exactes de docs/03_Modele_Donnees_v2.md §4 (bloc PARAMETRE_GLOBAL).
+export async function seedParametresGlobaux(prisma: PrismaClient): Promise<void> {
+  const parametres: Array<{ cle: string; valeur: object; libelle: string }> = [
+    {
+      cle: "politique_ligne_resiliee",
+      valeur: { mode: "BLOQUANT" },
+      libelle: "Politique sur ligne RESILIE (R15)"
+    },
+    {
+      cle: "si_poussee_automatique",
+      valeur: { actif: true },
+      libelle: "Poussée automatique au SI à la validation finale (R10)"
+    },
+    {
+      cle: "si_adaptateur_par_circuit",
+      valeur: { DOBB: "BSCS", DXC: "BSCS", DF: "GAIA" },
+      libelle: "Adaptateur BillingSiPort par circuit"
+    },
+    {
+      cle: "si_max_tentatives",
+      valeur: { valeur: 5 },
+      libelle: "Nombre maximal de rejeux SI"
+    },
+    {
+      cle: "mfa_methode_defaut",
+      valeur: { methode: "DUO" },
+      libelle: "Méthode MFA par défaut à l'enrôlement"
+    },
+    // PGD-073 — destinataires non déterminés par les sources (CLAUDE.md
+    // « Questions ouvertes ») : roleCode volontairement NULL au seed, pas
+    // deviné. Tant qu'un admin ne configure pas ce rôle via
+    // PATCH /api/admin/parametres-globaux, ces deux notifications ne sont
+    // simplement pas émises (NotificationService le journalise, ne l'invente
+    // jamais).
+    {
+      cle: "destinataire_notification_escalade_sla",
+      valeur: { roleCode: null },
+      libelle: "Rôle notifié à l'escalade SLA (superviseur métier — non déterminé par les sources)"
+    },
+    {
+      cle: "destinataire_notification_erreur_si",
+      valeur: { roleCode: null },
+      libelle: "Rôle notifié en cas d'erreur de restitution SI (exploitation — non déterminé par les sources)"
+    }
+  ];
+
+  for (const p of parametres) {
+    await prisma.parametreGlobal.upsert({
+      where: { cle: p.cle },
+      update: {},
+      create: { cle: p.cle, valeur: p.valeur, libelle: p.libelle }
+    });
+  }
+}
