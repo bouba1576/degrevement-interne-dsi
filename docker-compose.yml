@@ -1,0 +1,151 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pgd}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pgd}
+      POSTGRES_DB: ${POSTGRES_DB:-pgd}
+    volumes:
+      - pgd_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pgd}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - pgd_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-pgd}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-pgd}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-/pgd}
+      RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE:-pgd-dev-cookie}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - pgd_rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      NODE_ENV: production
+      API_PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pgd}:${POSTGRES_PASSWORD:-pgd}@postgres:5432/${POSTGRES_DB:-pgd}?schema=public
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_MANAGEMENT_PORT: 15672
+      RABBITMQ_USER: ${RABBITMQ_USER:-pgd}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-pgd}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/pgd}
+      CORS_ORIGIN: http://localhost:3001
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET}
+      REFRESH_TOKEN_EXPIRES_IN: ${REFRESH_TOKEN_EXPIRES_IN:-7d}
+      SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-pgd_session}
+      REFRESH_COOKIE_NAME: ${REFRESH_COOKIE_NAME:-pgd_refresh}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      # Prod : AD réel Orange CI (LDAPS). Dev : cf. docker-compose.override.yml
+      # (service openldap éphémère) — jamais le même LDAP_URL dans les deux.
+      LDAP_URL: ${LDAP_URL}
+      LDAP_BIND_DN: ${LDAP_BIND_DN}
+      LDAP_BIND_PASSWORD: ${LDAP_BIND_PASSWORD}
+      LDAP_BASE_DN: ${LDAP_BASE_DN}
+      LDAP_USER_DOMAIN: ${LDAP_USER_DOMAIN:-orange.ci}
+      DUO_CLIENT_ID: ${DUO_CLIENT_ID}
+      DUO_CLIENT_SECRET: ${DUO_CLIENT_SECRET}
+      DUO_API_HOST: ${DUO_API_HOST}
+      DUO_REDIRECT_URI: ${DUO_REDIRECT_URI}
+      TOTP_ISSUER: ${TOTP_ISSUER:-PGD Orange CI}
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY}
+      RATE_LIMIT_LOGIN_MAX_TENTATIVES: ${RATE_LIMIT_LOGIN_MAX_TENTATIVES:-5}
+      RATE_LIMIT_LOGIN_FENETRE_SECONDES: ${RATE_LIMIT_LOGIN_FENETRE_SECONDES:-300}
+      RATE_LIMIT_LOGIN_VERROUILLAGE_SECONDES: ${RATE_LIMIT_LOGIN_VERROUILLAGE_SECONDES:-900}
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    environment:
+      NODE_ENV: production
+      WORKER_HEALTH_PORT: 3002
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pgd}:${POSTGRES_PASSWORD:-pgd}@postgres:5432/${POSTGRES_DB:-pgd}?schema=public
+      REDIS_URL: redis://redis:6379
+      # apps/worker n'utilise aucune de ces variables — packages/config expose
+      # un schéma Zod partagé par toutes les apps (choix de Phase 1), donc
+      # loadEnv() échoue sans elles même ici. À corriger proprement en scindant
+      # le schéma par app si ça devient gênant ; pas fait maintenant pour ne
+      # pas rouvrir packages/config sous pression de fin de phase.
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET}
+      REFRESH_TOKEN_EXPIRES_IN: ${REFRESH_TOKEN_EXPIRES_IN:-7d}
+      LDAP_URL: ${LDAP_URL}
+      LDAP_BIND_DN: ${LDAP_BIND_DN}
+      LDAP_BIND_PASSWORD: ${LDAP_BIND_PASSWORD}
+      LDAP_BASE_DN: ${LDAP_BASE_DN}
+      DUO_CLIENT_ID: ${DUO_CLIENT_ID}
+      DUO_CLIENT_SECRET: ${DUO_CLIENT_SECRET}
+      DUO_API_HOST: ${DUO_API_HOST}
+      DUO_REDIRECT_URI: ${DUO_REDIRECT_URI}
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_MANAGEMENT_PORT: 15672
+      RABBITMQ_USER: ${RABBITMQ_USER:-pgd}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-pgd}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/pgd}
+    ports:
+      - "3002:3002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    environment:
+      NODE_ENV: production
+    ports:
+      - "3001:3001"
+    depends_on:
+      - api
+
+volumes:
+  pgd_postgres_data:
+  pgd_redis_data:
+  pgd_rabbitmq_data:

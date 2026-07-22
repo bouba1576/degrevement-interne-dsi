@@ -1,0 +1,94 @@
+services:
+  postgres:
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  # Annuaire de DEV uniquement — jamais en recette/prod, où LDAP_URL pointe
+  # vers l'AD réel Orange CI. N'existe pas dans docker-compose.yml (base).
+  openldap:
+    image: osixia/openldap:1.5.0
+    environment:
+      LDAP_ORGANISATION: PGD Orange CI Dev
+      LDAP_DOMAIN: pgd.orange.ci
+      LDAP_ADMIN_PASSWORD: admin
+    ports:
+      - "3890:389"
+    # Pas de bind-mount vers le dossier de bootstrap LDIF de l'image : son
+    # propre entrypoint tente un rm -rf de ce dossier après usage, ce qui
+    # échoue toujours sur un point de montage ("Device or resource busy"),
+    # que ce soit un fichier seul ou le dossier entier. Seed appliqué une fois
+    # le conteneur démarré via `ldapadd` (cf. docker/openldap/README.md).
+
+  api:
+    build:
+      target: deps
+    environment:
+      NODE_ENV: development
+      LDAP_URL: ldap://openldap:389
+    depends_on:
+      - openldap
+    volumes:
+      - .:/repo
+      - pgd_node_modules_root:/repo/node_modules
+      - pgd_node_modules_api:/repo/apps/api/node_modules
+      - pgd_node_modules_contracts:/repo/packages/contracts/node_modules
+      - pgd_node_modules_database:/repo/packages/database/node_modules
+      - pgd_node_modules_config:/repo/packages/config/node_modules
+      - pgd_node_modules_messaging:/repo/packages/messaging/node_modules
+      - pgd_node_modules_ui:/repo/packages/ui/node_modules
+    working_dir: /repo
+    command: ["pnpm", "--filter", "@pgd/api", "dev"]
+    user: node
+
+  worker:
+    build:
+      target: deps
+    environment:
+      NODE_ENV: development
+      LDAP_URL: ldap://openldap:389
+    depends_on:
+      - openldap
+    volumes:
+      - .:/repo
+      - pgd_node_modules_root:/repo/node_modules
+      - pgd_node_modules_worker:/repo/apps/worker/node_modules
+      - pgd_node_modules_contracts:/repo/packages/contracts/node_modules
+      - pgd_node_modules_database:/repo/packages/database/node_modules
+      - pgd_node_modules_config:/repo/packages/config/node_modules
+      - pgd_node_modules_messaging:/repo/packages/messaging/node_modules
+      - pgd_node_modules_ui:/repo/packages/ui/node_modules
+    working_dir: /repo
+    command: ["pnpm", "--filter", "@pgd/worker", "dev"]
+    user: node
+
+  web:
+    build:
+      target: deps
+    environment:
+      NODE_ENV: development
+    volumes:
+      - .:/repo
+      - pgd_node_modules_root:/repo/node_modules
+      - pgd_node_modules_web:/repo/apps/web/node_modules
+      - pgd_node_modules_contracts:/repo/packages/contracts/node_modules
+      - pgd_node_modules_database:/repo/packages/database/node_modules
+      - pgd_node_modules_config:/repo/packages/config/node_modules
+      - pgd_node_modules_ui:/repo/packages/ui/node_modules
+    working_dir: /repo
+    command: ["pnpm", "--filter", "@pgd/web", "dev"]
+    user: node
+
+volumes:
+  pgd_node_modules_root:
+  pgd_node_modules_api:
+  pgd_node_modules_worker:
+  pgd_node_modules_web:
+  pgd_node_modules_contracts:
+  pgd_node_modules_database:
+  pgd_node_modules_config:
+  pgd_node_modules_messaging:
+  pgd_node_modules_ui:

@@ -1,0 +1,27 @@
+# Annuaire de développement UNIQUEMENT — jamais utilisé en recette/prod
+# (LDAP_URL pointe vers l'AD réel Orange CI en dehors du profil dev, cf.
+# docker-compose.override.yml). Chargé manuellement via ldapadd, cf. README.md
+# de ce dossier (le mécanisme de bootstrap LDIF natif de l'image échoue sur
+# cet environnement).
+
+dn: ou=users,dc=pgd,dc=orange,dc=ci
+objectClass: organizationalUnit
+ou: users
+
+dn: ou=groups,dc=pgd,dc=orange,dc=ci
+objectClass: organizationalUnit
+ou: groups
+
+dn: uid=jean.kouassi,ou=users,dc=pgd,dc=orange,dc=ci
+objectClass: inetOrgPerson
+uid: jean.kouassi
+cn: Jean Kouassi
+sn: Kouassi
+givenName: Jean
+mail: jean.kouassi@orange.ci
+userPassword: MotDePasseTest123!
+
+dn: cn=GG-DGR-INITIATEUR-DOBB,ou=groups,dc=pgd,dc=orange,dc=ci
+objectClass: groupOfNames
+cn: GG-DGR-INITIATEUR-DOBB
+member: uid=jean.kouassi,ou=users,dc=pgd,dc=orange,dc=ci

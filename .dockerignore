@@ -1,0 +1,9 @@
+node_modules
+**/node_modules
+.pnpm-store
+.turbo
+**/dist
+**/.next
+.git
+.claude
+docs/design
