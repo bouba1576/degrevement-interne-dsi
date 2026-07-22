@@ -1,8 +1,18 @@
 import { Module } from "@nestjs/common";
+import { APP_GUARD } from "@nestjs/core";
 import { PrismaModule } from "./infra/prisma/prisma.module";
 import { RedisModule } from "./infra/redis/redis.module";
+import { HealthModule } from "./modules/health/health.module";
+import { AuthModule } from "./modules/auth/auth.module";
+import { AuthGuard } from "./common/guards/auth.guard";
+import { RbacGuard } from "./common/guards/rbac.guard";
 
 @Module({
-  imports: [PrismaModule, RedisModule]
+  imports: [PrismaModule, RedisModule, HealthModule, AuthModule],
+  providers: [
+    // Ordre d'exécution Nest = ordre de déclaration : authentification avant RBAC.
+    { provide: APP_GUARD, useClass: AuthGuard },
+    { provide: APP_GUARD, useClass: RbacGuard }
+  ]
 })
 export class AppModule {}
