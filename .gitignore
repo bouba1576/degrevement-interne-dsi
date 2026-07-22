@@ -10,3 +10,4 @@ coverage/
 *.tsbuildinfo
 .DS_Store
 packages/database/prisma/generated/
+.claude/settings.local.json

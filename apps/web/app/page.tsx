@@ -1,11 +1,33 @@
-// Écrans réels à partir de la Phase 9 (authentification, corbeille, nouvelle demande),
-// d'après la maquette docs/design/ (étape 9.0). Ce placeholder confirme seulement
-// que le socle Next.js démarre et parle à l'API.
+"use client";
+
+import { AppShell } from "@/components/AppShell";
+import type { SessionUtilisateur } from "@pgd/contracts";
+
+// Session simulée en attendant le câblage réel de l'authentification web
+// (LDAP/MFA côté apps/api existent déjà, Phase 2 — il manque la page de
+// connexion et la gestion de session côté apps/web, hors périmètre de la
+// coquille). Forme réelle de SessionUtilisateur (packages/contracts/src/
+// auth.ts), aucun champ inventé.
+const UTILISATEUR_SIMULE: SessionUtilisateur = {
+  id: "00000000-0000-0000-0000-000000000000",
+  identifiantAd: "a.kouassi",
+  nom: "Awa Kouassi",
+  roles: ["ADMIN_PGD"],
+  mfaMethode: "TOTP"
+};
+
 export default function Page() {
   return (
-    <main style={{ fontFamily: "system-ui", padding: "3rem" }}>
-      <h1>PGD — Plateforme de Gestion des Dégrèvements</h1>
-      <p>Socle Phase 1 en place. Interface réelle à partir de la Phase 9.</p>
-    </main>
+    <AppShell
+      utilisateur={UTILISATEUR_SIMULE}
+      libelleRole="Administrateur PGD"
+      titre="Tableau de bord"
+      sousTitre="Vue d'ensemble de l'activité"
+      compteMesDemandes={3}
+      compteCorbeilles={12}
+      onDeconnexion={() => {}}
+    >
+      <p className="text-13 text-gris600">Écran réel à partir de HomeScreen (Phase 9.2, prochaine étape).</p>
+    </AppShell>
   );
 }

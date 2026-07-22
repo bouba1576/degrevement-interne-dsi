@@ -149,7 +149,16 @@ export const espacements = {
   e12: "12px",
   e16: "16px",
   e20: "20px",
-  e24: "24px"
+  e24: "24px",
+  // e26 trouvé manquant en construisant la coquille applicative (Sidebar/
+  // Topbar, Phase 9.2) — cinquième gap méthodologique de la même famille que
+  // empilement/tailleConteneur/t18/t15 : mon extraction initiale (Phase 9,
+  // étape 3bis) ne balayait que les classes des composants alors identifiés
+  // dans ui.jsx, jamais .topbar/.content dans app.jsx/styles.css. 26px
+  // apparaît 2 fois (`.topbar` padding horizontal, `.content` padding) —
+  // réutilisé au sens normal de la règle du seuil, simplement hors du
+  // périmètre balayé la première fois.
+  e26: "26px"
 } as const;
 
 export const durees = {

@@ -66,7 +66,10 @@ export function SlaTimer({ echeanceSla, compact, maintenant = () => new Date() }
       style={{ background: urgence.fond, border: `1px solid ${urgence.texte}44` }}
     >
       <Icon nom="clock" taille={18} couleur={urgence.texte} />
-      <div className="leading-tight">
+      {/* Pas de line-height source dans la maquette pour ce conteneur
+          précis — choix libre, pas une extraction (contrairement à
+          Sidebar.tsx/Topbar.tsx où 1.05/1.1 sont des valeurs réelles). */}
+      <div className="leading-[1.2]">
         <div className="font-mono text-18 font-extrabold" style={{ color: urgence.texte }}>
           {texte}
         </div>

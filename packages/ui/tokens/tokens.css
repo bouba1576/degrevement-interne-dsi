@@ -29,6 +29,28 @@
      Cf. docs/design/DIVERGENCES.md. */
   --color-*: initial;
 
+  /* Même reset, même raison, sixième occurrence du motif (Phase 9.2,
+     construction de la coquille) : `tracking-wide`/`leading-tight` posés par
+     réflexe dans Sidebar.tsx/Topbar.tsx/CircuitPill.tsx ne correspondaient
+     PAS aux valeurs réelles de la maquette (line-height 1.05/1.1 exigés,
+     Tailwind par défaut résout `leading-tight` à 1.25 ; letter-spacing .02em
+     exigé pour .pill-circuit, `tracking-wide` résout à .025em) — corrigé en
+     valeurs arbitraires exactes (`leading-[1.05]`, `tracking-[.02em]`), puis
+     réinitialisé ici pour que l'erreur redevienne visible plutôt que
+     silencieuse : vérifié en réel (build CLI isolé) que `--tracking-*:
+     initial`/`--leading-*: initial` fonctionnent EXACTEMENT comme
+     `--color-*: initial` ci-dessus — après reset, `tracking-wide`/
+     `leading-tight`/`leading-loose`/etc. ne génèrent plus AUCUNE classe.
+     Deux utilitaires survivent malgré tout, vérifié : `leading-none`
+     (comme `bg-current`/`bg-transparent`/`bg-inherit` pour les couleurs,
+     ce sont des valeurs câblées en dur dans Tailwind, jamais lues depuis
+     le thème — rien à réinitialiser, rien à craindre). `duration-*` n'a
+     PAS d'équivalent à ce risque : `duration-150` compile toujours en
+     exactement 150ms, aucune échelle nommée dans le thème par défaut à
+     confondre — vérifié en réel, aucun reset n'y change rien. */
+  --tracking-*: initial;
+  --leading-*: initial;
+
   /* ---------- Couleurs — palette primitive complète ---------- */
   /* Noms EXACTEMENT ceux de packages/ui/tokens/primitives.ts (couleurs) :
      camelCase, jamais de tiret — `bg-gris100`, pas `bg-gris-100` — pour
@@ -114,15 +136,19 @@
      pb-5→20px, p-6→24px. */
   --spacing: 4px;
 
-  /* ---------- Conteneurs carrés fixes (icônes/avatars) ----------------
-     Clés hors échelle courante (34/38), déclarées à part : vérifié en
-     réel que les DEUX valeurs doivent être explicites. Une clé numérique
-     non déclarée (ex. `w-38` sans --spacing-38) ne tombe PAS en erreur :
-     elle se résout silencieusement vers l'échelle dynamique (38 × 4px =
-     152px, pas 38px) — un nom plausible, une valeur fausse, la même
-     famille de bug que le nuancier gris. */
+  /* ---------- Valeurs hors échelle dynamique (34/38/26) ---------------
+     Clés hors échelle courante, déclarées à part : vérifié en réel que
+     CHAQUE valeur doit être explicite. Une clé numérique non déclarée
+     (ex. `w-38` sans --spacing-38) ne tombe PAS en erreur : elle se
+     résout silencieusement vers l'échelle dynamique (38 × 4px = 152px,
+     pas 38px) — un nom plausible, une valeur fausse, la même famille de
+     bug que le nuancier gris. 34/38 : conteneurs carrés (icônes/avatars).
+     26 : padding horizontal .topbar / padding .content (e26, cf.
+     primitives.ts) — trouvé manquant en construisant la coquille
+     applicative (Phase 9.2), même famille de gap que les précédentes. */
   --spacing-34: 34px;
   --spacing-38: 38px;
+  --spacing-26: 26px;
 
   /* ---------- Empilement (z-index) — nommé par RÔLE, jamais par rang --
      Pas de namespace --z-index-* documenté nativement en v4 ; le

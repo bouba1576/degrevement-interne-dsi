@@ -15,7 +15,7 @@ export interface CircuitPillProps {
 export function CircuitPill({ code }: CircuitPillProps) {
   const { texte, fond } = circuit[code];
   return (
-    <span className="inline-flex items-center rounded px-2 py-1 text-11 font-extrabold tracking-wide" style={{ color: texte, background: fond }}>
+    <span className="inline-flex items-center rounded px-2 py-1 text-11 font-extrabold tracking-[.02em]" style={{ color: texte, background: fond }}>
       {code}
     </span>
   );
