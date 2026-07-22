@@ -1,0 +1,158 @@
+import { z } from "zod";
+import { enumCircuit, enumTypeRole } from "./enums";
+
+// docs/06_Contrats_API.md §9 (PGD-043) — CRUD des référentiels d'administration
+// hors paliers (admin-palier.ts) et paramètres de calcul (admin-parametre-calcul.ts,
+// traité à part : impact sur les montants, décision de gel/recalcul dédiée).
+// Aucun de ces référentiels n'est aujourd'hui lu via un cache Redis — pas
+// d'invalidation à écrire ici tant qu'aucun cache n'existe (cf. RuleEngineService
+// pour l'unique cas actuel, palier, déjà invalidé à l'écriture).
+
+// ---------------------------------------------------------------------------
+// Circuit — GET/PATCH seulement : code est un ENUM Postgres à 3 valeurs fixes
+// (DOBB/DXC/DF), ni création ni suppression n'ont de sens structurel ici.
+// ---------------------------------------------------------------------------
+export const circuitVueSchema = z.object({
+  code: enumCircuit,
+  libelle: z.string(),
+  segment: z.string(),
+  processCode: z.string().nullable()
+});
+export type CircuitVue = z.infer<typeof circuitVueSchema>;
+
+export const modifierCircuitRequeteSchema = z.object({
+  libelle: z.string().optional(),
+  processCode: z.string().optional()
+});
+export type ModifierCircuitRequete = z.infer<typeof modifierCircuitRequeteSchema>;
+
+// ---------------------------------------------------------------------------
+// Role — code libre (String @id), CRUD complet.
+// ---------------------------------------------------------------------------
+export const roleVueSchema = z.object({
+  code: z.string(),
+  libelle: z.string(),
+  groupeAd: z.string(),
+  niveau: z.number(),
+  type: enumTypeRole,
+  dansMatrice: z.boolean(),
+  requiertMfa: z.boolean()
+});
+export type RoleVue = z.infer<typeof roleVueSchema>;
+
+export const creerRoleRequeteSchema = z.object({
+  code: z.string().min(1),
+  libelle: z.string().min(1),
+  groupeAd: z.string().min(1),
+  niveau: z.number().int(),
+  type: enumTypeRole,
+  dansMatrice: z.boolean().optional(),
+  requiertMfa: z.boolean().optional()
+});
+export type CreerRoleRequete = z.infer<typeof creerRoleRequeteSchema>;
+
+export const modifierRoleRequeteSchema = creerRoleRequeteSchema.omit({ code: true }).partial();
+export type ModifierRoleRequete = z.infer<typeof modifierRoleRequeteSchema>;
+
+// ---------------------------------------------------------------------------
+// Motif + PieceAfferente — remplacement complet des pièces à la modification,
+// même principe que les étapes d'un palier (pas de fusion partielle).
+// ---------------------------------------------------------------------------
+export const pieceAfferentePayloadSchema = z.object({
+  libelle: z.string().min(1),
+  obligatoire: z.boolean().optional()
+});
+export type PieceAfferentePayload = z.infer<typeof pieceAfferentePayloadSchema>;
+
+export const pieceAfferenteVueSchema = z.object({
+  id: z.string().uuid(),
+  libelle: z.string(),
+  obligatoire: z.boolean()
+});
+export type PieceAfferenteVue = z.infer<typeof pieceAfferenteVueSchema>;
+
+export const creerMotifRequeteSchema = z.object({
+  circuit: enumCircuit,
+  libelle: z.string().min(1),
+  actif: z.boolean().optional(),
+  pieces: z.array(pieceAfferentePayloadSchema).optional()
+});
+export type CreerMotifRequete = z.infer<typeof creerMotifRequeteSchema>;
+
+export const modifierMotifRequeteSchema = creerMotifRequeteSchema.partial();
+export type ModifierMotifRequete = z.infer<typeof modifierMotifRequeteSchema>;
+
+export const motifVueSchema = z.object({
+  id: z.string().uuid(),
+  circuit: enumCircuit,
+  libelle: z.string(),
+  actif: z.boolean(),
+  piecesAfferentes: z.array(pieceAfferenteVueSchema)
+});
+export type MotifVue = z.infer<typeof motifVueSchema>;
+
+// ---------------------------------------------------------------------------
+// ParametreGlobal — GET/PATCH seulement (clé libre déjà seedée, pas de création
+// ad hoc de nouvelles clés via l'API : le code qui les lit doit les connaître).
+// ---------------------------------------------------------------------------
+export const parametreGlobalVueSchema = z.object({
+  cle: z.string(),
+  valeur: z.unknown(),
+  libelle: z.string().nullable(),
+  modifiableAdmin: z.boolean(),
+  dateMaj: z.string()
+});
+export type ParametreGlobalVue = z.infer<typeof parametreGlobalVueSchema>;
+
+export const modifierParametreGlobalRequeteSchema = z.object({
+  valeur: z.unknown()
+});
+export type ModifierParametreGlobalRequete = z.infer<typeof modifierParametreGlobalRequeteSchema>;
+
+// ---------------------------------------------------------------------------
+// CalendrierSla + JourFerie — jours ouvrés, plage horaire, fériés.
+// ---------------------------------------------------------------------------
+export const jourFerieVueSchema = z.object({
+  id: z.string().uuid(),
+  jour: z.string(),
+  libelle: z.string().nullable()
+});
+export type JourFerieVue = z.infer<typeof jourFerieVueSchema>;
+
+export const calendrierSlaVueSchema = z.object({
+  id: z.string().uuid(),
+  libelle: z.string(),
+  joursOuvres: z.array(z.number()),
+  heureDebut: z.string(),
+  heureFin: z.string(),
+  actif: z.boolean(),
+  joursFeries: z.array(jourFerieVueSchema)
+});
+export type CalendrierSlaVue = z.infer<typeof calendrierSlaVueSchema>;
+
+export const modifierCalendrierSlaRequeteSchema = z.object({
+  libelle: z.string().optional(),
+  joursOuvres: z.array(z.number().int().min(1).max(7)).optional(),
+  heureDebut: z.string().optional(),
+  heureFin: z.string().optional(),
+  actif: z.boolean().optional(),
+  // Remplacement complet si fourni — même principe que les paliers/motifs.
+  joursFeries: z.array(z.object({ jour: z.string(), libelle: z.string().optional() })).optional()
+});
+export type ModifierCalendrierSlaRequete = z.infer<typeof modifierCalendrierSlaRequeteSchema>;
+
+// ---------------------------------------------------------------------------
+// Module — activation de modules.
+// ---------------------------------------------------------------------------
+export const moduleVueSchema = z.object({
+  code: z.string(),
+  libelle: z.string(),
+  coeur: z.boolean(),
+  actif: z.boolean()
+});
+export type ModuleVue = z.infer<typeof moduleVueSchema>;
+
+export const modifierModuleRequeteSchema = z.object({
+  actif: z.boolean()
+});
+export type ModifierModuleRequete = z.infer<typeof modifierModuleRequeteSchema>;
