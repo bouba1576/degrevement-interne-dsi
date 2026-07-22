@@ -62,7 +62,12 @@ export function SlaTimer({ echeanceSla, compact, maintenant = () => new Date() }
 
   return (
     <div
-      className="inline-flex items-center gap-2.5 rounded-lg px-4 py-2"
+      // Pas de valeur source dans la maquette pour ce conteneur précis (pas
+      // de classe `.sla-timer` dans styles.css) — choix libre, rounded-6
+      // (r2) par cohérence avec card/modal, pas une extraction. `rounded-lg`
+      // aurait résolu vers l'échelle de shadcn (10px), jamais vers la nôtre
+      // — cf. tokens.css pour la collision de nom.
+      className="inline-flex items-center gap-2.5 rounded-6 px-4 py-2"
       style={{ background: urgence.fond, border: `1px solid ${urgence.texte}44` }}
     >
       <Icon nom="clock" taille={18} couleur={urgence.texte} />

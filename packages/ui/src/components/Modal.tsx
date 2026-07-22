@@ -45,7 +45,7 @@ export function Modal({ titre, icone, onFermer, children, pied, large }: ModalPr
             enfant qui n'existe plus dans cette structure. */}
         <DialogPrimitive.Overlay role="presentation" className="fixed inset-0 z-superposition bg-noir/45" />
         <DialogPrimitive.Content
-          className={`fixed inset-0 z-superposition m-auto flex max-h-[90vh] w-full flex-col rounded-md bg-blanc shadow-lg ${large ? "max-w-[720px]" : "max-w-[520px]"}`}
+          className={`fixed inset-0 z-superposition m-auto flex max-h-[90vh] w-full flex-col rounded-6 bg-blanc shadow-lg ${large ? "max-w-[720px]" : "max-w-[520px]"}`}
         >
           <div className="flex items-center gap-3 border-b border-gris100 px-6 py-5">
             {icone && <Icon nom={icone} taille={20} />}

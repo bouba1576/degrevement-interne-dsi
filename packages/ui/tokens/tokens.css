@@ -104,7 +104,37 @@
   --text-17: 17px;
   --text-18: 18px;
 
-  /* ---------- Rayons — seuls r4/r5 n'ont pas d'équivalent standard ---- */
+  /* ---------- Rayons — TOUJOURS numériques, jamais rounded-sm/md/lg/xl ----
+     `apps/web/app/globals.css` importe le bloc @theme de shadcn (shadcn
+     init), qui déclare SA PROPRE échelle sémantique : --radius-lg/-md/-sm/
+     -xl dérivées de --radius: 0.625rem (10px). Ces noms entrent en collision
+     directe avec les nôtres — `rounded-lg`/`rounded-md` dans un composant de
+     packages/ui résolvent vers l'échelle de SHADCN (10px / 8px), jamais vers
+     r2 (6px) / r3 (8px) de primitives.ts, quel que soit ce que le nom
+     suggère. Confirmé en réel (Phase 9.2, en préparant KpiCarte) : Modal.tsx
+     utilisait `rounded-md` depuis le refacto Radix (Phase 9.1e, déjà commité
+     et poussé) et rendait 8px alors que `.modal` (styles.css) exige 6px
+     (var(--radius-lg) = r2) — une régression silencieuse passée inaperçue en
+     revue ET en test (jsdom n'applique aucun CSS réel), la première
+     occurrence du motif « nom familier, valeur différente » qui n'ait pas
+     été attrapée avant un commit. Corrigé (Modal.tsx → rounded-6).
+     Contremesure structurelle, pas seulement le correctif ponctuel : chaque
+     palier de rayons.ts porte ici une clé NUMÉRIQUE (`rounded-6`, jamais
+     `rounded-lg`) — une collision de nom avec l'échelle sémantique de shadcn
+     est alors structurellement impossible (les deux formes ne peuvent pas se
+     confondre), le même principe que `gris100` vs `gray-100` pour les
+     couleurs, sauf qu'ici aucun reset `--radius-*: initial` n'est possible :
+     shadcn a besoin de SA propre échelle lg/md/sm/xl pour ses propres
+     composants (apps/web/components/ui/*.tsx, non concernés — ce ne sont pas
+     des composants de packages/ui). La discipline est donc une convention de
+     nommage à l'intérieur de packages/ui, pas un reset global :
+     `rounded-{9,10}` existaient déjà (sûrs, jamais réclamés par shadcn) ;
+     `rounded-6`/`rounded-8` ajoutés ici pour couvrir r2/r3. `rounded` (bare,
+     4px = r1) et `rounded-full` (pilule) restent sûrs sans clé dédiée : tous
+     deux câblés en dur dans Tailwind, jamais lus depuis un thème (même
+     famille que `bg-current`/`leading-none` déjà vérifiés). */
+  --radius-6: 6px;
+  --radius-8: 8px;
   --radius-9: 9px;
   --radius-10: 10px;
 
