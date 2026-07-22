@@ -1,7 +1,7 @@
-import { etatTache, typeActeur } from "../../tokens/semantic";
-import { stylePilule } from "./stylePilule";
+import { etatTache } from "../../tokens/semantic";
 import { Icon } from "./Icon";
 import { Badge } from "./Badge";
+import { TypeActeurBadge } from "./TypeActeurBadge";
 
 export type EtatTache = "EN_ATTENTE" | "EN_CORBEILLE" | "RECLAMEE" | "APPROUVEE" | "REJETEE" | "POST_CLOTURE";
 export type TypeActeurTache = "V" | "A" | "C";
@@ -59,7 +59,6 @@ export function WorkflowStepper({ etapes, maintenant = new Date() }: WorkflowSte
           etape.echeanceSla !== null &&
           new Date(etape.echeanceSla) < maintenant;
         const escaladee = etape.niveauEscalade > 0 && (etape.etat === "EN_CORBEILLE" || etape.etat === "RECLAMEE");
-        const pilule = stylePilule(typeActeur[etape.typeActeur]);
 
         return (
           <div className="flex gap-4 relative pb-1" key={etape.id}>
@@ -77,9 +76,7 @@ export function WorkflowStepper({ etapes, maintenant = new Date() }: WorkflowSte
             <div className={`flex-1 ${dernier ? "pb-0" : "pb-5"}`}>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-14 font-bold">{etape.roleLibelle}</span>
-                <span className={pilule.className} style={pilule.style}>
-                  {typeActeur[etape.typeActeur].libelle}
-                </span>
+                <TypeActeurBadge type={etape.typeActeur} />
                 {enRetard && (
                   <Badge ton="erreur" pastille>
                     SLA dépassé

@@ -101,6 +101,17 @@ export const taillesTexte = {
   t12: "12px",
   t13: "13px",
   t14: "14px",
+  // t15 trouvé manquant en construisant Empty (Phase 9.1bis, lot Avatar/
+  // Money/Field/Empty/BarChart/Donut/CircuitPill/TypeActeurBadge) — comble
+  // exactement le vide « 14 → 17 sans palier intermédiaire » déclaré
+  // volontaire lors de la consolidation initiale (Phase 9, étape 3bis).
+  // Ce n'était pas un vide réel : 15px apparaît 4 fois dans styles.css
+  // (.btn-lg, .kpi .value small, .empty h4, .masse-restit b) — mon grep de
+  // consolidation avait balayé les classes des 6 composants déjà construits,
+  // jamais l'ensemble de la feuille de style. Quatrième gap méthodologique
+  // de la même famille que empilement/tailleConteneur/t18, trouvé de la
+  // même façon (en construisant le composant suivant), pas anticipé.
+  t15: "15px",
   t17: "17px",
   // t18 trouvé manquant en construisant SlaTimer (Phase 9.1) — troisième
   // gap méthodologique de la même nature que empilement/tailleConteneur,
