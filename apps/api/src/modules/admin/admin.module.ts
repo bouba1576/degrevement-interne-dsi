@@ -16,11 +16,13 @@ import { AdminCalendrierSlaController } from "./admin-calendrier-sla.controller"
 import { AdminCalendrierSlaService } from "./services/admin-calendrier-sla.service";
 import { AdminModulesController } from "./admin-modules.controller";
 import { AdminModulesService } from "./services/admin-modules.service";
+import { EscaladeManuelleService } from "./services/escalade-manuelle.service";
 import { LignesModule } from "../lignes/lignes.module";
 import { DemandesModule } from "../demandes/demandes.module";
+import { TachesModule } from "../taches/taches.module";
 
 @Module({
-  imports: [LignesModule, DemandesModule],
+  imports: [LignesModule, DemandesModule, TachesModule],
   controllers: [
     AdminController,
     AdminPaliersController,
@@ -40,7 +42,8 @@ import { DemandesModule } from "../demandes/demandes.module";
     AdminMotifsService,
     AdminParametresGlobauxService,
     AdminCalendrierSlaService,
-    AdminModulesService
+    AdminModulesService,
+    EscaladeManuelleService
   ]
 })
 export class AdminModule {}

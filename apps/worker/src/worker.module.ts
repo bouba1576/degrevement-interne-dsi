@@ -12,6 +12,9 @@ import { BscsStubAdapter } from "./si-push/bscs-stub.adapter";
 import { GaiaStubAdapter } from "./si-push/gaia-stub.adapter";
 import { BillingSiRouterService } from "./si-push/billing-si-router.service";
 import { SiPushService } from "./si-push/si-push.service";
+import { NotificationService } from "./notifications/notification.service";
+import { SmtpStubAdapter } from "./notifications/smtp-stub.adapter";
+import { SMTP_PORT } from "./notifications/smtp.port";
 
 @Module({
   imports: [ScheduleModule.forRoot(), RabbitMQModule, RedisModule],
@@ -25,7 +28,10 @@ import { SiPushService } from "./si-push/si-push.service";
     BscsStubAdapter,
     GaiaStubAdapter,
     BillingSiRouterService,
-    SiPushService
+    SiPushService,
+    SmtpStubAdapter,
+    { provide: SMTP_PORT, useExisting: SmtpStubAdapter },
+    NotificationService
   ]
 })
 export class WorkerModule {}

@@ -1,8 +1,11 @@
-import { Controller, HttpCode, Post } from "@nestjs/common";
+import { Controller, HttpCode, Param, Post } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
-import type { ImportCrmReponse } from "@pgd/contracts";
+import type { ImportCrmReponse, TacheVue } from "@pgd/contracts";
 import { Roles } from "../../common/decorators/roles.decorator";
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
+import type { UtilisateurRequete } from "../../common/guards/auth.guard";
 import { CrmImportService } from "../lignes/services/crm-import.service";
+import { EscaladeManuelleService } from "./services/escalade-manuelle.service";
 
 // docs/06 §9 : toute écriture d'administration est restreinte et journalisée.
 // Première route @Roles() de l'API — sert aussi de vérification en direct de
@@ -10,12 +13,28 @@ import { CrmImportService } from "../lignes/services/crm-import.service";
 @ApiTags("admin")
 @Controller("admin")
 export class AdminController {
-  constructor(private readonly crmImportService: CrmImportService) {}
+  constructor(
+    private readonly crmImportService: CrmImportService,
+    private readonly escaladeManuelle: EscaladeManuelleService
+  ) {}
 
   @Roles("ADMIN_PGD")
   @Post("import-crm")
   @HttpCode(200)
   async importerCrm(): Promise<ImportCrmReponse> {
     return this.crmImportService.importer();
+  }
+
+  // docs/06 §9 (6.7) — volet manuel, distinct du cron sla-escalation
+  // (apps/worker) : un administrateur peut escalader une tâche avant que son
+  // SLA ne soit dépassé.
+  @Roles("ADMIN_PGD")
+  @Post("escalade-manuelle/:tacheId")
+  @HttpCode(200)
+  async escaladerManuellement(
+    @Param("tacheId") tacheId: string,
+    @CurrentUser() utilisateur: UtilisateurRequete
+  ): Promise<TacheVue> {
+    return this.escaladeManuelle.escalader(tacheId, utilisateur.identifiantAd);
   }
 }
