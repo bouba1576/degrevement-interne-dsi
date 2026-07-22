@@ -8,11 +8,22 @@ import { LignesModule } from "./modules/lignes/lignes.module";
 import { RabbitMQModule } from "./infra/rabbitmq/rabbitmq.module";
 import { DemandesModule } from "./modules/demandes/demandes.module";
 import { AdminModule } from "./modules/admin/admin.module";
+import { TachesModule } from "./modules/taches/taches.module";
 import { AuthGuard } from "./common/guards/auth.guard";
 import { RbacGuard } from "./common/guards/rbac.guard";
 
 @Module({
-  imports: [PrismaModule, RedisModule, RabbitMQModule, HealthModule, AuthModule, LignesModule, DemandesModule, AdminModule],
+  imports: [
+    PrismaModule,
+    RedisModule,
+    RabbitMQModule,
+    HealthModule,
+    AuthModule,
+    LignesModule,
+    DemandesModule,
+    AdminModule,
+    TachesModule
+  ],
   providers: [
     // Ordre d'exécution Nest = ordre de déclaration : authentification avant RBAC.
     { provide: APP_GUARD, useClass: AuthGuard },
