@@ -1,0 +1,149 @@
+/* ====================================================================
+   Tokens PGD — extraits de docs/design/styles.css (Phase 9, étape 3).
+   Miroir CSS de primitives.ts / semantic.ts — même valeurs, mêmes
+   corrections d'accessibilité (voir docs/design/DIVERGENCES.md).
+   Les composants de packages/ui ne consomment QUE les variables de la
+   section « Sémantique » ci-dessous, jamais celles de « Primitives ».
+   ==================================================================== */
+:root {
+  /* ---------- Primitives : marque ---------- */
+  --pgd-orange: #FF7900;
+  --pgd-orange-600: #E96B00;
+  --pgd-orange-50: #FFF3E8;
+  --pgd-orange-100: #FFE3C7;
+  --pgd-orange-texte-sur-clair: #9a4a00; /* corrigé (WCAG), cf. primitives.ts */
+
+  /* ---------- Primitives : neutres ---------- */
+  --pgd-noir: #000000;
+  --pgd-blanc: #ffffff;
+  --pgd-encre: #0a0a0a;
+  --pgd-gris-900: #141414;
+  --pgd-gris-800: #242424;
+  --pgd-gris-700: #595959;
+  --pgd-gris-600: #767676;
+  --pgd-gris-500: #999999; /* ne jamais utiliser pour du texte sur fond clair */
+  --pgd-gris-400: #b3b3b3; /* idem */
+  --pgd-gris-300: #cccccc;
+  --pgd-gris-200: #e0e0e0;
+  --pgd-gris-100: #eeeeee;
+  --pgd-gris-75: #f3f3f3;
+  --pgd-gris-50: #f8f8f8;
+
+  /* ---------- Primitives : fonctionnelles ---------- */
+  --pgd-vert: #32C832;
+  --pgd-vert-fond: #E7F8E7;
+  --pgd-vert-700: #23901f; /* ne jamais utiliser pour du texte, cf. --pgd-vert-texte-sur-clair */
+  --pgd-vert-texte-sur-clair: #148110; /* corrigé (WCAG) */
+  --pgd-rouge: #CD3C14;
+  --pgd-rouge-fond: #FCEBE6;
+  --pgd-rouge-700: #a52f0f;
+  --pgd-jaune: #FFCC00;
+  --pgd-jaune-fond: #FFF6D6;
+  --pgd-jaune-700: #8a6d00;
+  --pgd-bleu: #4BB4E6;
+  --pgd-bleu-fond: #E7F4FB;
+  --pgd-bleu-700: #1a6f99;
+  --pgd-violet: #A885D8;
+  --pgd-violet-fond: #F1ECF9;
+  --pgd-violet-texte: #6b3fa0;
+
+  /* ---------- Primitives : rayons ---------- */
+  --pgd-rayon-1: 4px;
+  --pgd-rayon-2: 6px;
+  --pgd-rayon-3: 8px;
+  --pgd-rayon-4: 9px;
+  --pgd-rayon-5: 10px;
+  --pgd-rayon-pilule: 999px;
+
+  /* ---------- Primitives : ombres ---------- */
+  --pgd-ombre-sm: 0 1px 2px rgba(0,0,0,.06);
+  --pgd-ombre: 0 2px 8px rgba(0,0,0,.08);
+  --pgd-ombre-lg: 0 12px 40px rgba(0,0,0,.18);
+
+  /* ---------- Primitives : transitions ---------- */
+  --pgd-duree-rapide: .1s;
+  --pgd-duree-base: .12s;
+  --pgd-duree-moyenne: .13s;
+  --pgd-duree-lente: .15s;
+
+  /* ---------- Primitives : typographie ---------- */
+  --pgd-police-base: "Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif;
+  --pgd-police-mono: "SF Mono", ui-monospace, "Roboto Mono", Menlo, monospace;
+
+  /* ================= Sémantique — seule couche consommée ================= */
+
+  /* Statut de la demande (dossier) */
+  --statut-demande-brouillon-texte: var(--pgd-gris-700);
+  --statut-demande-brouillon-fond: var(--pgd-gris-100);
+  --statut-demande-soumis-texte: var(--pgd-bleu-700);
+  --statut-demande-soumis-fond: var(--pgd-bleu-fond);
+  --statut-demande-en-cours-texte: var(--pgd-orange-texte-sur-clair);
+  --statut-demande-en-cours-fond: var(--pgd-orange-50);
+  --statut-demande-valide-texte: var(--pgd-vert-texte-sur-clair);
+  --statut-demande-valide-fond: var(--pgd-vert-fond);
+  --statut-demande-rejete-texte: var(--pgd-rouge-700);
+  --statut-demande-rejete-fond: var(--pgd-rouge-fond);
+  --statut-demande-abandonne-texte: var(--pgd-gris-700);
+  --statut-demande-abandonne-fond: var(--pgd-gris-100);
+
+  /* État d'une tâche (chaîne de validation) */
+  --etat-tache-attente-texte: var(--pgd-gris-600);
+  --etat-tache-attente-fond: var(--pgd-blanc);
+  --etat-tache-attente-bordure: var(--pgd-gris-300);
+  --etat-tache-en-cours-texte: var(--pgd-noir);
+  --etat-tache-en-cours-fond: var(--pgd-orange);
+  --etat-tache-termine-texte: var(--pgd-blanc);
+  --etat-tache-termine-fond: var(--pgd-vert);
+  --etat-tache-rejete-texte: var(--pgd-blanc);
+  --etat-tache-rejete-fond: var(--pgd-rouge);
+
+  /* Urgence SLA */
+  --sla-normal-texte: var(--pgd-vert-texte-sur-clair);
+  --sla-normal-fond: var(--pgd-vert-fond);
+  --sla-alerte-texte: var(--pgd-jaune-700);
+  --sla-alerte-fond: var(--pgd-jaune-fond);
+  --sla-depasse-texte: var(--pgd-rouge-700);
+  --sla-depasse-fond: var(--pgd-rouge-fond);
+
+  /* Type d'acteur (V/A/C) */
+  --type-acteur-verification-texte: var(--pgd-bleu-700);
+  --type-acteur-verification-fond: var(--pgd-bleu-fond);
+  --type-acteur-validation-texte: var(--pgd-orange-texte-sur-clair);
+  --type-acteur-validation-fond: var(--pgd-orange-50);
+  --type-acteur-controle-texte: var(--pgd-violet-texte);
+  --type-acteur-controle-fond: var(--pgd-violet-fond);
+
+  /* Circuit */
+  --circuit-dobb-texte: var(--pgd-orange-texte-sur-clair);
+  --circuit-dobb-fond: var(--pgd-orange-100);
+  --circuit-dxc-texte: var(--pgd-bleu-700);
+  --circuit-dxc-fond: var(--pgd-bleu-fond);
+  --circuit-df-texte: var(--pgd-violet-texte);
+  --circuit-df-fond: var(--pgd-violet-fond);
+
+  /* Statut de ligne (ACTIF/SUSPENDU/RESILIE, R15) — décision de design
+     assumée, SANS SOURCE dans la maquette (cf. semantic.ts, DIVERGENCES.md).
+     `suspendu` vérifié WCAG AA (4,55:1) avant d'être retenu sans correction. */
+  --statut-ligne-actif-texte: var(--pgd-vert-texte-sur-clair);
+  --statut-ligne-actif-fond: var(--pgd-vert-fond);
+  --statut-ligne-suspendu-texte: var(--pgd-jaune-700);
+  --statut-ligne-suspendu-fond: var(--pgd-jaune-fond);
+  --statut-ligne-resilie-texte: var(--pgd-rouge-700);
+  --statut-ligne-resilie-fond: var(--pgd-rouge-fond);
+
+  /* Anneau de focus clavier — distinct du survol souris, cf. semantic.ts
+     pour la justification du choix de teinte (orange600, pas orange). */
+  --focus-anneau-couleur: var(--pgd-orange-600);
+  --focus-anneau-epaisseur: 2px;
+  --focus-anneau-decalage: 2px;
+}
+
+/* Focus visible au clavier — jamais au survol souris ni au simple :focus.
+   S'applique à tout élément interactif standard (boutons, liens, éléments
+   navigables, onglets) sans qu'aucun composant n'ait à le redéfinir : le
+   manque identifié en Phase 9.0 (la maquette ne couvre que les champs de
+   saisie) est comblé une seule fois, ici, pas composant par composant. */
+:focus-visible {
+  outline: var(--focus-anneau-epaisseur) solid var(--focus-anneau-couleur);
+  outline-offset: var(--focus-anneau-decalage);
+}
