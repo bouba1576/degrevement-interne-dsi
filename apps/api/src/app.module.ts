@@ -4,11 +4,12 @@ import { PrismaModule } from "./infra/prisma/prisma.module";
 import { RedisModule } from "./infra/redis/redis.module";
 import { HealthModule } from "./modules/health/health.module";
 import { AuthModule } from "./modules/auth/auth.module";
+import { LignesModule } from "./modules/lignes/lignes.module";
 import { AuthGuard } from "./common/guards/auth.guard";
 import { RbacGuard } from "./common/guards/rbac.guard";
 
 @Module({
-  imports: [PrismaModule, RedisModule, HealthModule, AuthModule],
+  imports: [PrismaModule, RedisModule, HealthModule, AuthModule, LignesModule],
   providers: [
     // Ordre d'exécution Nest = ordre de déclaration : authentification avant RBAC.
     { provide: APP_GUARD, useClass: AuthGuard },
