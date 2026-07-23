@@ -1,23 +1,39 @@
 import { z } from "zod";
 import {
   apercuRoutageReponseSchema,
+  delegationVueSchema,
   demandeDetailSchema,
   erreurSchema,
+  etapeDossierSchema,
   formulesDeLigneSchema,
+  journalAuditVueSchema,
   kpiValeurSchema,
   ligneAvecContexteSchema,
+  pieceJointeSchema,
   sessionUtilisateurSchema,
+  siVueSchema,
   soumissionReponseSchema,
+  tacheVueSchema,
   tachesListeReponseSchema,
   type ApercuRoutageReponse,
+  type ApprouverRequete,
+  type CreerDelegationRequete,
   type CreerDemandeRequete,
   type DefinirLignesRequete,
+  type DelegationVue,
   type DemandeDetail,
+  type EtapeDossier,
   type FormulesDeLigne,
+  type JournalAuditVue,
   type KpiValeur,
   type LigneAvecContexte,
+  type ModifierDemandeRequete,
+  type PieceJointeVue,
+  type RejeterRequete,
   type SessionUtilisateur,
+  type SiVue,
   type SoumissionReponse,
+  type TacheVue,
   type TachesListeReponse
 } from "@pgd/contracts";
 
@@ -142,5 +158,105 @@ export function soumettreDemande(demandeId: string): Promise<SoumissionReponse> 
 export function abandonnerDemande(demandeId: string): Promise<{ abandonne: true }> {
   return requete(`/api/demandes/${demandeId}/abandonner`, z.object({ abandonne: z.literal(true) }), {
     method: "POST"
+  });
+}
+
+// --- DossierDetailScreen / CorbeillesScreen (Phase 9.2) --------------
+
+export function obtenirDetailDemande(demandeId: string): Promise<DemandeDetail> {
+  return requete(`/api/demandes/${demandeId}`, demandeDetailSchema);
+}
+
+// Vue EtapeDossier délibérément plus étroite que TacheVue — voir
+// packages/contracts/src/tache.ts. acteurNom n'est jamais renseigné pour une
+// étape en cours, seulement une fois décidée.
+export function listerTachesDemande(demandeId: string): Promise<EtapeDossier[]> {
+  return requete(`/api/demandes/${demandeId}/taches`, z.array(etapeDossierSchema));
+}
+
+export function obtenirEtatSi(demandeId: string): Promise<SiVue> {
+  return requete(`/api/demandes/${demandeId}/si`, siVueSchema);
+}
+
+export function journalAuditDemande(demandeId: string): Promise<JournalAuditVue[]> {
+  return requete(`/api/audit/${demandeId}`, z.array(journalAuditVueSchema));
+}
+
+export function rappelerDemande(demandeId: string): Promise<{ rappele: true }> {
+  return requete(`/api/demandes/${demandeId}/rappeler`, z.object({ rappele: z.literal(true) }), { method: "POST" });
+}
+
+export function modifierDemande(demandeId: string, donnees: ModifierDemandeRequete): Promise<DemandeDetail> {
+  return requete(`/api/demandes/${demandeId}`, demandeDetailSchema, {
+    method: "PATCH",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(donnees)
+  });
+}
+
+export function ajouterPiece(demandeId: string, fichier: File, pieceAfferenteId?: string): Promise<PieceJointeVue> {
+  const formData = new FormData();
+  formData.append("fichier", fichier);
+  if (pieceAfferenteId) formData.append("pieceAfferenteId", pieceAfferenteId);
+  // Pas de Content-Type explicite : le navigateur pose le boundary multipart
+  // lui-même, un en-tête manuel casserait le découpage des parties.
+  return requete(`/api/demandes/${demandeId}/pieces`, pieceJointeSchema, { method: "POST", body: formData });
+}
+
+export function supprimerPiece(demandeId: string, pieceId: string): Promise<{ supprime: true }> {
+  return requete(`/api/demandes/${demandeId}/pieces/${pieceId}`, z.object({ supprime: z.literal(true) }), {
+    method: "DELETE"
+  });
+}
+
+export interface ListerTachesCorbeilleParams {
+  role?: string;
+  etat?: string;
+}
+
+// GET /api/taches — scopé serveur aux rôles réels + délégués de l'appelant
+// (R4, TacheService.lister) : `role=` restreint cet ensemble, ne l'élargit
+// jamais.
+export function listerTachesCorbeille(params: ListerTachesCorbeilleParams): Promise<TachesListeReponse> {
+  const query = new URLSearchParams();
+  if (params.role) query.set("role", params.role);
+  if (params.etat) query.set("etat", params.etat);
+  query.set("limit", "200");
+  return requete(`/api/taches?${query.toString()}`, tachesListeReponseSchema);
+}
+
+export function trouverTache(tacheId: string): Promise<TacheVue> {
+  return requete(`/api/taches/${tacheId}`, tacheVueSchema);
+}
+
+export function claimTache(tacheId: string): Promise<TacheVue> {
+  return requete(`/api/taches/${tacheId}/claim`, tacheVueSchema, { method: "POST" });
+}
+
+export function unclaimTache(tacheId: string): Promise<TacheVue> {
+  return requete(`/api/taches/${tacheId}/unclaim`, tacheVueSchema, { method: "POST" });
+}
+
+export function approuverTache(tacheId: string, donnees: ApprouverRequete): Promise<TacheVue> {
+  return requete(`/api/taches/${tacheId}/approuver`, tacheVueSchema, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(donnees)
+  });
+}
+
+export function rejeterTache(tacheId: string, donnees: RejeterRequete): Promise<TacheVue> {
+  return requete(`/api/taches/${tacheId}/rejeter`, tacheVueSchema, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(donnees)
+  });
+}
+
+export function deleguerTache(tacheId: string, donnees: CreerDelegationRequete): Promise<DelegationVue> {
+  return requete(`/api/taches/${tacheId}/deleguer`, delegationVueSchema, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(donnees)
   });
 }

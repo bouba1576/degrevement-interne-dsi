@@ -4,12 +4,16 @@ import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { HomeScreen } from "@/components/screens/HomeScreen";
 import { NouvelleDemandeScreen } from "@/components/screens/nouvelle-demande/NouvelleDemandeScreen";
+import { CorbeillesScreen } from "@/components/screens/corbeilles/CorbeillesScreen";
+import { DossierDetailScreen } from "@/components/screens/dossier-detail/DossierDetailScreen";
 import { ApiError, deconnecter, fetchSession } from "@/lib/api";
 import type { SessionUtilisateur } from "@pgd/contracts";
 
 const TITRES: Record<string, { titre: string; sousTitre?: string }> = {
   home: { titre: "Tableau de bord", sousTitre: "Vue d'ensemble de l'activité" },
-  nouvelle: { titre: "Nouvelle fiche d'ajustement", sousTitre: "Formulaire cadré sur votre périmètre" }
+  nouvelle: { titre: "Nouvelle fiche d'ajustement", sousTitre: "Formulaire cadré sur votre périmètre" },
+  corbeilles: { titre: "Corbeilles partagées", sousTitre: "Affectation par rôle (pull)" },
+  detail: { titre: "Dossier" }
 };
 
 // Premier écran réellement connecté (Phase 9.2) : la session simulée posée
@@ -22,6 +26,17 @@ export default function Page() {
   const [utilisateur, setUtilisateur] = useState<SessionUtilisateur | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [route, setRoute] = useState("home");
+  const [dossierId, setDossierId] = useState<string | null>(null);
+
+  function naviguer(nouvelleRoute: string) {
+    setDossierId(null);
+    setRoute(nouvelleRoute);
+  }
+
+  function ouvrirDossier(id: string) {
+    setDossierId(id);
+    setRoute("detail");
+  }
 
   useEffect(() => {
     fetchSession()
@@ -56,6 +71,7 @@ export default function Page() {
   }
 
   const { titre, sousTitre } = TITRES[route] ?? { titre: route };
+  const ecransConnus = ["home", "nouvelle", "corbeilles", "detail"];
 
   return (
     <AppShell
@@ -63,12 +79,14 @@ export default function Page() {
       titre={titre}
       sousTitre={sousTitre}
       routeActuelle={route}
-      onNaviguer={setRoute}
+      onNaviguer={naviguer}
       onDeconnexion={onDeconnexion}
     >
-      {route === "home" && <HomeScreen utilisateur={utilisateur} onNaviguer={setRoute} />}
+      {route === "home" && <HomeScreen utilisateur={utilisateur} onNaviguer={naviguer} />}
       {route === "nouvelle" && <NouvelleDemandeScreen utilisateur={utilisateur} />}
-      {route !== "home" && route !== "nouvelle" && (
+      {route === "corbeilles" && <CorbeillesScreen utilisateur={utilisateur} onOuvrirDossier={ouvrirDossier} />}
+      {route === "detail" && dossierId && <DossierDetailScreen dossierId={dossierId} utilisateur={utilisateur} />}
+      {!ecransConnus.includes(route) && (
         <p className="text-13 text-gris600">Écran « {route} » à construire (Phase 9.2, étapes suivantes).</p>
       )}
     </AppShell>
