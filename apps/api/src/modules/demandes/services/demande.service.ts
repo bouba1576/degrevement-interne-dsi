@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, NotFoundException, UnprocessableEntityException } from "@nestjs/common";
 import { Prisma } from "@pgd/database";
 import type { Demande as DemandePrisma } from "@pgd/database";
 import type {
@@ -12,6 +12,7 @@ import { PrismaService } from "../../../infra/prisma/prisma.service";
 import { ReferenceService } from "./reference.service";
 import { MontantService } from "./montant.service";
 import { HistoriqueMontantService } from "./historique-montant.service";
+import { GedStubAdapter } from "../providers/ged-stub.adapter";
 
 type DemandeAvecRelations = Prisma.DemandeGetPayload<{ include: { lignes: true; pieces: true } }>;
 
@@ -21,7 +22,8 @@ export class DemandeService {
     private readonly prisma: PrismaService,
     private readonly reference: ReferenceService,
     private readonly montant: MontantService,
-    private readonly historique: HistoriqueMontantService
+    private readonly historique: HistoriqueMontantService,
+    private readonly ged: GedStubAdapter
   ) {}
 
   // POST /api/demandes (SF-PGD-040) — brouillon, segment dérivé du circuit
@@ -87,6 +89,41 @@ export class DemandeService {
     });
 
     return { demande: this.versDemande(demande), lignes: [], pieces: [] };
+  }
+
+  // DELETE /api/demandes/{id} — suppression d'un BROUILLON par son
+  // initiateur (InitiateurDemandeGuard, contrôleur). Restreinte au statut
+  // BROUILLON : un dossier déjà soumis se clôt par abandon (statut
+  // ABANDONNE, tracé), jamais par suppression — les deux opérations ont un
+  // sens métier différent (cf. CLAUDE.md § Questions ouvertes, question
+  // fermée en Phase 9.2). Suppression PHYSIQUE, en cascade (DemandeLigne,
+  // HistoriqueMontant, PieceJointe — onDelete: Cascade, schema.prisma) :
+  // aucune entrée JournalAudit n'existe jamais pour un brouillon (creer/
+  // definirLignes n'écrivent que dans HISTORIQUE_MONTANT, jamais
+  // JOURNAL_AUDIT — vérifié, rien à orpheliner ni à décider ici). Point qui
+  // NE se règle PAS par la seule cascade SQL : les pièces jointes ont un
+  // fichier réel sur disque (GedStubAdapter.stocker) — un DELETE cascadé au
+  // niveau base ne l'efface jamais, contrairement à PieceService.supprimer
+  // qui appelle explicitement `ged.supprimer()`. Sans cette boucle, chaque
+  // pièce d'un brouillon supprimé laisserait un fichier orphelin permanent.
+  async supprimer(demandeId: string): Promise<void> {
+    const demande = await this.prisma.demande.findUnique({ where: { id: demandeId } });
+    if (!demande) {
+      throw new NotFoundException({ code: "DEMANDE_INTROUVABLE", message: "Demande introuvable." });
+    }
+    if (demande.statut !== "BROUILLON") {
+      throw new UnprocessableEntityException({
+        code: "DEMANDE_NON_SUPPRIMABLE",
+        message: "Seul un brouillon peut être supprimé — un dossier déjà soumis se clôt par abandon."
+      });
+    }
+
+    const pieces = await this.prisma.pieceJointe.findMany({ where: { demandeId } });
+    for (const piece of pieces) {
+      if (piece.gedRef) await this.ged.supprimer(piece.gedRef);
+    }
+
+    await this.prisma.demande.delete({ where: { id: demandeId } });
   }
 
   async obtenirDetail(id: string): Promise<DemandeDetail> {

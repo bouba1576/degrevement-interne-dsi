@@ -88,6 +88,22 @@ export class DemandesController {
     return this.demandeService.obtenirDetail(id);
   }
 
+  // DELETE /api/demandes/{id} — suppression d'un BROUILLON par son
+  // initiateur (Phase 9.2, question ouverte fermée : « abandon » exige un
+  // dossier déjà engagé dans une chaîne de validation, un brouillon ne l'est
+  // jamais — deux opérations distinctes, pas un raccourci). Le contrôle
+  // d'état (statut === BROUILLON) reste dans le service, comme pour
+  // definirLignes/modifier — InitiateurDemandeGuard ne vérifie QUE la
+  // propriété.
+  @Authenticated()
+  @UseGuards(InitiateurDemandeGuard)
+  @Delete(":id")
+  @HttpCode(200)
+  async supprimer(@Param("id") id: string): Promise<{ supprime: true }> {
+    await this.demandeService.supprimer(id);
+    return { supprime: true };
+  }
+
   // PATCH /api/demandes/{id} (SF-PGD-087, R6) — re-routage si déjà soumise,
   // simple modification de champs sinon (DemandeWorkflowService tranche).
   // InitiateurDemandeGuard ne remplace pas le contrôle d'état déjà présent

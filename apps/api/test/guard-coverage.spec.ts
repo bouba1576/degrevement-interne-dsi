@@ -73,6 +73,7 @@ describe("Couverture structurelle des guards de portée — récidive des huit f
     rappeler: [InitiateurDemandeGuard],
     ajouterPiece: [InitiateurDemandeGuard],
     supprimerPiece: [InitiateurDemandeGuard],
+    supprimer: [InitiateurDemandeGuard],
     rejouerSi: []
   };
 

@@ -1,4 +1,6 @@
 import { UnprocessableEntityException } from "@nestjs/common";
+import { access } from "node:fs/promises";
+import { join } from "node:path";
 import Redis from "ioredis";
 import { loadEnv } from "@pgd/config";
 import { PrismaService } from "../src/infra/prisma/prisma.service";
@@ -25,7 +27,7 @@ describe("DemandeWorkflowService.soumettre — R13/R14/R15/R17 + instanciation",
   const reference = new ReferenceService();
   const montant = new MontantService(prisma);
   const historique = new HistoriqueMontantService(prisma);
-  const demandeService = new DemandeService(prisma, reference, montant, historique);
+  const demandeService = new DemandeService(prisma, reference, montant, historique, new GedStubAdapter());
   const demandeLigneService = new DemandeLigneService(prisma, montant, historique, demandeService);
   const piece = new PieceService(prisma, new GedStubAdapter());
   const calendrierSla = new CalendrierSlaService(prisma);
@@ -388,7 +390,7 @@ describe("DemandeLigneService.definirLignes — remplacement complet, pas incré
   const reference = new ReferenceService();
   const montant = new MontantService(prisma);
   const historique = new HistoriqueMontantService(prisma);
-  const demandeService = new DemandeService(prisma, reference, montant, historique);
+  const demandeService = new DemandeService(prisma, reference, montant, historique, new GedStubAdapter());
   const demandeLigneService = new DemandeLigneService(prisma, montant, historique, demandeService);
 
   const acteur = { id: "44444444-4444-4444-4444-444444444444", identifiantAd: "test.lignes@orange.ci" };
@@ -499,5 +501,117 @@ describe("DemandeLigneService.definirLignes — remplacement complet, pas incré
 
     expect(apres.id).toBe(avant.id);
     expect(Number(apres.recurrent)).toBe(21000);
+  });
+});
+
+// Lot API (Phase 9.2, après vérification live de NouvelleDemandeScreen) :
+// « abandon » exige un dossier engagé dans une chaîne de validation — un
+// brouillon ne l'est jamais. Deux opérations distinctes, pas un abandon
+// déguisé. L'ownership (InitiateurDemandeGuard) est déjà testée
+// génériquement, route-agnostique, dans initiateur-demande.guard.spec.ts ;
+// ce qui est PROPRE à cette route est le contrôle de statut (seul BROUILLON
+// est supprimable) et le nettoyage GED réel — vérifiés ici.
+describe("DemandeService.supprimer — suppression physique d'un BROUILLON", () => {
+  const prisma = new PrismaService();
+  const reference = new ReferenceService();
+  const montant = new MontantService(prisma);
+  const historique = new HistoriqueMontantService(prisma);
+  const ged = new GedStubAdapter();
+  const demandeService = new DemandeService(prisma, reference, montant, historique, ged);
+  const demandeLigneService = new DemandeLigneService(prisma, montant, historique, demandeService);
+  const piece = new PieceService(prisma, ged);
+
+  const acteur = { id: "55555555-5555-5555-5555-555555555555", identifiantAd: "test.suppression@orange.ci" };
+  const suffixe = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  let compteId: string;
+  let ligneId: string;
+  let formuleId: string;
+  let pieceAfferenteId: string;
+
+  beforeAll(async () => {
+    await prisma.utilisateur.upsert({
+      where: { id: acteur.id },
+      update: {},
+      create: { id: acteur.id, identifiantAd: acteur.identifiantAd, nom: "Test Suppression" }
+    });
+    const motif = await prisma.motif.findFirstOrThrow({ where: { circuit: "DOBB" } });
+    const pieceAfferente = await prisma.pieceAfferente.findFirstOrThrow({ where: { motifId: motif.id } });
+    pieceAfferenteId = pieceAfferente.id;
+  });
+
+  beforeEach(async () => {
+    const compte = await prisma.compteClient.create({
+      data: { numeroCompte: `TEST-CPT-DS-${suffixe}`, nomClient: "Client Test Suppression" }
+    });
+    compteId = compte.id;
+    const ligne = await prisma.ligne.create({ data: { compteId, nd: `ND-DS-${suffixe}`, statut: "ACTIF" } });
+    ligneId = ligne.id;
+    const formule = await prisma.formule.create({
+      data: { ligneId, libelle: "Formule test", recurrentMensuelHt: 20000, dateDebut: new Date("2025-01-01"), courante: true }
+    });
+    formuleId = formule.id;
+    await prisma.ligne.update({ where: { id: ligneId }, data: { formuleCouranteId: formuleId } });
+  });
+
+  afterEach(async () => {
+    // La demande de test peut déjà avoir été supprimée par le test lui-même
+    // (`demandeService.supprimer`) — `deleteMany` reste silencieux si rien
+    // ne correspond, contrairement à `delete`.
+    await prisma.historiqueMontant.deleteMany({ where: { demande: { compteClient: compteId } } });
+    await prisma.pieceJointe.deleteMany({ where: { demande: { compteClient: compteId } } });
+    await prisma.demandeLigne.deleteMany({ where: { demande: { compteClient: compteId } } });
+    await prisma.demande.deleteMany({ where: { compteClient: compteId } });
+    await prisma.formule.deleteMany({ where: { ligneId } });
+    await prisma.ligne.deleteMany({ where: { compteId } });
+    await prisma.compteClient.delete({ where: { id: compteId } });
+  });
+
+  afterAll(async () => {
+    await prisma.$disconnect();
+  });
+
+  async function creerDemandeBrouillon(): Promise<string> {
+    const detail = await demandeService.creer({ circuit: "DOBB", nomClient: "Client Test", compteClient: compteId }, acteur.id);
+    return detail.demande.id;
+  }
+
+  it("supprime un BROUILLON : DemandeLigne/HistoriqueMontant/PieceJointe disparaissent, le fichier GED réel aussi", async () => {
+    const demandeId = await creerDemandeBrouillon();
+    await demandeLigneService.definirLignes(
+      demandeId,
+      { lignes: [{ ligneId, formuleId, recurrent: 20000, montantHtLigne: 20000 }] },
+      acteur.id
+    );
+    const pieceJointe = await piece.ajouter(
+      demandeId,
+      { originalname: "facture.pdf", mimetype: "application/pdf", size: 100, buffer: Buffer.from("test") },
+      pieceAfferenteId
+    );
+    const gedRef = (await prisma.pieceJointe.findUniqueOrThrow({ where: { id: pieceJointe.id } })).gedRef!;
+
+    // Le fichier existe réellement sur disque avant la suppression — sinon
+    // le test ne prouverait rien sur le nettoyage GED, juste sur la cascade SQL.
+    const env = loadEnv();
+    const cheminFichier = join(env.GED_STORAGE_PATH, gedRef);
+    await expect(access(cheminFichier)).resolves.toBeUndefined();
+
+    await demandeService.supprimer(demandeId);
+
+    expect(await prisma.demande.findUnique({ where: { id: demandeId } })).toBeNull();
+    expect(await prisma.demandeLigne.count({ where: { demandeId } })).toBe(0);
+    expect(await prisma.historiqueMontant.count({ where: { demandeId } })).toBe(0);
+    expect(await prisma.pieceJointe.count({ where: { demandeId } })).toBe(0);
+    await expect(access(cheminFichier)).rejects.toThrow();
+  });
+
+  it("rejette (422 DEMANDE_NON_SUPPRIMABLE) une demande déjà soumise — seul un BROUILLON est supprimable", async () => {
+    const demandeId = await creerDemandeBrouillon();
+    await prisma.demande.update({ where: { id: demandeId }, data: { statut: "SOUMIS" } });
+
+    await expect(demandeService.supprimer(demandeId)).rejects.toMatchObject({
+      response: { code: "DEMANDE_NON_SUPPRIMABLE" }
+    });
+    expect(await prisma.demande.findUnique({ where: { id: demandeId } })).not.toBeNull();
   });
 });
