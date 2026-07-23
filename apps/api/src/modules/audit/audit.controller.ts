@@ -31,10 +31,10 @@ export class AuditController {
 
   @Roles("ADMIN_PGD")
   @Get("securite")
-  async journalSecurite(@Query() query: unknown): Promise<{ entrees: JournalSecuriteVue[]; meta: { total: number } }> {
+  async journalSecurite(@Query() query: unknown): Promise<{ data: JournalSecuriteVue[]; meta: { total: number } }> {
     const dto = journalSecuriteQuerySchema.parse(query);
     const { entrees, total } = await this.audit.journalSecurite(dto);
-    return { entrees, meta: { total } };
+    return { data: entrees, meta: { total } };
   }
 
   @Roles("ADMIN_PGD")

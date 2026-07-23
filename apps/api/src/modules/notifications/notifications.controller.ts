@@ -21,10 +21,10 @@ export class NotificationsController {
   async lister(
     @Query() query: unknown,
     @CurrentUser() utilisateur: UtilisateurRequete
-  ): Promise<{ notifications: NotificationVue[]; meta: { total: number } }> {
+  ): Promise<{ data: NotificationVue[]; meta: { total: number } }> {
     const dto = listerNotificationsQuerySchema.parse(query);
     const { notifications, total } = await this.notifications.lister(dto, utilisateur.id);
-    return { notifications, meta: { total } };
+    return { data: notifications, meta: { total } };
   }
 
   @Authenticated()

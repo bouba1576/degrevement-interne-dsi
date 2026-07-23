@@ -85,10 +85,10 @@ export class DemandesController {
   async lister(
     @Query() query: unknown,
     @CurrentUser() utilisateur: UtilisateurRequete
-  ): Promise<{ demandes: Demande[]; meta: { total: number } }> {
+  ): Promise<{ data: Demande[]; meta: { total: number } }> {
     const dto = listerDemandesQuerySchema.parse(query);
     const { demandes, total } = await this.demandeService.lister(dto, utilisateur.id);
-    return { demandes, meta: { total } };
+    return { data: demandes, meta: { total } };
   }
 
   @Authenticated()
