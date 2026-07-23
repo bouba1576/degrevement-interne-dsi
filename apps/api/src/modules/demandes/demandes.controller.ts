@@ -24,6 +24,7 @@ import {
   type ApercuRoutageReponse,
   type Demande,
   type DemandeDetail,
+  type EtapeDossier,
   type PieceJointeVue,
   type SiVue,
   type SoumissionReponse
@@ -94,6 +95,16 @@ export class DemandesController {
   @Get(":id")
   async obtenirDetail(@Param("id") id: string): Promise<DemandeDetail> {
     return this.demandeService.obtenirDetail(id);
+  }
+
+  // GET /api/demandes/{id}/taches (Phase 9.2) — chaîne réelle du dossier,
+  // pour l'onglet « Circuit de validation ». Même ouverture qu'obtenirDetail
+  // ci-dessus (docs/06 §4) : pas de guard supplémentaire, la 404 sur demande
+  // absente est portée par le service.
+  @Authenticated()
+  @Get(":id/taches")
+  async listerTaches(@Param("id") id: string): Promise<EtapeDossier[]> {
+    return this.demandeService.listerTaches(id);
   }
 
   // DELETE /api/demandes/{id} — suppression d'un BROUILLON par son

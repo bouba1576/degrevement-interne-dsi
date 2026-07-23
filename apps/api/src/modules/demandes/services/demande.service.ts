@@ -5,6 +5,7 @@ import type {
   CreerDemandeRequete,
   Demande,
   DemandeDetail,
+  EtapeDossier,
   ListerDemandesQuery,
   ModifierDemandeRequete
 } from "@pgd/contracts";
@@ -135,6 +136,52 @@ export class DemandeService {
       throw new NotFoundException({ code: "DEMANDE_INTROUVABLE", message: "Demande introuvable." });
     }
     return this.versDetail(demande);
+  }
+
+  // GET /api/demandes/{id}/taches (Phase 9.2) — chaîne réelle et ordonnée des
+  // tâches d'un dossier, pour l'onglet « Circuit de validation »
+  // (WorkflowStepper, packages/ui). Même ouverture que obtenirDetail
+  // ci-dessus (docs/06 §4, lecture non restreinte) : la chaîne d'un dossier
+  // déjà lisible ne divulgue rien de structurellement nouveau. Vivant ici
+  // plutôt que dans TacheService pour éviter une dépendance circulaire
+  // DemandesModule <-> TachesModule (TachesModule importe déjà DemandesModule
+  // pour CalendrierSlaService/RuleEngineService) — PrismaService suffit, il
+  // est global (PrismaModule).
+  //
+  // Vue délibérément PLUS ÉTROITE que TacheVue — décision explicite, pas un
+  // `select *` (cf. packages/contracts/src/tache.ts, EtapeDossier) :
+  // agentClaimId/dateClaim (qui traite le dossier, depuis quand) ne sont
+  // JAMAIS exposés pour une étape en cours — ce serait révéler la charge de
+  // travail en temps réel d'un agent précis à n'importe quel authentifié
+  // ouvrant un dossier tiers, une information différente de « quel rôle doit
+  // valider ». acteurNom n'est renseigné que lorsque dateDecision est déjà
+  // posée (étape APPROUVEE/REJETEE) : même information que celle déjà
+  // visible via GET /api/audit/{demandeId}, présentée avec un nom résolu.
+  async listerTaches(demandeId: string): Promise<EtapeDossier[]> {
+    const demande = await this.prisma.demande.findUnique({ where: { id: demandeId } });
+    if (!demande) {
+      throw new NotFoundException({ code: "DEMANDE_INTROUVABLE", message: "Demande introuvable." });
+    }
+
+    const taches = await this.prisma.tache.findMany({
+      where: { demandeId },
+      include: { role: { select: { libelle: true } }, agentClaim: { select: { nom: true } } },
+      orderBy: { ordre: "asc" }
+    });
+
+    return taches.map((t) => ({
+      id: t.id,
+      ordre: t.ordre,
+      roleCode: t.roleCorbeille,
+      roleLibelle: t.role.libelle,
+      typeActeur: t.typeActeur as never,
+      bloquant: t.bloquant,
+      etat: t.etat as never,
+      echeanceSla: t.echeanceSla ? t.echeanceSla.toISOString() : null,
+      niveauEscalade: t.niveauEscalade,
+      dateDecision: t.dateDecision ? t.dateDecision.toISOString() : null,
+      acteurNom: t.dateDecision ? (t.agentClaim?.nom ?? null) : null
+    }));
   }
 
   // POST /api/demandes/{id}/calcul (SF-PGD-041) — aperçu : recalcule TSC/TVA/

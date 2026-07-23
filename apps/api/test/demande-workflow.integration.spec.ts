@@ -687,3 +687,110 @@ describe("DemandeService.lister — profil=initiateur force le périmètre serve
     expect(demandes.some((d) => d.id === demandeAutre.demande.id)).toBe(true);
   });
 });
+
+// GET /api/demandes/{id}/taches (Phase 9.2) — vue délibérément plus étroite
+// que TacheVue (cf. packages/contracts/src/tache.ts, EtapeDossier) : acteurNom
+// ne doit JAMAIS fuiter pour une étape en cours, seulement une fois décidée.
+describe("DemandeService.listerTaches — chaîne réelle, acteurNom seulement si décidé", () => {
+  const prisma = new PrismaService();
+  const reference = new ReferenceService();
+  const montant = new MontantService(prisma);
+  const historique = new HistoriqueMontantService(prisma);
+  const demandeService = new DemandeService(prisma, reference, montant, historique, new GedStubAdapter());
+
+  const acteur = { id: "88888888-8888-8888-8888-888888888888", identifiantAd: "test.chaine@orange.ci" };
+  const suffixe = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const roleCode = `TEST_ROLE_CHAINE_${suffixe}`;
+
+  let demandeId: string;
+
+  beforeAll(async () => {
+    await prisma.utilisateur.upsert({
+      where: { id: acteur.id },
+      update: {},
+      create: { id: acteur.id, identifiantAd: acteur.identifiantAd, nom: "Test Chaine Acteur" }
+    });
+    await prisma.role.create({
+      data: {
+        code: roleCode,
+        libelle: "Rôle Test Chaîne",
+        groupeAd: `GG-TEST-${suffixe}`,
+        niveau: 1,
+        type: "METIER",
+        dansMatrice: false,
+        requiertMfa: false
+      }
+    });
+  });
+
+  beforeEach(async () => {
+    const detail = await demandeService.creer({ circuit: "DOBB", nomClient: "Client Test Chaîne" }, acteur.id);
+    demandeId = detail.demande.id;
+
+    await prisma.tache.create({
+      data: {
+        demandeId,
+        roleCorbeille: roleCode,
+        ordre: 0,
+        typeActeur: "V",
+        bloquant: true,
+        slaHeures: 24,
+        etat: "APPROUVEE",
+        agentClaimId: acteur.id,
+        dateDecision: new Date()
+      }
+    });
+    await prisma.tache.create({
+      data: {
+        demandeId,
+        roleCorbeille: roleCode,
+        ordre: 1,
+        typeActeur: "A",
+        bloquant: true,
+        slaHeures: 24,
+        etat: "RECLAMEE",
+        agentClaimId: acteur.id,
+        dateClaim: new Date()
+      }
+    });
+  });
+
+  afterAll(async () => {
+    await prisma.tache.deleteMany({ where: { roleCorbeille: roleCode } });
+    await prisma.demande.deleteMany({ where: { initiateurId: acteur.id } });
+    await prisma.role.delete({ where: { code: roleCode } });
+    await prisma.utilisateur.deleteMany({ where: { id: acteur.id } });
+    await prisma.$disconnect();
+  });
+
+  it("renvoie la chaîne ordonnée avec roleLibelle résolu", async () => {
+    const etapes = await demandeService.listerTaches(demandeId);
+
+    expect(etapes).toHaveLength(2);
+    expect(etapes[0]).toMatchObject({ ordre: 0, roleCode, roleLibelle: "Rôle Test Chaîne", etat: "APPROUVEE" });
+    expect(etapes[1]).toMatchObject({ ordre: 1, roleCode, roleLibelle: "Rôle Test Chaîne", etat: "RECLAMEE" });
+  });
+
+  it("expose acteurNom pour une étape déjà décidée (dateDecision posée)", async () => {
+    const etapes = await demandeService.listerTaches(demandeId);
+    const etapeDecidee = etapes.find((e) => e.ordre === 0)!;
+
+    expect(etapeDecidee.dateDecision).not.toBeNull();
+    expect(etapeDecidee.acteurNom).toBe("Test Chaine Acteur");
+  });
+
+  it("ne renvoie JAMAIS acteurNom pour une étape en cours, même avec un agentClaimId posé", async () => {
+    const etapes = await demandeService.listerTaches(demandeId);
+    const etapeEnCours = etapes.find((e) => e.ordre === 1)!;
+
+    expect(etapeEnCours.etat).toBe("RECLAMEE");
+    expect(etapeEnCours.dateDecision).toBeNull();
+    expect(etapeEnCours.acteurNom).toBeNull();
+  });
+
+  it("rejette (404 DEMANDE_INTROUVABLE) un id de demande inexistant", async () => {
+    await expect(demandeService.listerTaches("00000000-0000-0000-0000-000000000000")).rejects.toMatchObject({
+      response: { code: "DEMANDE_INTROUVABLE" }
+    });
+  });
+});

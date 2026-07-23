@@ -61,3 +61,35 @@ export const rejeterRequeteSchema = z.object({
   motif: z.string().min(1, "Le motif de rejet est obligatoire")
 });
 export type RejeterRequete = z.infer<typeof rejeterRequeteSchema>;
+
+// GET /api/demandes/{id}/taches (Phase 9.2) — chaîne réelle des tâches d'un
+// dossier, pour l'onglet « Circuit de validation » (WorkflowStepper,
+// packages/ui). Même ouverture que GET /api/demandes/{id} (docs/06 §4,
+// lecture non restreinte) : la chaîne d'un dossier déjà lisible ne divulgue
+// rien de nouveau structurellement.
+//
+// Vue délibérément PLUS ÉTROITE que TacheVue — décision explicite, pas un
+// `select *` : `agentClaimId`/`dateClaim` (qui traite le dossier, depuis
+// quand) ne sont JAMAIS exposés pour une étape en cours (EN_ATTENTE/
+// EN_CORBEILLE/RECLAMEE), ce serait révéler la charge de travail en temps
+// réel d'un agent précis à n'importe quel utilisateur authentifié qui ouvre
+// un dossier tiers — une information différente de « quel rôle doit
+// valider ». `acteurNom` n'est renseigné que lorsque `dateDecision` est déjà
+// posée (étape APPROUVEE/REJETEE, donc décidée) : c'est la même information
+// que celle déjà visible via GET /api/audit/{demandeId} (acteur.identifiantAd
+// sur les entrées "approbation"/"rejet"), présentée avec un nom résolu au
+// lieu d'un identifiant — pas une exposition nouvelle.
+export const etapeDossierSchema = z.object({
+  id: z.string().uuid(),
+  ordre: z.number(),
+  roleCode: z.string(),
+  roleLibelle: z.string(),
+  typeActeur: enumTypeActeur,
+  bloquant: z.boolean(),
+  etat: enumEtatTache,
+  echeanceSla: z.string().nullable(),
+  niveauEscalade: z.number(),
+  dateDecision: z.string().nullable(),
+  acteurNom: z.string().nullable()
+});
+export type EtapeDossier = z.infer<typeof etapeDossierSchema>;
