@@ -3,12 +3,14 @@ import { RequestMethod } from "@nestjs/common";
 import { DemandesController } from "../src/modules/demandes/demandes.controller";
 import { TachesController } from "../src/modules/taches/taches.controller";
 import { KpiController } from "../src/modules/kpi/kpi.controller";
+import { NotificationsController } from "../src/modules/notifications/notifications.controller";
 import { InitiateurDemandeGuard } from "../src/common/guards/initiateur-demande.guard";
 import { CorbeilleRoleGuard } from "../src/common/guards/corbeille-role.guard";
 import { DelegantMembreRoleGuard } from "../src/common/guards/delegant-membre-role.guard";
 import { DelegationContextGuard } from "../src/common/guards/delegation-context.guard";
 import { SodGuard } from "../src/common/guards/sod.guard";
 import { KpiPerimetreGuard } from "../src/common/guards/kpi-perimetre.guard";
+import { NotificationDestinataireGuard } from "../src/common/guards/notification-destinataire.guard";
 
 // Contremesure durable aux huit occurrences de la même faille en Phase 8
 // (contrôle de rôle présent au niveau route, absent au niveau objet/portée —
@@ -97,6 +99,16 @@ describe("Couverture structurelle des guards de portée — récidive des huit f
     definitions: []
   };
 
+  // NotificationsController (Phase 9.2, question ouverte fermée) — `lister`
+  // n'a pas de guard de propriété : le périmètre est garanti par construction
+  // (where.destinataireId = utilisateur.id), même raisonnement que
+  // DemandesController.creer. `marquerLue` porte le guard car il agit sur une
+  // ressource déjà identifiée par id, comme les routes d'écriture de
+  // DemandesController.
+  const TABLE_NOTIFICATIONS: Record<string, unknown[]> = {
+    marquerLue: [NotificationDestinataireGuard]
+  };
+
   function verifierControleur(nom: string, controleur: ControleurAvecPrototype, table: Record<string, unknown[]>, routes: string[]) {
     describe(nom, () => {
       it("toute route répertoriée dans la table porte réellement chacun de ses guards attendus", () => {
@@ -124,4 +136,5 @@ describe("Couverture structurelle des guards de portée — récidive des huit f
   verifierControleur("DemandesController — InitiateurDemandeGuard sur les routes d'écriture", DemandesController, TABLE_DEMANDES, listerRoutesEcriture(DemandesController));
   verifierControleur("TachesController — CorbeilleRoleGuard/DelegantMembreRoleGuard sur les routes d'écriture", TachesController, TABLE_TACHES, listerRoutesEcriture(TachesController));
   verifierControleur("KpiController — KpiPerimetreGuard sur la lecture agrégée", KpiController, TABLE_KPI, listerRoutes(KpiController));
+  verifierControleur("NotificationsController — NotificationDestinataireGuard sur les routes d'écriture", NotificationsController, TABLE_NOTIFICATIONS, listerRoutesEcriture(NotificationsController));
 });

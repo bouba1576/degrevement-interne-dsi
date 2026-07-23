@@ -16,3 +16,4 @@ export * from "./si";
 export * from "./controle";
 export * from "./audit";
 export * from "./kpi";
+export * from "./notification";
