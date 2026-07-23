@@ -266,6 +266,10 @@ Deuxième occurrence (Phase 4 sur `api`, Phase 6 sur `worker`) du même incident
 
 **Ne pas** : élargir `estDejaEnveloppe()` pour deviner/fusionner une clé de liste arbitraire — l'intercepteur est un composant partagé et générique (tout contrôleur de l'API le traverse) ; lui apprendre à reconnaître des formes de contrôleur ad hoc serait exactement le genre de couplage fragile que la convention `{ data, meta }` existe pour éviter. Le contrat reste simple et à la charge du contrôleur : **toute réponse paginée doit être `{ data: [...], meta: { total } }`**, jamais une autre clé.
 
+**Balayage complet effectué** (pas seulement les 3 routes trouvées en construisant AdminScreen) : les 18 fichiers `*.controller.ts` d'`apps/api/src` ont été inspectés — chaque type de retour `Promise<{...}>` inline et chaque type nommé (`TachesListeReponse`, `PaliersListeReponse`, `ImportCrmReponse`, `SanteDetail`, `CompteAvecLignes`, `FormulesDeLigne`, etc.). Aucune autre route ne porte une clé `meta` à côté d'une clé de liste autre que `data`. Deux formes cohabitent légitimement et ne se confondent jamais avec le piège : le total porté **dans** le DTO lui-même (`{taches, total}`, `{paliers, trous}` — jamais de clé `meta`, `estDejaEnveloppe()` ne se déclenche pas dessus), et `{data, meta}` — la forme correcte.
+
+**Généralisé en test structurel, pas seulement pin des 3 cas connus** : `apps/api/test/envelope-contract.spec.ts` lit l'AST réel (compilateur TypeScript, déjà une dépendance) de chaque `*.controller.ts`, extrait tout `return { ... }` littéral, et échoue si une réponse porte `meta` sans `data` — sur **n'importe quelle route future**, sans table à tenir à jour. Contrairement à `guard-coverage.spec.ts` (une table route → guards attendus est nécessaire faute de décorateur marquant « ceci est une route de liste »), l'invariant « `meta` implique `data` » est universel et vérifiable sans connaître à l'avance quelles routes existeront — structurellement supérieur à une table pour ce cas précis, mais ce n'est pas un pattern général : un contrôle qui a besoin de savoir QUELLES routes sont concernées (guards de portée) reste nécessairement porté par une table, l'AST ne sait pas deviner une intention métier. Preuve que le test mord réellement : `{ demandes, meta }` réintroduit temporairement dans `DemandesController.lister` → échec avec fichier/ligne exacts ; revert (diff vide confirmé) → vert. Un test de non-régression qui n'a jamais été vu échouer sur le défaut qu'il prétend couvrir n'est qu'une hypothèse.
+
 ### `si-service.integration.spec.ts` — un test peut échouer parce que le conteneur `worker` réel consomme le message avant l'assertion (trouvé en sweep de fin d'étape, Phase 9.2)
 
 **Symptôme** : `pnpm --filter @pgd/api test` lancé depuis l'hôte échoue de façon intermittente sur « rejeu manuel sous le plafond republie si.push sans lever d'erreur » — attend `{ etat: "ERREUR" }`, reçoit `{ etat: "ENVOYE" }`. Les 172 autres tests passent.
@@ -277,6 +281,26 @@ Deuxième occurrence (Phase 4 sur `api`, Phase 6 sur `worker`) du même incident
 **Geste** : si ce test échoue seul (les 172 autres verts) pendant un sweep depuis l'hôte, revérifier `docker compose ps worker` avant de le lire comme une régression — un `worker` actif suffit à l'expliquer. Pour une vérification déterministe de ce fichier précis, `docker compose stop worker` le temps du run, puis `docker compose start worker` ensuite (jamais `down`/`rm`, pas de perte d'état à ce prix).
 
 **Ne pas** : mocker `ConnexionRabbitMQ` dans ce test pour le rendre silencieux vis-à-vis du worker — le test vérifie explicitement (commentaire du fichier) que le rejeu republie réellement sur le broker, un mock rendrait cette assertion vide de sens. Le bon correctif, s'il est fait un jour, isolerait le test (routing key ou file dédiée à l'exécution de test) plutôt que de couper la publication réelle — décision hors du périmètre de cette session, non prise ici.
+
+**Ne pas confondre avec `ldap-provider.integration.spec.ts` ci-dessus — deux natures différentes, pas la même dette.** `ldap-provider` est un problème de **contexte d'exécution** (conteneur vs hôte) : déterministe et vert à 100 % depuis l'hôte, la couverture existe réellement, elle n'est simplement pas disponible dans tous les contextes de lancement. `si-service` est une **vraie course de concurrence** contre un processus tiers réel, reproductible peu importe où `pnpm test` est lancé (hôte ou conteneur) tant que `worker` tourne — une dette non résolue, pas une question de disponibilité. Les deux restent en l'état (non « réparés »), mais ne pas les traiter comme une seule et même catégorie de problème dans un futur compte-rendu.
+
+### État des lieux Phase 9 (fin d'étape AdminScreen, avant `LoginScreen`)
+
+Inventaire vérifié contre le contenu réel de `docs/design/` (noms de composants exportés), pas contre la mémoire d'une session précédente.
+
+**Construit** : coquille (Sidebar/Topbar), `HomeScreen`, `NouvelleDemandeScreen` (avec le correctif montant), `CorbeillesScreen`, `DossierDetailScreen`, `ControleScreen`, `AdminScreen` (7 onglets — clôt les écrans de `screens3.jsx`).
+
+**Lacune la plus critique — aucun écran de connexion.** `screens_auth.jsx` (`LoginScreen`/`MfaChallenge`) n'a aucune contrepartie dans `apps/web`. Le backend d'authentification est complet et vérifié contre un annuaire réel depuis la Phase 2 ; sans cet écran, **aucune recette n'est possible par l'interface** — chaque vérification live de cette session (Phase 9.2 entière) a posé un cookie de session hors application (`fetch` direct, login+MFA scriptés). C'est la seule lacune qui bloque toute recette, indépendamment de la qualité du reste. Traité en priorité immédiatement après ce commit.
+
+**Autres écrans du mockup sans contrepartie** :
+- `MesDemandesScreen` (`screens2.jsx`) — `GET /api/demandes?profil=initiateur` existe et est prêt (Phase 9.2), jamais câblé à un écran.
+- `ConsultationScreen` et un `AuditScreen` autonome (`screens2.jsx`/`screens3.jsx`) — `GET /api/audit/securite` (dont l'enveloppe vient d'être corrigée ci-dessus) n'a aucun consommateur frontend aujourd'hui.
+- `MasseScreen`, `IntegrationsScreen` (`screens4.jsx`) — aucune route backend, aucune trace nulle part : même famille que Utilisateurs/Moniteur (AdminScreen), jamais nommée comme telle jusqu'ici.
+- Entrée Sidebar « Modules » redondante avec l'onglet « Paramètres système » d'AdminScreen depuis ce tour — à nettoyer ou rediriger, pas urgent.
+
+**Dans `DossierDetailScreen`, actions du mockup non couvertes** : `Modifier` (PATCH re-routage, R6) n'a aucun déclencheur UI bien que la route existe ; `Déléguer`/`Réaffecter` restent exclus (route de recherche d'agent manquante, déjà consignée) ; Approuver/Rejeter sont des actions simples, pas la « revue champ par champ » du mockup (`ApproveModal`) — écart non documenté jusqu'à ce tour.
+
+**Questions métier non tranchées** (inchangées, cf. « Questions ouvertes » plus bas) : seuils/rôles de subdélégation DOBB/DXC, N1/N2 jamais câblés dans aucun palier, destinataires des notifications ESCALADE/ERREUR_SI, rôle habilité au rejeu SI manuel et à l'export d'audit, rattachement agent→direction/service pour le scoping KPI, escalade SLA sans effet de déblocage réel.
 
 ---
 
