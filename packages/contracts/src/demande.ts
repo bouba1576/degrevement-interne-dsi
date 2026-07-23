@@ -138,11 +138,19 @@ export const demandeDetailSchema = z.object({
 });
 export type DemandeDetail = z.infer<typeof demandeDetailSchema>;
 
+// `profil=initiateur` scope la liste au seul appelant — jamais un
+// `initiateurId` accepté en paramètre (même convention que GET /api/kpi,
+// KpiEngineService.construireWhere) : le périmètre vient TOUJOURS de la
+// session authentifiée côté serveur, jamais d'une valeur que le client
+// pourrait fournir. Sans `profil`, la liste reste non scopée — ouverte à
+// tout utilisateur authentifié par choix documenté (docs/06 §4), pas un
+// oubli à combler ici.
 export const listerDemandesQuerySchema = z.object({
   circuit: enumCircuit.optional(),
   statut: enumStatutDemande.optional(),
   siEtat: enumEtatSi.optional(),
   q: z.string().optional(),
+  profil: z.enum(["initiateur"]).optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(200).default(20)
 });

@@ -615,3 +615,75 @@ describe("DemandeService.supprimer — suppression physique d'un BROUILLON", () 
     expect(await prisma.demande.findUnique({ where: { id: demandeId } })).not.toBeNull();
   });
 });
+
+// Périmètre de `profil=initiateur` — même famille de contrôle que
+// KpiEngineService.construireWhere (kpi-engine.integration.spec.ts, « profil
+// force initiateurId=appelant ») : initiateurId vient TOUJOURS de la session
+// authentifiée passée en second argument, jamais d'un champ que le client
+// pourrait faire varier. Ces tests prouvent le périmètre dans les DEUX sens.
+describe("DemandeService.lister — profil=initiateur force le périmètre serveur", () => {
+  const prisma = new PrismaService();
+  const reference = new ReferenceService();
+  const montant = new MontantService(prisma);
+  const historique = new HistoriqueMontantService(prisma);
+  const demandeService = new DemandeService(prisma, reference, montant, historique, new GedStubAdapter());
+
+  const acteurAppelant = { id: "66666666-6666-6666-6666-666666666666", identifiantAd: "test.mesdemandes.appelant@orange.ci" };
+  const acteurAutre = { id: "77777777-7777-7777-7777-777777777777", identifiantAd: "test.mesdemandes.autre@orange.ci" };
+  const suffixe = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  let compteId: string;
+
+  beforeAll(async () => {
+    await prisma.utilisateur.upsert({
+      where: { id: acteurAppelant.id },
+      update: {},
+      create: { id: acteurAppelant.id, identifiantAd: acteurAppelant.identifiantAd, nom: "Test Mes Demandes Appelant" }
+    });
+    await prisma.utilisateur.upsert({
+      where: { id: acteurAutre.id },
+      update: {},
+      create: { id: acteurAutre.id, identifiantAd: acteurAutre.identifiantAd, nom: "Test Mes Demandes Autre" }
+    });
+    const compte = await prisma.compteClient.create({
+      data: { numeroCompte: `TEST-CPT-MD-${suffixe}`, nomClient: "Client Test Mes Demandes" }
+    });
+    compteId = compte.id;
+  });
+
+  afterAll(async () => {
+    await prisma.demande.deleteMany({ where: { compteClient: compteId } });
+    await prisma.compteClient.delete({ where: { id: compteId } });
+    await prisma.$disconnect();
+  });
+
+  it("profil=initiateur ne renvoie que les demandes de l'appelant — un dossier d'un autre agent reste invisible", async () => {
+    const demandeAppelant = await demandeService.creer(
+      { circuit: "DOBB", nomClient: "Client Test", compteClient: compteId },
+      acteurAppelant.id
+    );
+    const demandeAutre = await demandeService.creer(
+      { circuit: "DOBB", nomClient: "Client Test", compteClient: compteId },
+      acteurAutre.id
+    );
+
+    const { demandes, total } = await demandeService.lister({ profil: "initiateur", page: 1, limit: 200 }, acteurAppelant.id);
+
+    const ids = demandes.map((d) => d.id);
+    expect(ids).toContain(demandeAppelant.demande.id);
+    expect(ids).not.toContain(demandeAutre.demande.id);
+    expect(demandes.every((d) => d.initiateurId === acteurAppelant.id)).toBe(true);
+    expect(total).toBe(demandes.length);
+  });
+
+  it("sans profil, la liste reste non scopée — le dossier d'un autre agent reste visible (docs/06 §4, choix documenté, pas une fuite)", async () => {
+    const demandeAutre = await demandeService.creer(
+      { circuit: "DOBB", nomClient: "Client Test", compteClient: compteId },
+      acteurAutre.id
+    );
+
+    const { demandes } = await demandeService.lister({ page: 1, limit: 200 }, acteurAppelant.id);
+
+    expect(demandes.some((d) => d.id === demandeAutre.demande.id)).toBe(true);
+  });
+});

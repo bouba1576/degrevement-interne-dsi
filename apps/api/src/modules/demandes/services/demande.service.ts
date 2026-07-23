@@ -182,14 +182,20 @@ export class DemandeService {
     return this.obtenirDetail(id);
   }
 
-  async lister(query: ListerDemandesQuery): Promise<{ demandes: Demande[]; total: number }> {
+  async lister(query: ListerDemandesQuery, utilisateurId: string): Promise<{ demandes: Demande[]; total: number }> {
     const where: Prisma.DemandeWhereInput = {
       circuit: query.circuit,
       statut: query.statut,
       siEtat: query.siEtat,
       ...(query.q
         ? { OR: [{ reference: { contains: query.q, mode: "insensitive" } }, { nomClient: { contains: query.q, mode: "insensitive" } }] }
-        : {})
+        : {}),
+      // `profil=initiateur` : périmètre réel, appliqué APRÈS les filtres
+      // client, jamais contournable par eux — initiateurId vient de la
+      // session authentifiée (utilisateurId, résolu par le contrôleur via
+      // @CurrentUser()), jamais d'un paramètre `query`. Même garde que
+      // KpiEngineService.construireWhere pour `profil=initiateur`.
+      ...(query.profil === "initiateur" ? { initiateurId: utilisateurId } : {})
     };
 
     const [demandes, total] = await this.prisma.$transaction([

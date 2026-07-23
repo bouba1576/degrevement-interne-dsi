@@ -74,11 +74,19 @@ export class DemandesController {
     return this.demandeService.creer(dto, utilisateur.id);
   }
 
+  // `@CurrentUser()` désormais injecté (absent jusqu'ici, cf. CLAUDE.md §
+  // Questions ouvertes, question fermée en Phase 9.2) — nécessaire pour que
+  // `profil=initiateur` puisse forcer `initiateurId` depuis la session
+  // réelle. Sans `profil`, le comportement non scopé reste inchangé (docs/06
+  // §4, lecture ouverte à tout authentifié).
   @Authenticated()
   @Get()
-  async lister(@Query() query: unknown): Promise<{ demandes: Demande[]; meta: { total: number } }> {
+  async lister(
+    @Query() query: unknown,
+    @CurrentUser() utilisateur: UtilisateurRequete
+  ): Promise<{ demandes: Demande[]; meta: { total: number } }> {
     const dto = listerDemandesQuerySchema.parse(query);
-    const { demandes, total } = await this.demandeService.lister(dto);
+    const { demandes, total } = await this.demandeService.lister(dto, utilisateur.id);
     return { demandes, meta: { total } };
   }
 
