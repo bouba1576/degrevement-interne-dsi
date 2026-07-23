@@ -1,6 +1,8 @@
 import { z } from "zod";
 import {
   apercuRoutageReponseSchema,
+  calendrierSlaVueSchema,
+  circuitVueSchema,
   controleVueSchema,
   delegationVueSchema,
   demandeDetailSchema,
@@ -10,7 +12,15 @@ import {
   journalAuditVueSchema,
   kpiValeurSchema,
   ligneAvecContexteSchema,
+  moduleVueSchema,
+  modifierParametreCalculReponseSchema,
+  motifVueSchema,
+  paliersListeReponseSchema,
+  palierVueSchema,
+  parametreCalculVueSchema,
+  parametreGlobalVueSchema,
   pieceJointeSchema,
+  roleVueSchema,
   sessionUtilisateurSchema,
   siVueSchema,
   soumissionReponseSchema,
@@ -18,9 +28,14 @@ import {
   tachesListeReponseSchema,
   type ApercuRoutageReponse,
   type ApprouverRequete,
+  type CalendrierSlaVue,
+  type CircuitVue,
   type ControleVue,
   type CreerDelegationRequete,
   type CreerDemandeRequete,
+  type CreerMotifRequete,
+  type CreerPalierRequete,
+  type CreerRoleRequete,
   type DefinirLignesRequete,
   type DelegationVue,
   type DemandeDetail,
@@ -29,9 +44,25 @@ import {
   type JournalAuditVue,
   type KpiValeur,
   type LigneAvecContexte,
+  type ModifierCalendrierSlaRequete,
+  type ModifierCircuitRequete,
   type ModifierDemandeRequete,
+  type ModifierModuleRequete,
+  type ModifierMotifRequete,
+  type ModifierPalierRequete,
+  type ModifierParametreCalculReponse,
+  type ModifierParametreCalculRequete,
+  type ModifierParametreGlobalRequete,
+  type ModifierRoleRequete,
+  type ModuleVue,
+  type MotifVue,
+  type PaliersListeReponse,
+  type PalierVue,
+  type ParametreCalculVue,
+  type ParametreGlobalVue,
   type PieceJointeVue,
   type RejeterRequete,
+  type RoleVue,
   type SessionUtilisateur,
   type SiVue,
   type SoumettreControleRequete,
@@ -92,6 +123,29 @@ async function requete<T>(chemin: string, schema: z.ZodType<T>, init?: RequestIn
   }
 
   return schema.parse(enveloppe?.data);
+}
+
+// Variante de `requete` pour les listes paginées, qui ont besoin de
+// `meta.total` (compte réel Postgres) en plus de la page de résultats —
+// `requete` seule jette `meta`. Réservée à ces cas : le reste de ce fichier
+// n'a jamais eu besoin de meta jusqu'ici (Phase 9.2, AdminScreen).
+async function requeteAvecTotal<T>(
+  chemin: string,
+  schema: z.ZodType<T>,
+  init?: RequestInit
+): Promise<{ data: T; total: number }> {
+  const reponse = await fetch(`${API_URL}${chemin}`, { credentials: "include", ...init });
+  const corps: unknown = await reponse.json().catch(() => null);
+  const enveloppe = corps as { data?: unknown; error?: unknown; meta?: { total?: number } } | null;
+
+  if (!reponse.ok) {
+    const erreur = enveloppe?.error
+      ? erreurSchema.parse(enveloppe.error)
+      : { code: "ERREUR", message: "Erreur inattendue du serveur.", details: undefined };
+    throw new ApiError(erreur.code, erreur.message, reponse.status, erreur.details);
+  }
+
+  return { data: schema.parse(enveloppe?.data), total: enveloppe?.meta?.total ?? 0 };
 }
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
@@ -282,4 +336,136 @@ export function soumettreControle(tacheId: string, donnees: SoumettreControleReq
     headers: JSON_HEADERS,
     body: JSON.stringify(donnees)
   });
+}
+
+// --- AdminScreen (Phase 9.2) — @Roles("ADMIN_PGD") sur toutes ces routes ---
+
+// Paliers (PGD-042) ----------------------------------------------------
+
+export function listerPaliers(circuit?: string): Promise<PaliersListeReponse> {
+  const query = circuit ? `?circuit=${circuit}` : "";
+  return requete(`/api/admin/paliers${query}`, paliersListeReponseSchema);
+}
+
+export function creerPalier(donnees: CreerPalierRequete): Promise<PalierVue> {
+  return requete("/api/admin/paliers", palierVueSchema, { method: "POST", headers: JSON_HEADERS, body: JSON.stringify(donnees) });
+}
+
+export function modifierPalier(id: string, donnees: ModifierPalierRequete): Promise<PalierVue> {
+  return requete(`/api/admin/paliers/${id}`, palierVueSchema, { method: "PATCH", headers: JSON_HEADERS, body: JSON.stringify(donnees) });
+}
+
+export function supprimerPalier(id: string): Promise<{ supprime: true }> {
+  return requete(`/api/admin/paliers/${id}`, z.object({ supprime: z.literal(true) }), { method: "DELETE" });
+}
+
+// Rôles (PGD-043) -------------------------------------------------------
+
+export function listerRoles(): Promise<RoleVue[]> {
+  return requete("/api/admin/roles", z.array(roleVueSchema));
+}
+
+export function creerRole(donnees: CreerRoleRequete): Promise<RoleVue> {
+  return requete("/api/admin/roles", roleVueSchema, { method: "POST", headers: JSON_HEADERS, body: JSON.stringify(donnees) });
+}
+
+export function modifierRole(code: string, donnees: ModifierRoleRequete): Promise<RoleVue> {
+  return requete(`/api/admin/roles/${code}`, roleVueSchema, { method: "PATCH", headers: JSON_HEADERS, body: JSON.stringify(donnees) });
+}
+
+export function supprimerRole(code: string): Promise<{ supprime: true }> {
+  return requete(`/api/admin/roles/${code}`, z.object({ supprime: z.literal(true) }), { method: "DELETE" });
+}
+
+// Motifs (PGD-043) ------------------------------------------------------
+
+export function listerMotifs(circuit?: string): Promise<MotifVue[]> {
+  const query = circuit ? `?circuit=${circuit}` : "";
+  return requete(`/api/admin/motifs${query}`, z.array(motifVueSchema));
+}
+
+export function creerMotif(donnees: CreerMotifRequete): Promise<MotifVue> {
+  return requete("/api/admin/motifs", motifVueSchema, { method: "POST", headers: JSON_HEADERS, body: JSON.stringify(donnees) });
+}
+
+export function modifierMotif(id: string, donnees: ModifierMotifRequete): Promise<MotifVue> {
+  return requete(`/api/admin/motifs/${id}`, motifVueSchema, { method: "PATCH", headers: JSON_HEADERS, body: JSON.stringify(donnees) });
+}
+
+export function supprimerMotif(id: string): Promise<{ supprime: true }> {
+  return requete(`/api/admin/motifs/${id}`, z.object({ supprime: z.literal(true) }), { method: "DELETE" });
+}
+
+// Circuits (PGD-043) — GET/PATCH seulement, segment immuable -------------
+
+export function listerCircuits(): Promise<CircuitVue[]> {
+  return requete("/api/admin/circuits", z.array(circuitVueSchema));
+}
+
+export function modifierCircuit(code: string, donnees: ModifierCircuitRequete): Promise<CircuitVue> {
+  return requete(`/api/admin/circuits/${code}`, circuitVueSchema, { method: "PATCH", headers: JSON_HEADERS, body: JSON.stringify(donnees) });
+}
+
+// Paramètres de calcul (PGD-043) — taux TSC/TVA, recalcul des brouillons -
+
+export function listerParametresCalcul(): Promise<ParametreCalculVue[]> {
+  return requete("/api/admin/parametres", z.array(parametreCalculVueSchema));
+}
+
+export function modifierParametreCalcul(
+  circuit: string,
+  donnees: ModifierParametreCalculRequete
+): Promise<ModifierParametreCalculReponse> {
+  return requete(`/api/admin/parametres/${circuit}`, modifierParametreCalculReponseSchema, {
+    method: "PATCH",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(donnees)
+  });
+}
+
+// Calendrier SLA (PGD-043) ------------------------------------------------
+
+export function listerCalendriersSla(): Promise<CalendrierSlaVue[]> {
+  return requete("/api/admin/calendrier-sla", z.array(calendrierSlaVueSchema));
+}
+
+export function modifierCalendrierSla(id: string, donnees: ModifierCalendrierSlaRequete): Promise<CalendrierSlaVue> {
+  return requete(`/api/admin/calendrier-sla/${id}`, calendrierSlaVueSchema, {
+    method: "PATCH",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(donnees)
+  });
+}
+
+// Paramètres globaux + Modules (PGD-043) — onglet "Paramètres système" --
+
+export function listerParametresGlobaux(): Promise<ParametreGlobalVue[]> {
+  return requete("/api/admin/parametres-globaux", z.array(parametreGlobalVueSchema));
+}
+
+export function modifierParametreGlobal(cle: string, donnees: ModifierParametreGlobalRequete): Promise<ParametreGlobalVue> {
+  return requete(`/api/admin/parametres-globaux/${cle}`, parametreGlobalVueSchema, {
+    method: "PATCH",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(donnees)
+  });
+}
+
+export function listerModules(): Promise<ModuleVue[]> {
+  return requete("/api/admin/modules", z.array(moduleVueSchema));
+}
+
+export function modifierModule(code: string, donnees: ModifierModuleRequete): Promise<ModuleVue> {
+  return requete(`/api/admin/modules/${code}`, moduleVueSchema, { method: "PATCH", headers: JSON_HEADERS, body: JSON.stringify(donnees) });
+}
+
+// Compte des brouillons d'un circuit — pour prévenir avant un changement de
+// taux (AdminParametresCalculService.modifier recalcule tous les brouillons
+// de ce circuit). Réutilise GET /api/demandes déjà scopé/filtré, pas une
+// route dédiée : limit=1, seul meta.total (count() réel Postgres,
+// DemandeService.lister) nous intéresse, jamais la page renvoyée.
+export function compterBrouillons(circuit: string): Promise<number> {
+  return requeteAvecTotal(`/api/demandes?circuit=${circuit}&statut=BROUILLON&limit=1`, z.array(z.unknown())).then(
+    (r) => r.total
+  );
 }
