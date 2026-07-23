@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { z } from "zod";
+import { Money } from "@pgd/ui";
 import type { DemandeDetail, EnumCircuit, SessionUtilisateur, SoumissionReponse } from "@pgd/contracts";
 import { ApiError, creerDemande, definirLignes, erreurRegleMetierSchema, soumettreDemande, type ErreurRegleMetier } from "@/lib/api";
 import { RechercheNd } from "./RechercheNd";
-import { SelecteurLignes, type LigneLocale } from "./SelecteurLignes";
+import { SelecteurLignes, montantLigneParDefaut, type LigneLocale } from "./SelecteurLignes";
 import { ApercuRoutage } from "./ApercuRoutage";
 
 const CIRCUITS: EnumCircuit[] = ["DOBB", "DXC", "DF"];
@@ -96,7 +97,14 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
         lignes: lignesLocales.map((l) => ({
           ligneId: l.contexte.ligne.id,
           formuleId: l.formule!.formuleId,
-          recurrent: l.formule!.recurrent
+          recurrent: l.formule!.recurrent,
+          // Jamais de prorata calculé ici — le serveur (DemandeLigneService.
+          // definirLignes) fait foi sur le montant, que ce soit un
+          // montantHtLigne direct ou un calcul depuis les deux dates
+          // (SF-PGD-062, R11). Un seul des deux modes est envoyé par ligne.
+          ...(l.montant.mode === "periode"
+            ? { debutPeriodeContestee: l.montant.debutPeriodeContestee, finPeriodeContestee: l.montant.finPeriodeContestee }
+            : { montantHtLigne: Number(l.montant.montantHtLigne) })
         }))
       });
       setDemande(misAJour);
@@ -210,7 +218,11 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
 
       <RechercheNd
         onLigneTrouvee={(contexte) =>
-          setLignesLocales((s) => (s.some((l) => l.contexte.ligne.id === contexte.ligne.id) ? s : [...s, { contexte, formule: null }]))
+          setLignesLocales((s) =>
+            s.some((l) => l.contexte.ligne.id === contexte.ligne.id)
+              ? s
+              : [...s, { contexte, formule: null, montant: montantLigneParDefaut() }]
+          )
         }
       />
 
@@ -220,10 +232,35 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
         onChangeFormule={(ligneId, valeur) =>
           setLignesLocales((s) => s.map((l) => (l.contexte.ligne.id === ligneId ? { ...l, formule: valeur } : l)))
         }
+        onChangeMontant={(ligneId, valeur) =>
+          setLignesLocales((s) => s.map((l) => (l.contexte.ligne.id === ligneId ? { ...l, montant: valeur } : l)))
+        }
         onEnregistrer={handleEnregistrerLignes}
         enregistrement={enregistrement}
         erreur={erreurEnregistrement}
       />
+
+      {/* Montants affichés uniquement APRÈS "Enregistrer les lignes" : ce
+          sont ceux renvoyés par le serveur (demande.lignes[].montantHtLigne,
+          demande.demande.montantTtc), jamais une estimation calculée ici —
+          même principe qu'ApercuRoutage. */}
+      {demande && demande.lignes.length > 0 && (
+        <div className="rounded-6 border border-gris200 bg-blanc p-5">
+          <h3 className="mb-3 text-14 font-bold">Montants</h3>
+          <div className="flex flex-col gap-2">
+            {demande.lignes.map((l) => (
+              <div key={l.id} className="flex justify-between text-13">
+                <span className="font-mono text-gris600">{l.nd}</span>
+                <Money valeur={l.montantHtLigne} />
+              </div>
+            ))}
+            <div className="mt-2 flex justify-between border-t border-gris200 pt-2">
+              <span className="font-bold">Total TTC</span>
+              <Money valeur={demande.demande.montantTtc} fort className="text-orange600" />
+            </div>
+          </div>
+        </div>
+      )}
 
       {demande && demande.lignes.length > 0 && <ApercuRoutage demandeId={demande.demande.id} />}
 
