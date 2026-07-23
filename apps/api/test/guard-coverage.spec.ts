@@ -79,7 +79,21 @@ describe("Couverture structurelle des guards de portée — récidive des huit f
     rejouerSi: []
   };
 
+  // `trouver` (GET /api/taches/{id}) porte désormais CorbeilleRoleGuard —
+  // trouvé sans AUCUNE portée (Phase 9.2, en construisant DossierDetailScreen)
+  // : n'importe quel authentifié recevait la TacheVue complète d'une tâche
+  // hors de son rôle, agentClaimId compris. Même faille que les huit de
+  // Phase 8, ici sur une lecture à portée plutôt qu'une écriture — comme
+  // `profil` de GET /api/kpi (KpiController ci-dessous). `lister` (GET
+  // /api/taches) reste sans guard : le périmètre y est garanti par
+  // construction (where.roleCorbeille IN rôles+délégations réels de
+  // l'appelant, TacheService.lister), jamais un paramètre client — même
+  // raisonnement que DemandesController.creer/NotificationsController.lister.
+  // Vérifié via listerRoutes (pas listerRoutesEcriture) pour que cette
+  // lecture soit couverte, pas seulement les routes d'écriture.
   const TABLE_TACHES: Record<string, unknown[]> = {
+    lister: [],
+    trouver: [CorbeilleRoleGuard],
     claim: [CorbeilleRoleGuard],
     unclaim: [CorbeilleRoleGuard],
     approuver: [DelegationContextGuard, CorbeilleRoleGuard, SodGuard],
@@ -134,7 +148,7 @@ describe("Couverture structurelle des guards de portée — récidive des huit f
   }
 
   verifierControleur("DemandesController — InitiateurDemandeGuard sur les routes d'écriture", DemandesController, TABLE_DEMANDES, listerRoutesEcriture(DemandesController));
-  verifierControleur("TachesController — CorbeilleRoleGuard/DelegantMembreRoleGuard sur les routes d'écriture", TachesController, TABLE_TACHES, listerRoutesEcriture(TachesController));
+  verifierControleur("TachesController — CorbeilleRoleGuard/DelegantMembreRoleGuard, écriture et lecture à portée", TachesController, TABLE_TACHES, listerRoutes(TachesController));
   verifierControleur("KpiController — KpiPerimetreGuard sur la lecture agrégée", KpiController, TABLE_KPI, listerRoutes(KpiController));
   verifierControleur("NotificationsController — NotificationDestinataireGuard sur les routes d'écriture", NotificationsController, TABLE_NOTIFICATIONS, listerRoutesEcriture(NotificationsController));
 });

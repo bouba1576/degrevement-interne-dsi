@@ -45,7 +45,15 @@ export class TachesController {
     return this.taches.lister(utilisateur.roles, utilisateur.id, dto);
   }
 
+  // Trouvé en revue (Phase 9.2, en construisant DossierDetailScreen) : cette
+  // route n'avait AUCUNE portée au-delà de l'authentification — n'importe
+  // quel utilisateur connaissant/devinant un id de tâche recevait la
+  // TacheVue complète (agentClaimId compris), quel que soit son rôle. Même
+  // guard que claim/unclaim/approuver/rejeter (R4) — huitième/neuvième
+  // classe de faille (règle non négociable 2), ici sur une lecture à
+  // portée, pas une écriture.
   @Authenticated()
+  @UseGuards(CorbeilleRoleGuard)
   @Get(":id")
   async trouver(@Param("id") id: string): Promise<TacheVue> {
     return this.taches.trouver(id);
