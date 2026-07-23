@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   apercuRoutageReponseSchema,
+  controleVueSchema,
   delegationVueSchema,
   demandeDetailSchema,
   erreurSchema,
@@ -17,6 +18,7 @@ import {
   tachesListeReponseSchema,
   type ApercuRoutageReponse,
   type ApprouverRequete,
+  type ControleVue,
   type CreerDelegationRequete,
   type CreerDemandeRequete,
   type DefinirLignesRequete,
@@ -32,6 +34,7 @@ import {
   type RejeterRequete,
   type SessionUtilisateur,
   type SiVue,
+  type SoumettreControleRequete,
   type SoumissionReponse,
   type TacheVue,
   type TachesListeReponse
@@ -255,6 +258,26 @@ export function rejeterTache(tacheId: string, donnees: RejeterRequete): Promise<
 
 export function deleguerTache(tacheId: string, donnees: CreerDelegationRequete): Promise<DelegationVue> {
   return requete(`/api/taches/${tacheId}/deleguer`, delegationVueSchema, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(donnees)
+  });
+}
+
+// --- ControleScreen (Phase 9.2) ---------------------------------------
+
+// Pas de role= : la portée vient de TacheService.lister lui-même (rôles +
+// délégations actifs de l'appelant), la même base que CorbeilleRoleGuard sur
+// POST /api/taches/{id}/controle — cohérence par construction, pas par
+// coïncidence. POST_CLOTURE n'est posé que sur les étapes typeActeur === 'C'
+// (RuleEngineService.instancierChaine) : aucune ambiguïté sur ce que ce
+// filtre renvoie.
+export function listerTachesControle(): Promise<TachesListeReponse> {
+  return requete(`/api/taches?etat=POST_CLOTURE&limit=200`, tachesListeReponseSchema);
+}
+
+export function soumettreControle(tacheId: string, donnees: SoumettreControleRequete): Promise<ControleVue> {
+  return requete(`/api/taches/${tacheId}/controle`, controleVueSchema, {
     method: "POST",
     headers: JSON_HEADERS,
     body: JSON.stringify(donnees)
