@@ -244,6 +244,18 @@ Deuxième occurrence (Phase 4 sur `api`, Phase 6 sur `worker`) du même incident
 
 **Rappel** — ajouter une dépendance npm à un `apps/*/package.json` (ex. `pdfkit` en Phase 8) et lancer `pnpm install` **depuis l'hôte** ne l'installe pas dans le `node_modules` du conteneur dev : c'est un volume nommé séparé (`pgd_node_modules_api`), non partagé avec l'hôte. Symptôme en conteneur : `Cannot find module 'pdfkit'` (TS2307) en compilation watch, alors que `pnpm typecheck`/`build` sur l'hôte est vert. Geste : appliquer le geste `EACCES` ci-dessus (install en root dans le conteneur concerné, puis `chown`) après tout ajout de dépendance, avant de considérer la vérification live terminée.
 
+### `ldap-provider.integration.spec.ts` — Testcontainers ne tourne pas dans le conteneur `api` (trouvé en revue, Phase 9.2)
+
+**Symptôme** : `pnpm --filter @pgd/api test` lancé via `docker compose exec api ...` échoue systématiquement sur `LdapProvider (OpenLDAP réel via Testcontainers)` (3 tests) avec `Could not find a working container runtime strategy` — les 163 autres tests passent. Signalé une fois comme « échec sans rapport » avant vérification explicite du contraire ; ne plus reproduire cette approximation.
+
+**Cause, confirmée, pas supposée** : ce test (introduit Phase 2, `ded70d5`) démarre son propre serveur OpenLDAP éphémère via Testcontainers (`GenericContainer(...).start()`) — mécanisme *Docker-outside-of-Docker*, qui exige un accès au démon Docker de l'hôte. Ni `docker-compose.yml` ni `docker-compose.override.yml` ne montent `/var/run/docker.sock` (ou l'équivalent Windows) dans le conteneur `api` — vérifié par recherche, aucune occurrence. Exécuté depuis l'intérieur du conteneur `api`, Testcontainers n'a donc littéralement aucun démon à qui parler. Ce n'est pas un problème d'installation ni de version.
+
+**Ce n'est pas un problème d'environnement durable** : exécuté **depuis l'hôte** (`pnpm --filter @pgd/api test`, PowerShell/Git Bash, pas `docker compose exec`), ce même test passe (vérifié en direct) — le poste de dev a Docker Desktop, donc un démon Docker directement joignable, et `.env` à la racine pointe déjà `DATABASE_URL`/`REDIS_URL` sur `localhost` (ports publiés) pour ce cas d'usage. Suite complète depuis l'hôte : **166/166**, LdapProvider compris.
+
+**Geste** : pour toute vérification qui doit inclure `ldap-provider.integration.spec.ts` (recette, sweep de fin de phase), lancer `pnpm --filter @pgd/api test` **depuis l'hôte**, pas via `docker compose exec`. Pour un sweep ciblé qui ne touche pas `LdapProvider`, `docker compose exec api ...` reste légitime — mais alors dire explicitement « N/166, LdapProvider exclu (Testcontainers, conteneur sans accès au démon Docker) », jamais un total qui laisse croire à un échec sans rapport ou à une régression.
+
+**Ne pas** : monter `/var/run/docker.sock` dans le conteneur `api` pour « corriger » ceci en conteneur — donner à un conteneur applicatif le contrôle du démon Docker de l'hôte est un changement de posture de sécurité, pas un correctif de test, et ne serait pris qu'après arbitrage explicite.
+
 ---
 
 ## Codes d'erreur
