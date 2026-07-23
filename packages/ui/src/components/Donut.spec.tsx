@@ -27,4 +27,12 @@ describe("Donut", () => {
     // 5/10 de la circonférence — la géométrie suit le ratio fourni, pas une valeur recalculée.
     expect(segment.getAttribute("stroke-dasharray")).toBeTruthy();
   });
+
+  it("formaterTotal reformate le texte central — nécessaire pour un total TAUX (ratio 0-1, jamais déjà un pourcentage)", () => {
+    const { getByText, queryByText } = render(
+      <Donut segments={[{ value: 0.18, color: "#111" }]} total={0.18} formaterTotal={(v) => `${(v * 100).toFixed(0)} %`} />
+    );
+    expect(getByText("18 %")).toBeInTheDocument();
+    expect(queryByText("0.18")).not.toBeInTheDocument();
+  });
 });

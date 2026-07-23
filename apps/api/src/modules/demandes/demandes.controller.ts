@@ -58,6 +58,15 @@ export class DemandesController {
     private readonly siService: SiService
   ) {}
 
+  // Pas de InitiateurDemandeGuard ici — volontaire, pas un oubli (confirmé
+  // guard-coverage.spec.ts, TABLE_DEMANDES.creer: []). Ce guard vérifie une
+  // PROPRIÉTÉ SUR UNE RESSOURCE EXISTANTE (demande.initiateurId ===
+  // appelant.id) ; à la création, la ressource n'existe pas encore, la
+  // question n'a pas de sens. Le scope est garanti autrement, par
+  // construction : `initiateurId` vient de `utilisateur.id` (le JWT), jamais
+  // du corps de la requête — `creerDemandeRequeteSchema` ne porte même pas
+  // ce champ. Un appelant ne peut pas créer une demande au nom de quelqu'un
+  // d'autre, structurellement, pas par un contrôle qu'on pourrait oublier.
   @Authenticated()
   @Post()
   async creer(@Body() body: unknown, @CurrentUser() utilisateur: UtilisateurRequete): Promise<DemandeDetail> {

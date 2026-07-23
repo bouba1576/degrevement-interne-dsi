@@ -10,6 +10,7 @@ export interface DonutProps {
   taille?: number;
   total?: number;
   libelleTotal?: string;
+  formaterTotal?: (valeur: number) => string;
 }
 
 // Port de docs/design/ui.jsx (Donut, SVG pur). La géométrie (rayon,
@@ -19,7 +20,22 @@ export interface DonutProps {
 // `total` distinct de la somme des segments par choix explicite du port
 // (comme la maquette) : un total peut légitimement différer de la somme
 // affichée (segments partiels d'un ensemble plus large).
-export function Donut({ segments, taille = 130, total, libelleTotal = "dossiers" }: DonutProps) {
+//
+// Géométrie insensible à l'échelle absolue des `value` (chaque arc n'est
+// qu'une FRACTION de la somme des segments) — mais le texte central ne
+// l'est pas : `{somme}` affiche la valeur brute, jamais reformatée.
+// KpiEngineService.calculerTauxRepartition (unite=TAUX) renvoie un RATIO
+// 0–1 (ex. .18, jamais 18) — vérifié en Phase 9.2 sur tauxEvolution/
+// calculerTauxRepartition, même convention partout dans le moteur KPI.
+// Un Donut nourri de segments TAUX sans `formaterTotal` afficherait la
+// somme des ratios bruts au centre (ex. "1" pour 100%), pas un
+// pourcentage lisible — `formaterTotal` ferme ce trou avant qu'un appelant
+// futur ne le découvre en production, même logique que `formater` sur
+// BarChart (déjà présent, déjà correct : la hauteur des barres est
+// elle-même relative au max du jeu de données, insensible à l'échelle —
+// seul le LIBELLÉ affiché sur chaque barre a besoin de ce même `formater`
+// pour un jeu de données TAUX).
+export function Donut({ segments, taille = 130, total, libelleTotal = "dossiers", formaterTotal }: DonutProps) {
   const somme = total ?? segments.reduce((acc, s) => acc + s.value, 0) ?? 1;
   const rayon = taille / 2 - 14;
   const centre = taille / 2;
@@ -51,7 +67,7 @@ export function Donut({ segments, taille = 130, total, libelleTotal = "dossiers"
         return cercle;
       })}
       <text x={centre} y={centre - 2} textAnchor="middle" fontSize={22} fontWeight={800} fill={couleurs.encre}>
-        {somme}
+        {formaterTotal ? formaterTotal(somme) : somme}
       </text>
       <text x={centre} y={centre + 15} textAnchor="middle" fontSize={10} fill={couleurs.gris600}>
         {libelleTotal}

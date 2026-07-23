@@ -31,6 +31,27 @@ export class DemandeLigneService {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      // `dto.lignes` est le jeu COMPLET des lignes retenues, pas un ajout
+      // incrémental — même convention que les collections imbriquées de
+      // Phase 5 (pièces afférentes, jours fériés) : le client envoie l'état
+      // final, le serveur doit le refléter. Sans ce `deleteMany`, une ligne
+      // absente du tableau restait indéfiniment attachée au dossier —
+      // trouvé en Phase 9.2 en retirant une ligne RESILIE côté écran et en
+      // constatant, par requête directe, qu'elle bloquait toujours R15 à la
+      // soumission après ré-enregistrement. Pas un défaut d'affichage : la
+      // ligne fantôme aurait aussi gonflé montant_ht (R18) et suivi le
+      // dossier jusqu'au SI. `onDelete: Cascade` (HistoriqueMontant →
+      // DemandeLigne, schema.prisma) efface l'historique de correction de la
+      // ligne retirée avec elle — défendable ici précisément parce que cette
+      // méthode n'est accessible qu'en BROUILLON (vérifié plus haut) : le
+      // re-routage d'un dossier déjà soumis passe par un tout autre chemin
+      // (DemandeWorkflowService.modifierAvecReRoutage), qui ne touche jamais
+      // DemandeLigne, donc jamais cette cascade.
+      const ligneIdsConserves = dto.lignes.map((l) => l.ligneId);
+      await tx.demandeLigne.deleteMany({
+        where: { demandeId, ligneId: { notIn: ligneIdsConserves } }
+      });
+
       for (const ligneDto of dto.lignes) {
         const [ligne, formule] = await Promise.all([
           tx.ligne.findUnique({ where: { id: ligneDto.ligneId } }),

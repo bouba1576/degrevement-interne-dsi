@@ -374,3 +374,130 @@ describe("DemandeWorkflowService.soumettre — R13/R14/R15/R17 + instanciation",
     });
   });
 });
+
+// Trouvé en Phase 9.2 (vérification live de NouvelleDemandeScreen, pas en
+// relisant le code) : `definirLignes` n'effaçait jamais une DemandeLigne
+// absente du tableau soumis — un simple ajout cumulatif, contredisant sa
+// propre sémantique de remplacement complet (même convention que les
+// collections imbriquées de Phase 5 : pièces afférentes, jours fériés).
+// Une ligne RESILIE « retirée » côté écran restait attachée au dossier,
+// continuait de compter dans montant_ht (R18) et bloquait R15 à la
+// soumission après un second enregistrement — pas un défaut d'affichage.
+describe("DemandeLigneService.definirLignes — remplacement complet, pas incrémental", () => {
+  const prisma = new PrismaService();
+  const reference = new ReferenceService();
+  const montant = new MontantService(prisma);
+  const historique = new HistoriqueMontantService(prisma);
+  const demandeService = new DemandeService(prisma, reference, montant, historique);
+  const demandeLigneService = new DemandeLigneService(prisma, montant, historique, demandeService);
+
+  const acteur = { id: "44444444-4444-4444-4444-444444444444", identifiantAd: "test.lignes@orange.ci" };
+  const suffixe = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  let compteId: string;
+  let ligneId: string;
+  let formuleId: string;
+
+  beforeAll(async () => {
+    await prisma.utilisateur.upsert({
+      where: { id: acteur.id },
+      update: {},
+      create: { id: acteur.id, identifiantAd: acteur.identifiantAd, nom: "Test Lignes" }
+    });
+  });
+
+  beforeEach(async () => {
+    const compte = await prisma.compteClient.create({
+      data: { numeroCompte: `TEST-CPT-DL-${suffixe}`, nomClient: "Client Test Lignes" }
+    });
+    compteId = compte.id;
+    const ligne = await prisma.ligne.create({ data: { compteId, nd: `ND-DL-${suffixe}`, statut: "ACTIF" } });
+    ligneId = ligne.id;
+    const formule = await prisma.formule.create({
+      data: { ligneId, libelle: "Formule test", recurrentMensuelHt: 20000, dateDebut: new Date("2025-01-01"), courante: true }
+    });
+    formuleId = formule.id;
+    await prisma.ligne.update({ where: { id: ligneId }, data: { formuleCouranteId: formuleId } });
+  });
+
+  afterEach(async () => {
+    await prisma.historiqueMontant.deleteMany({ where: { demande: { compteClient: compteId } } });
+    await prisma.demandeLigne.deleteMany({ where: { demande: { compteClient: compteId } } });
+    await prisma.demande.deleteMany({ where: { compteClient: compteId } });
+    await prisma.formule.deleteMany({ where: { ligneId } });
+    await prisma.ligne.deleteMany({ where: { compteId } });
+    await prisma.compteClient.delete({ where: { id: compteId } });
+  });
+
+  afterAll(async () => {
+    await prisma.$disconnect();
+  });
+
+  async function creerDemandeBrouillon(): Promise<string> {
+    const detail = await demandeService.creer({ circuit: "DOBB", nomClient: "Client Test", compteClient: compteId }, acteur.id);
+    return detail.demande.id;
+  }
+
+  it("retire une ligne sans historique associé — elle disparaît de DEMANDE_LIGNE", async () => {
+    const demandeId = await creerDemandeBrouillon();
+    await demandeLigneService.definirLignes(
+      demandeId,
+      { lignes: [{ ligneId, formuleId, recurrent: 20000, montantHtLigne: 20000 }] },
+      acteur.id
+    );
+    expect(await prisma.demandeLigne.count({ where: { demandeId } })).toBe(1);
+
+    await demandeLigneService.definirLignes(demandeId, { lignes: [] }, acteur.id);
+
+    expect(await prisma.demandeLigne.count({ where: { demandeId } })).toBe(0);
+  });
+
+  it("retire une ligne qui porte un historique de correction — la ligne ET son historique disparaissent (cascade voulue sur un BROUILLON)", async () => {
+    const demandeId = await creerDemandeBrouillon();
+    // Deux appels avec un `recurrent` différent : chacun pousse une entrée
+    // HISTORIQUE_MONTANT via HistoriqueMontantService.enregistrer.
+    await demandeLigneService.definirLignes(
+      demandeId,
+      { lignes: [{ ligneId, formuleId, recurrent: 20000, montantHtLigne: 20000 }] },
+      acteur.id
+    );
+    await demandeLigneService.definirLignes(
+      demandeId,
+      { lignes: [{ ligneId, formuleId, recurrent: 22000, montantHtLigne: 22000 }] },
+      acteur.id
+    );
+    const demandeLigne = await prisma.demandeLigne.findUniqueOrThrow({ where: { demandeId_ligneId: { demandeId, ligneId } } });
+    const historiqueAvant = await prisma.historiqueMontant.count({ where: { demandeLigneId: demandeLigne.id } });
+    expect(historiqueAvant).toBeGreaterThan(0);
+
+    await demandeLigneService.definirLignes(demandeId, { lignes: [] }, acteur.id);
+
+    expect(await prisma.demandeLigne.count({ where: { demandeId } })).toBe(0);
+    // Cascade Prisma (onDelete: Cascade, HistoriqueMontant → DemandeLigne) :
+    // l'historique de la ligne retirée ne survit pas — voulu ici précisément
+    // parce que cette route n'est accessible qu'en BROUILLON (vérifié par
+    // ailleurs) ; le re-routage d'un dossier déjà soumis ne passe jamais par
+    // `definirLignes`, donc jamais par cette cascade.
+    expect(await prisma.historiqueMontant.count({ where: { demandeLigneId: demandeLigne.id } })).toBe(0);
+  });
+
+  it("conserve une ligne toujours présente dans le nouveau tableau et met simplement à jour ses champs", async () => {
+    const demandeId = await creerDemandeBrouillon();
+    await demandeLigneService.definirLignes(
+      demandeId,
+      { lignes: [{ ligneId, formuleId, recurrent: 20000, montantHtLigne: 20000 }] },
+      acteur.id
+    );
+    const avant = await prisma.demandeLigne.findUniqueOrThrow({ where: { demandeId_ligneId: { demandeId, ligneId } } });
+
+    await demandeLigneService.definirLignes(
+      demandeId,
+      { lignes: [{ ligneId, formuleId, recurrent: 21000, montantHtLigne: 21000 }] },
+      acteur.id
+    );
+    const apres = await prisma.demandeLigne.findUniqueOrThrow({ where: { demandeId_ligneId: { demandeId, ligneId } } });
+
+    expect(apres.id).toBe(avant.id);
+    expect(Number(apres.recurrent)).toBe(21000);
+  });
+});
