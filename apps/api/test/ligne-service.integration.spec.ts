@@ -1,4 +1,4 @@
-import { UnprocessableEntityException } from "@nestjs/common";
+import { NotFoundException, UnprocessableEntityException } from "@nestjs/common";
 import { Prisma } from "@pgd/database";
 import { PrismaService } from "../src/infra/prisma/prisma.service";
 import { LigneService } from "../src/modules/lignes/services/ligne.service";
@@ -84,6 +84,12 @@ describe("LigneService — R19 et cohérence formule courante", () => {
     expect(a2.courante).toBe(true);
   });
 
+  it("assignerFormuleCourante lève 404 pour un id de formule inconnu", async () => {
+    await expect(
+      ligneService.assignerFormuleCourante(ligneAId, "00000000-0000-0000-0000-000000000000")
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
   it("rejette une formule qui n'appartient pas à la ligne indiquée (422)", async () => {
     await expect(ligneService.assignerFormuleCourante(ligneAId, formuleBId)).rejects.toBeInstanceOf(
       UnprocessableEntityException
@@ -123,5 +129,29 @@ describe("LigneService — R19 et cohérence formule courante", () => {
 
     const resultat = await ligneService.rechercherParNd(ndAvecEspacesEtCasseDifferente);
     expect(resultat?.ligne.id).toBe(ligneAId);
+  });
+
+  it("trouverParId retourne la ligne pour un id connu", async () => {
+    const ligne = await ligneService.trouverParId(ligneAId);
+    expect(ligne.id).toBe(ligneAId);
+    expect(ligne.nd).toBe(`TEST-ND-A-${suffixe}`);
+  });
+
+  it("trouverParId lève 404 pour un id inconnu", async () => {
+    await expect(ligneService.trouverParId("00000000-0000-0000-0000-000000000000")).rejects.toBeInstanceOf(
+      NotFoundException
+    );
+  });
+
+  it("formulesDeLigne retourne l'historique des formules, triées par date de début décroissante", async () => {
+    const resultat = await ligneService.formulesDeLigne(ligneAId);
+    expect(resultat.historiquePartiel).toBe(false);
+    expect(resultat.formules.map((f) => f.id)).toEqual([formuleA2Id, formuleA1Id]);
+  });
+
+  it("formulesDeLigne lève 404 pour un id de ligne inconnu", async () => {
+    await expect(ligneService.formulesDeLigne("00000000-0000-0000-0000-000000000000")).rejects.toBeInstanceOf(
+      NotFoundException
+    );
   });
 });
