@@ -284,13 +284,13 @@ Deuxième occurrence (Phase 4 sur `api`, Phase 6 sur `worker`) du même incident
 
 **Ne pas confondre avec `ldap-provider.integration.spec.ts` ci-dessus — deux natures différentes, pas la même dette.** `ldap-provider` est un problème de **contexte d'exécution** (conteneur vs hôte) : déterministe et vert à 100 % depuis l'hôte, la couverture existe réellement, elle n'est simplement pas disponible dans tous les contextes de lancement. `si-service` est une **vraie course de concurrence** contre un processus tiers réel, reproductible peu importe où `pnpm test` est lancé (hôte ou conteneur) tant que `worker` tourne — une dette non résolue, pas une question de disponibilité. Les deux restent en l'état (non « réparés »), mais ne pas les traiter comme une seule et même catégorie de problème dans un futur compte-rendu.
 
-### État des lieux Phase 9 (fin d'étape AdminScreen, avant `LoginScreen`)
+### État des lieux Phase 9 (après `LoginScreen`)
 
 Inventaire vérifié contre le contenu réel de `docs/design/` (noms de composants exportés), pas contre la mémoire d'une session précédente.
 
-**Construit** : coquille (Sidebar/Topbar), `HomeScreen`, `NouvelleDemandeScreen` (avec le correctif montant), `CorbeillesScreen`, `DossierDetailScreen`, `ControleScreen`, `AdminScreen` (7 onglets — clôt les écrans de `screens3.jsx`).
+**Construit** : coquille (Sidebar/Topbar), `LoginScreen` (identifiants LDAP + défi MFA DUO/TOTP, cf. section dédiée ci-dessus), `HomeScreen`, `NouvelleDemandeScreen` (avec le correctif montant), `CorbeillesScreen`, `DossierDetailScreen`, `ControleScreen`, `AdminScreen` (7 onglets — clôt les écrans de `screens3.jsx`).
 
-**Lacune la plus critique — aucun écran de connexion.** `screens_auth.jsx` (`LoginScreen`/`MfaChallenge`) n'a aucune contrepartie dans `apps/web`. Le backend d'authentification est complet et vérifié contre un annuaire réel depuis la Phase 2 ; sans cet écran, **aucune recette n'est possible par l'interface** — chaque vérification live de cette session (Phase 9.2 entière) a posé un cookie de session hors application (`fetch` direct, login+MFA scriptés). C'est la seule lacune qui bloque toute recette, indépendamment de la qualité du reste. Traité en priorité immédiatement après ce commit.
+**Lacune résolue — écran de connexion.** `screens_auth.jsx` (`LoginScreen`) a désormais une contrepartie réelle dans `apps/web` (`components/screens/auth/LoginScreen.tsx`, routes `/` et `/login`). Vérifié en direct par l'interface elle-même (pas par script) : identifiants+TOTP réussis → session → `HomeScreen` ; identifiants invalides → message lisible ; déconnexion → retour à `LoginScreen` ; compte `TOTP` sans secret enrôlé → message de non-provisionnement, sans champ de code ; DUO indisponible → `503 MFA_INDISPONIBLE` affiché lisiblement. Chaque vérification live des étapes précédentes de cette session (Phase 9.2 avant ce commit) avait posé un cookie de session hors application (`fetch` direct, login+MFA scriptés) — ce n'est plus nécessaire. `MfaChallenge`/`DemoAccounts`/sélecteur de persona du mockup restent hors périmètre (logique cliente jamais portée, même traitement que `RoleMenu`).
 
 **Autres écrans du mockup sans contrepartie** :
 - `MesDemandesScreen` (`screens2.jsx`) — `GET /api/demandes?profil=initiateur` existe et est prêt (Phase 9.2), jamais câblé à un écran.
