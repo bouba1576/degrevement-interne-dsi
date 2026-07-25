@@ -115,6 +115,20 @@ Lève un verrou de claim en dehors du mécanisme automatique (`LocksSweeperServi
 
 Les commentaires internes de `screens4.jsx` (`MasseScreen`, `IntegrationsScreen`, `ModulesScreen`) citent des codes « PGD-27 », « PGD-25 », « PGD-26 » absents de la numérotation `PGD-0NN` de `docs/04_UserStories_Realisation.md`. Fichier entier exclu du portage (voir `README.md`, section « Exclusions »).
 
+## Fonctionnalité spécifiée ET maquettée, non construite à l'écran
+
+Catégorie distincte des autres sections de ce fichier : celles-ci comparent la maquette au PRD. Ici les deux sont **alignés** — c'est l'écran réellement construit (`apps/web`) qui diverge des deux à la fois. Consigné quand même dans ce fichier (pas seulement dans un compte-rendu de session, CLAUDE.md) parce que l'écart porte sur un **contrat d'interaction**, pas un détail de style : il se perdrait silencieusement s'il ne survivait que dans l'historique de conversation.
+
+### Approbation — bouton simple, pas la revue champ par champ (Phase 9.2, `DossierDetailScreen`)
+
+`PGD-055`/`SF-PGD-080`/`SF-PGD-081` (`docs/01_PRD_Consolide.md` lignes 90-91, `docs/04_UserStories_Realisation.md` ligne 212) exigent explicitement une **revue champ par champ** pour le valideur à l'approbation : chaque champ de la demande peut être marqué vu/corrigé, avec un commentaire complétable en aval. Ce n'est pas une lecture de la maquette — c'est écrit dans le PRD, `M · 8 pts`, story dédiée.
+
+La maquette (`docs/design/screens2.jsx:600-691`, `ApproveModal`) implémente ce pattern intégralement : une liste des champs de la demande (`buildFieldRows`), chaque champ signalable en anomalie (bouton « Signaler », défaut = conforme), un commentaire obligatoire par anomalie signalée, un récapitulatif auto-généré, et une décision dérivée (`hasInvalid ? "rejete" : "approuve"`) envoyée en un seul payload `{ decision, commentaire, revue: [{champ, valeur, verdict, commentaire}] }`.
+
+**Le backend réel supporte déjà ce pattern** — ce n'est pas un gap serveur. `approuverRequeteSchema` (`packages/contracts/src/tache.ts`) porte `revue?: RevueChamp[]`, et `RevueChamp = {champ, vu: boolean, correction?: string}` (forme réelle, à ne pas confondre avec `{champ, valeur, verdict, commentaire}` de la maquette — vocabulaire différent, `vu`/`correction` plutôt que `verdict`/`commentaire`, à respecter si cette UI est construite un jour). L'écran construit (`TacheActionBanner.tsx`) appelle `approuverTache(tache.id, {})` — `revue` toujours omis, jamais peuplé. Purement un manque côté `apps/web`, pas une limite d'API.
+
+**Différence structurelle supplémentaire, pas seulement l'absence de la revue** : la maquette fusionne approbation et rejet en une seule modale dont la décision est dérivée des champs signalés. Le contrat réel garde deux routes séparées (`POST /api/taches/{id}/approuver`, `POST /api/taches/{id}/rejeter`, motif obligatoire pour ce dernier) — l'écran construit respecte déjà cette séparation (deux actions distinctes dans `TacheActionBanner`). Construire cette UI un jour ne veut donc pas dire porter `ApproveModal` tel quel : la revue champ par champ doit alimenter l'action Approuver existante, pas fusionner les deux décisions.
+
 ## Point d'attention transverse — masquage de bouton par rôle
 
 La maquette peut masquer ou désactiver des boutons selon le rôle courant (ex. `defaultRouteFor`, conditions d'affichage dans les écrans de corbeille/admin). **Si portée, cette logique est un confort d'affichage, jamais un contrôle d'accès** : le serveur reste seul juge de ce qu'un appel peut effectivement faire, exactement comme rappelé règle non négociable 2 de CLAUDE.md (« un contrôle côté client est un confort, jamais une garantie »). Un bouton visible dont l'action est refusée côté serveur est un comportement normal, pas un bug à corriger en assouplissant l'API.
