@@ -54,17 +54,29 @@ jobs:
           --health-timeout 10s
           --health-retries 10
 
-    # Volontairement PAS de variables d'environnement ici au-delà du strict
-    # nécessaire : apps/api/test/setup-env.ts et apps/worker/test/setup-env.ts
-    # posent déjà des valeurs de test par défaut (??=) pour JWT_SECRET,
-    # REFRESH_TOKEN_SECRET, TOTP_ENCRYPTION_KEY, LDAP_*, DUO_* — les mêmes
-    # valeurs qu'un `pnpm --filter @pgd/api test` lancé depuis un poste de dev.
-    # Les services ci-dessus sont configurés avec les identifiants/ports par
-    # défaut attendus par ces mêmes fichiers (pgd/pgd, 127.0.0.1:5432/6379,
-    # vhost /pgd) : aucune variable DATABASE_URL/REDIS_URL/RABBITMQ_* à
-    # dupliquer ici, la coïncidence est délibérée, pas accidentelle.
+    # Corrigé après un premier run réel en échec (run #1, étape "Appliquer les
+    # migrations") : DATABASE_URL/REDIS_URL/RABBITMQ_* DOIVENT être posées ici
+    # explicitement. apps/api/test/setup-env.ts et apps/worker/test/setup-env.ts
+    # ne s'exécutent que comme setupFiles Jest — ils ne couvrent JAMAIS les
+    # étapes qui invoquent Prisma en CLI brute (migrate, seed), qui tournent
+    # avant tout process Jest et sans .env (fichier gitignored, absent d'un
+    # checkout propre). La validation locale précédente avait masqué ce trou :
+    # chaque commande avait été lancée avec un export manuel de ces variables,
+    # jamais rejouée depuis le fichier de workflow tel qu'il est réellement
+    # écrit — c'est exactement ce qu'un run réel sur runner GitHub, demandé
+    # explicitement plutôt que déduit d'une répétition locale, a fait remonter.
+    # Valeurs alignées sur les services ci-dessus (pgd/pgd, ports standard,
+    # vhost /pgd) — mêmes valeurs que celles supposées par setup-env.ts pour
+    # les étapes Jest, donc aucun changement de comportement pour elles.
     env:
       NODE_ENV: test
+      DATABASE_URL: postgresql://pgd:pgd@localhost:5432/pgd?schema=public
+      REDIS_URL: redis://localhost:6379
+      RABBITMQ_HOST: localhost
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_USER: pgd
+      RABBITMQ_PASSWORD: pgd
+      RABBITMQ_VHOST: /pgd
 
     steps:
       - uses: actions/checkout@v4
