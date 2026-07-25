@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { CircuitPill, StatusBadge, type StatutDemande } from "@pgd/ui";
 import type { DemandeDetail, EtapeDossier, SessionUtilisateur } from "@pgd/contracts";
-import { ApiError, abandonnerDemande, listerTachesDemande, obtenirDetailDemande, rappelerDemande } from "@/lib/api";
+import { ApiError, abandonnerDemande, listerTachesDemande, modifierDemande, obtenirDetailDemande, rappelerDemande } from "@/lib/api";
 import { ApercuTab } from "./ApercuTab";
 import { CircuitTab } from "./CircuitTab";
 import { PiecesTab } from "./PiecesTab";
 import { AuditTab } from "./AuditTab";
 import { TacheActionBanner } from "./TacheActionBanner";
+import { ModifierDemandeModal, type ModifierDemandeValeur } from "./ModifierDemandeModal";
 
 export interface DossierDetailScreenProps {
   dossierId: string;
@@ -38,6 +39,7 @@ export function DossierDetailScreen({ dossierId, utilisateur }: DossierDetailScr
   const [onglet, setOnglet] = useState<Onglet>("apercu");
   const [erreur, setErreur] = useState<string | null>(null);
   const [chargementAction, setChargementAction] = useState(false);
+  const [modaleModification, setModaleModification] = useState(false);
 
   const charger = useCallback(async () => {
     try {
@@ -60,6 +62,18 @@ export function DossierDetailScreen({ dossierId, utilisateur }: DossierDetailScr
   const { demande, lignes, pieces } = detail;
   const estInitiateur = demande.initiateurId === utilisateur.id;
   const peutAbandonnerOuRappeler = estInitiateur && (demande.statut === "SOUMIS" || demande.statut === "EN_COURS");
+  // Même fenêtre d'éligibilité que Rappeler/Abandonner (statut) — mais R6
+  // n'est réellement exerçable que tant qu'aucune décision n'a encore été
+  // prise sur AUCUNE étape (DemandeWorkflowService.verifierAucuneDecision,
+  // partagée par modifier/rappeler/abandonner) : une fois une seule étape
+  // approuvée ou rejetée, le serveur refuse tout PATCH (422
+  // DECISION_DEJA_PRISE), définitivement, pour le reste du cycle de vie du
+  // dossier. `etapes` est déjà chargé pour l'onglet Circuit — réutilisé ici
+  // pour ne pas afficher un bouton voué à toujours échouer, sans dupliquer
+  // la règle elle-même (le 422 reste la seule garantie réelle, ceci n'est
+  // qu'un confort d'affichage, R2 des règles non négociables).
+  const aucuneDecisionPrise = etapes.every((e) => e.dateDecision === null);
+  const peutModifier = peutAbandonnerOuRappeler && aucuneDecisionPrise;
 
   async function handleAbandonner() {
     setChargementAction(true);
@@ -85,6 +99,23 @@ export function DossierDetailScreen({ dossierId, utilisateur }: DossierDetailScr
     }
   }
 
+  async function handleModifier(valeur: ModifierDemandeValeur) {
+    setChargementAction(true);
+    try {
+      await modifierDemande(dossierId, {
+        nomClient: valeur.nomClient,
+        libelle: valeur.libelle || undefined,
+        commentaire: valeur.commentaire || undefined
+      });
+      setModaleModification(false);
+      await charger();
+    } catch (err) {
+      setErreur(err instanceof ApiError ? err.message : "Modification impossible.");
+    } finally {
+      setChargementAction(false);
+    }
+  }
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
@@ -98,6 +129,16 @@ export function DossierDetailScreen({ dossierId, utilisateur }: DossierDetailScr
         </div>
         {peutAbandonnerOuRappeler && (
           <div className="flex gap-2">
+            {peutModifier && (
+              <button
+                type="button"
+                disabled={chargementAction}
+                onClick={() => setModaleModification(true)}
+                className="rounded border border-gris200 px-3 py-1.5 text-13 font-bold text-gris700 disabled:opacity-50"
+              >
+                Modifier
+              </button>
+            )}
             <button
               type="button"
               disabled={chargementAction}
@@ -152,6 +193,15 @@ export function DossierDetailScreen({ dossierId, utilisateur }: DossierDetailScr
         />
       )}
       {onglet === "audit" && <AuditTab demandeId={dossierId} />}
+
+      {modaleModification && (
+        <ModifierDemandeModal
+          demande={demande}
+          onFermer={() => setModaleModification(false)}
+          onConfirmer={handleModifier}
+          chargement={chargementAction}
+        />
+      )}
     </div>
   );
 }
