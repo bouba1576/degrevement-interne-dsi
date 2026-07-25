@@ -26,9 +26,11 @@ describe("Sidebar", () => {
     expect(screen.getByText("Pilotage")).toBeInTheDocument();
     expect(screen.getByText("Administration")).toBeInTheDocument();
     expect(screen.getByText("Intégrations")).toBeInTheDocument();
-    expect(screen.getByText("Modules")).toBeInTheDocument();
     expect(screen.getByText("Journal d'audit")).toBeInTheDocument();
     expect(screen.getByText("Consultation")).toBeInTheDocument();
+    // Pas d'entrée « Modules » séparée — couverte par l'onglet « Paramètres
+    // système » d'AdminScreen, jamais dupliquée dans la Sidebar.
+    expect(screen.queryByText("Modules")).not.toBeInTheDocument();
   });
 
   it("affiche le compte fourni uniquement s'il est strictement positif", () => {

@@ -35,13 +35,15 @@ export function Sidebar({ roles, routeActuelle, onNaviguer, compteMesDemandes, c
   ];
 
   const estAdmin = roles.includes(ROLE_ADMIN);
+  // Pas d'entrée « Modules » séparée : couverte par l'onglet « Paramètres
+  // système » d'AdminScreen (Phase 9.2) — une entrée dédiée aurait été
+  // redondante avec une route déjà servie ailleurs, pas un gap à combler.
   const pilotage: ArticleNav[] = estAdmin
     ? [
         { route: "consultation", libelle: "Consultation", icone: "search" },
         { route: "audit", libelle: "Journal d'audit", icone: "lock" },
         { route: "admin", libelle: "Administration", icone: "gear" },
-        { route: "integrations", libelle: "Intégrations", icone: "flow" },
-        { route: "modules", libelle: "Modules", icone: "layers" }
+        { route: "integrations", libelle: "Intégrations", icone: "flow" }
       ]
     : [];
 
