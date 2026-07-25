@@ -123,5 +123,19 @@ jobs:
       - name: Test de concurrence sur le claim (T1, SF-PGD-072, R7)
         run: pnpm --filter @pgd/api test -- tache-claim.integration.spec.ts
 
+      # Ferme ce que T1 seul ne couvre pas : T1 verrouille la mécanique de
+      # claim, pas le circuit entier. Formalise le parcours vérifié à la main
+      # en clôture de Phase 9 (docs/05 §10.3) — un par circuit, en HTTP réel
+      # via supertest contre l'app complète (apps/api/test/helpers/e2e-app.ts),
+      # pas des appels de service directs : ferme le même angle mort
+      # structurel que route-order.spec.ts/envelope-contract.spec.ts (aucun
+      # test n'appelait ces routes en HTTP réel avant la Phase 9). DOBB/DXC
+      # restent sous 5M (R12, aucun palier DOBB/DXC ne câble FRA — question
+      # métier ouverte, cf. CLAUDE.md) et vérifient explicitement le rejet
+      # 422 au-delà, plutôt que de dépendre d'un arbitrage non rendu ; DF
+      # couvre le seul palier réellement doté d'un contrôle FRA aujourd'hui.
+      - name: Suite e2e — parcours par circuit (DOBB, DXC, DF, PGD-090 §10.3)
+        run: pnpm --filter @pgd/api test:e2e
+
       - name: Suite de tests complète (api, worker, ui)
         run: pnpm test
