@@ -23,18 +23,32 @@ import { AuditService } from "./audit.service";
 export class AuditController {
   constructor(private readonly audit: AuditService) {}
 
-  @Authenticated()
-  @Get(":demandeId")
-  async journalDemande(@Param("demandeId") demandeId: string): Promise<JournalAuditVue[]> {
-    return this.audit.journalDemande(demandeId);
-  }
-
+  // ORDRE CRITIQUE : les routes littérales (segment fixe, comme "securite")
+  // doivent être déclarées AVANT toute route à paramètre de même profondeur
+  // (":demandeId") — Express/Nest matchent dans l'ordre d'enregistrement, un
+  // paramètre générique déclaré en premier intercepte tout, y compris un
+  // segment littéral qui le suit. Trouvé en revue (Phase 9.2, en vérifiant le
+  // périmètre ADMIN_PGD avant de construire l'écran de consultation
+  // d'audit) : dans l'ordre inverse (":demandeId" avant "securite"),
+  // GET /api/audit/securite ne renvoie JAMAIS la réponse de journalSecurite
+  // — journalDemande("securite") l'intercepte d'abord et plante en 500
+  // (Prisma : "securite" n'est pas un UUID valide). Le guard ADMIN_PGD sur
+  // journalSecurite n'exécutait donc jamais, ni pour un admin ni pour
+  // quiconque : la route est restée du code mort depuis la Phase 8.
+  // ":demandeId/export" n'est pas concerné (profondeur différente, deux
+  // segments), seul le cas à profondeur égale collisionne.
   @Roles("ADMIN_PGD")
   @Get("securite")
   async journalSecurite(@Query() query: unknown): Promise<{ data: JournalSecuriteVue[]; meta: { total: number } }> {
     const dto = journalSecuriteQuerySchema.parse(query);
     const { entrees, total } = await this.audit.journalSecurite(dto);
     return { data: entrees, meta: { total } };
+  }
+
+  @Authenticated()
+  @Get(":demandeId")
+  async journalDemande(@Param("demandeId") demandeId: string): Promise<JournalAuditVue[]> {
+    return this.audit.journalDemande(demandeId);
   }
 
   @Roles("ADMIN_PGD")
