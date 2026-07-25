@@ -7,6 +7,7 @@ import {
   controleVueSchema,
   delegationVueSchema,
   demandeDetailSchema,
+  demandesListeReponseSchema,
   erreurSchema,
   etapeDossierSchema,
   formulesDeLigneSchema,
@@ -41,8 +42,10 @@ import {
   type CreerRoleRequete,
   type DefinirLignesRequete,
   type DelegationVue,
+  type Demande,
   type DemandeDetail,
   type EtapeDossier,
+  type ListerDemandesQuery,
   type FormulesDeLigne,
   type JournalAuditVue,
   type KpiValeur,
@@ -238,6 +241,22 @@ export function abandonnerDemande(demandeId: string): Promise<{ abandonne: true 
   return requete(`/api/demandes/${demandeId}/abandonner`, z.object({ abandonne: z.literal(true) }), {
     method: "POST"
   });
+}
+
+// --- MesDemandesScreen (Phase 9.2) --------------------------------------
+
+// `query.profil` transmis tel quel — jamais un `initiateurId` construit ici :
+// le périmètre réel vient de DemandeService.lister côté serveur (session),
+// ce paramètre ne fait que DEMANDER ce scope, il ne le garantit pas.
+export function listerDemandes(query: ListerDemandesQuery): Promise<{ data: Demande[]; total: number }> {
+  const params = new URLSearchParams();
+  if (query.circuit) params.set("circuit", query.circuit);
+  if (query.statut) params.set("statut", query.statut);
+  if (query.q) params.set("q", query.q);
+  if (query.profil) params.set("profil", query.profil);
+  params.set("page", String(query.page));
+  params.set("limit", String(query.limit));
+  return requeteAvecTotal(`/api/demandes?${params.toString()}`, demandesListeReponseSchema);
 }
 
 // --- DossierDetailScreen / CorbeillesScreen (Phase 9.2) --------------
