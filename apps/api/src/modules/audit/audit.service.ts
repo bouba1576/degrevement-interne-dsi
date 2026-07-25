@@ -51,6 +51,7 @@ export class AuditService {
     const [entrees, total] = await this.prisma.$transaction([
       this.prisma.journalSecurite.findMany({
         where,
+        include: { utilisateur: { select: { identifiantAd: true } } },
         orderBy: { horodatage: "desc" },
         skip: (query.page - 1) * query.limit,
         take: query.limit
@@ -155,6 +156,7 @@ export class AuditService {
   private versVueSecurite(e: {
     id: string;
     utilisateurId: string | null;
+    utilisateur: { identifiantAd: string } | null;
     evenement: string;
     succes: boolean;
     facteur: string;
@@ -164,6 +166,7 @@ export class AuditService {
     return {
       id: e.id,
       utilisateurId: e.utilisateurId,
+      identifiantAd: e.utilisateur?.identifiantAd ?? null,
       evenement: e.evenement as never,
       succes: e.succes,
       facteur: e.facteur as never,

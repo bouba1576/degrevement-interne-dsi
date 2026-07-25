@@ -18,6 +18,17 @@ export type JournalAuditVue = z.infer<typeof journalAuditVueSchema>;
 export const journalSecuriteVueSchema = z.object({
   id: z.string().uuid(),
   utilisateurId: z.string().uuid().nullable(),
+  // Résolu côté serveur (jointure sur Utilisateur), Phase 9.2 — ADMIN_PGD a
+  // déjà la visibilité la plus large qui existe sur cette route (IP,
+  // connexions, refus RBAC/SoD, tous utilisateurs) : ce champ rend lisible
+  // ce que l'admin voit déjà, il ne crée aucun accès nouveau. `null` couvre
+  // deux cas INDISTINGUABLES en base (`ON DELETE SET NULL` sur la FK,
+  // aucune copie texte façon `JournalAudit.acteur`) : un identifiant jamais
+  // résolu (tentative de connexion avec un identifiant inconnu — le cas le
+  // plus fréquent) ou un compte depuis supprimé. Ne jamais afficher « compte
+  // supprimé » pour ce `null` : ce serait factuellement faux dans le cas le
+  // plus courant.
+  identifiantAd: z.string().nullable(),
   evenement: enumEvenementSecurite,
   succes: z.boolean(),
   facteur: enumFacteurAuth,
