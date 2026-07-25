@@ -296,7 +296,38 @@ Deuxième occurrence (Phase 4 sur `api`, Phase 6 sur `worker`) du même incident
 
 **Ne pas** : supposer qu'un test qui appelle le service directement (`AuditService.journalSecurite(...)`) aurait suffi à couvrir ceci — le bug est au niveau du **routage HTTP**, invisible tant qu'aucun test ne passe par une vraie requête. C'est la troisième fois cette phase que ce défaut de couverture précis (service testé, route jamais appelée en HTTP réel) cache un bug réel (cf. enveloppe HTTP ci-dessus) — un signal que la convention de test de ce projet (service-level, jamais HTTP réel) a un angle mort structurel, pas seulement trois coïncidences isolées.
 
-### État des lieux Phase 9 (après `LoginScreen` + `MesDemandesScreen` + `AuditSecuriteScreen`)
+### R6 (re-routage) est bien plus étroit que la question initialement posée ne le supposait (trouvé en construisant le déclencheur `Modifier` de `DossierDetailScreen`, Phase 9.2)
+
+**Prémisse initiale, non vérifiée jusqu'à ce tour** : la question ouverte de longue date supposait qu'un « changement de montant ou de circuit » pouvait survenir sur un dossier déjà partiellement décidé, et que le mécanisme méritant vérification était la **préservation** des décisions déjà prises au milieu d'un re-routage. Les deux volets de cette prémisse sont faux, confirmés en lisant `packages/contracts/src/demande.ts` et `demande-workflow.service.ts`, pas supposés.
+
+**`circuit` n'est pas modifiable par `PATCH /api/demandes/{id}`** : `modifierDemandeRequeteSchema = creerDemandeRequeteSchema.omit({ circuit: true }).partial()` — le champ est structurellement absent du schéma de requête, pas seulement ignoré s'il est envoyé. Le segment et le routage en dépendent, donc le circuit ne se change jamais après création.
+
+**Le montant n'est jamais un champ direct de cette route** : `montantTtc` ne fait pas partie de `modifierDemandeRequeteSchema` non plus — le montant découle exclusivement des lignes retenues (`PUT /api/demandes/{id}/lignes`, `R18`), jamais d'une valeur saisie sur la demande elle-même.
+
+**La fenêtre d'éligibilité de R6 est binaire, pas un état intermédiaire à préserver** : `DemandeWorkflowService.verifierAucuneDecision()` (partagée par `modifier`/`rappeler`/`abandonner`) lève `422 DECISION_DEJA_PRISE` dès qu'**une seule** étape porte `etat` dans `[APPROUVEE, REJETEE]` — définitivement, pour le reste du cycle de vie du dossier. Il n'existe donc aucun scénario réel où un re-routage doit « fusionner autour » de décisions déjà prises : soit zéro décision n'a encore été prise (le re-routage supprime et réinstancie toute la chaîne sans rien à préserver), soit au moins une décision existe (le serveur refuse la modification avant de toucher quoi que ce soit). La préservation vient du **refus avant écriture**, pas d'une logique de fusion.
+
+**Vérifié en direct dans les deux sens** (Phase 9.2, déclencheur `Modifier` construit dans le même tour) :
+- 0 décision (`DOBB-2026-629A73`) : `PATCH` réussi → chaîne de tâches supprimée puis réinstanciée, compteur d'escalade remis à zéro, nouvelle entrée `journalAudit` « re-routage », champs modifiés visibles.
+- 1 décision (`DF-2026-56EB9D`, étape `FRA` déjà `APPROUVEE`) : bouton `Modifier` absent côté UI (`aucuneDecisionPrise` calculé côté client, confort d'affichage seulement) ; appel API direct → `422 DECISION_DEJA_PRISE` ; requête DB avant/après confirmant la tâche décidée (id, `dateDecision`, tous les champs) strictement inchangée.
+
+**Ne pas** : rouvrir cette question comme si elle restait ouverte — elle est maintenant vérifiée en conditions réelles, dans les deux sens, et documentée ici pour ne pas la reposer en Phase 10+.
+
+### `demande.statut` n'atteint jamais `EN_COURS` dans le backend réel — valeur d'énumération morte (trouvé en construisant `MesDemandesScreen`, confirmé en revue Phase 9.2)
+
+**Constat, par recherche exhaustive, pas par lecture partielle** : `grep -rn "EN_COURS" apps/api/src` ne retourne aucune occurrence hors la déclaration de l'enum elle-même (`packages/contracts`, `schema.prisma`). Aucun chemin de code n'assigne jamais `statut = 'EN_COURS'` à une demande.
+
+**Cause** : les transitions réelles de `demande.statut` ne mènent qu'à `VALIDE` (validation finale) ou `REJETE` (rejet) — `R10`. Chaque approbation intermédiaire fait avancer `etapeCourante`, jamais `statut`, qui reste `SOUMIS` pendant tout le cycle de vie « en cours de circuit ». `EN_COURS` existe dans l'énumération sans qu'aucun service ne l'atteigne jamais.
+
+**Conséquences déjà présentes dans le code livré, aucune n'est un bug — des branches mortes inoffensives, à connaître avant d'en ajouter d'autres** :
+- `MesDemandesScreen` : l'option de filtre « En cours » du sélecteur de statut ne retournera jamais de résultat (correcte par construction — elle interroge `statut = EN_COURS` fidèlement, c'est le backend qui ne produit jamais cette valeur).
+- Badge Sidebar « Mes demandes » (`app/page.tsx`, `rafraichirCompteMesDemandes`) : calculé comme `SOUMIS + EN_COURS` — le second terme vaut toujours 0, le badge reflète en pratique uniquement `SOUMIS`. Documenté ici plutôt que simplifié : la formule reste correcte si `EN_COURS` devient un jour atteignable (cf. hypothèse ci-dessous), la simplifier maintenant serait recréer le même trou plus tard.
+- `DossierDetailScreen` : `peutAbandonnerOuRappeler`/`peutModifier` testent `statut === "SOUMIS" || statut === "EN_COURS"` — la seconde moitié du test est une branche morte, `SOUMIS` seul suffit aujourd'hui.
+
+**Hypothèse non vérifiée, à ne pas coder dessus** : `EN_COURS` a peut-être été prévu pour distinguer « soumis, aucune étape encore traitée » de « au moins une étape déjà décidée, circuit en cours » — une transition qui n'a jamais été implémentée, pas nécessairement une valeur à supprimer. Question business, pas technique : à trancher avec le même arbitrage que les autres valeurs d'énumération surnuméraires du projet (cf. « 34 rôles maquette vs 25 seedés »), pas une décision à prendre en passant.
+
+**Ne pas** : retirer `EN_COURS` de l'énumération ou des trois endroits ci-dessus pour « nettoyer » — sans arbitrage métier explicite, ce serait deviner que la valeur est définitivement inutile plutôt que simplement jamais encore câblée.
+
+### État des lieux Phase 9 — clôture (après `LoginScreen`, `MesDemandesScreen`, `AuditSecuriteScreen`, déclencheur `Modifier`)
 
 Inventaire vérifié contre le contenu réel de `docs/design/` (noms de composants exportés), pas contre la mémoire d'une session précédente.
 
@@ -314,9 +345,10 @@ Inventaire vérifié contre le contenu réel de `docs/design/` (noms de composan
 - `ConsultationScreen` (`screens2.jsx`) — réutilise `DossierExplorer` sur l'ensemble des dossiers, sans scope `profil`. Distinct du journal de sécurité (`AuditSecuriteScreen`, construit ce tour) : c'est une vue globale des demandes, pas un journal d'événements. Route backend déjà ouverte (`GET /api/demandes` sans `profil`, docs/06 §4), jamais câblée à un écran.
 - La « Transitions des dossiers » de la maquette `AuditScreen` (`screens3.jsx`) — agrégation `JournalAuditVue` à travers tous les dossiers — n'a toujours aucune route serveur (cf. Questions ouvertes, « Aucun flux d'activité récent transversal n'existe »). `AuditSecuriteScreen` ne couvre que l'onglet « Sécurité » de cette même maquette, le seul avec une route réelle.
 - `MasseScreen`, `IntegrationsScreen` (`screens4.jsx`) — aucune route backend, aucune trace nulle part : même famille que Utilisateurs/Moniteur (AdminScreen), jamais nommée comme telle jusqu'ici.
-- Entrée Sidebar « Modules » redondante avec l'onglet « Paramètres système » d'AdminScreen depuis ce tour — à nettoyer ou rediriger, pas urgent.
 
-**Dans `DossierDetailScreen`, actions du mockup non couvertes** : `Modifier` (PATCH re-routage, R6) n'a aucun déclencheur UI bien que la route existe ; `Déléguer`/`Réaffecter` restent exclus (route de recherche d'agent manquante, déjà consignée) ; Approuver/Rejeter sont des actions simples, pas la revue champ par champ **spécifiée par `PGD-055`/`SF-PGD-080`/`081`** (pas seulement montrée par le mockup `ApproveModal`) — backend déjà prêt (`approuverRequeteSchema.revue`), jamais peuplé côté écran. Entrée dédiée dans `docs/design/DIVERGENCES.md` (« Fonctionnalité spécifiée ET maquettée, non construite à l'écran »), pas seulement cette ligne — un écart de contrat d'interaction, pas un détail.
+**Lacune résolue — déclencheur `Modifier` (R6).** `DossierDetailScreen` expose désormais le bouton conditionné à initiateur + statut ∈ {SOUMIS, EN_COURS} + aucune décision déjà prise ; formulaire minimal (`nomClient`/`libelle`/`commentaire` — ni `circuit` ni montant, non modifiables via cette route). Voir la section dédiée ci-dessus pour le détail de la vérification live et la correction de la prémisse initiale de la question (R6 est plus étroit qu'on ne le supposait). Entrée Sidebar « Modules », redondante avec l'onglet « Paramètres système » d'AdminScreen, retirée dans le même tour.
+
+**Dans `DossierDetailScreen`, actions du mockup encore non couvertes** : `Déléguer`/`Réaffecter` restent exclus (route de recherche d'agent manquante, déjà consignée) ; Approuver/Rejeter sont des actions simples, pas la revue champ par champ **spécifiée par `PGD-055`/`SF-PGD-080`/`081`** (pas seulement montrée par le mockup `ApproveModal`) — backend déjà prêt (`approuverRequeteSchema.revue`), jamais peuplé côté écran. Entrée dédiée dans `docs/design/DIVERGENCES.md` (« Fonctionnalité spécifiée ET maquettée, non construite à l'écran »), pas seulement cette ligne — un écart de contrat d'interaction, pas un détail.
 
 **Questions métier non tranchées** (inchangées, cf. « Questions ouvertes » plus bas) : seuils/rôles de subdélégation DOBB/DXC, N1/N2 jamais câblés dans aucun palier, destinataires des notifications ESCALADE/ERREUR_SI, rôle habilité au rejeu SI manuel et à l'export d'audit, rattachement agent→direction/service pour le scoping KPI, escalade SLA sans effet de déblocage réel.
 
