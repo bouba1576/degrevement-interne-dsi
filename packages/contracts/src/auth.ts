@@ -15,7 +15,18 @@ export const connexionReponseSchema = z.object({
   challengeId: z.string().nullable(),
   // Extension au contrat docs/06 §2 — nécessaire au flux réel du Duo Universal
   // Prompt (redirection OIDC) : présent uniquement si methode === "DUO".
-  redirectUrl: z.string().url().nullable()
+  redirectUrl: z.string().url().nullable(),
+  // Extension Phase 9.2 (LoginScreen) — peuplé uniquement quand methode ===
+  // "TOTP", depuis l'utilisateur déjà résolu par LDAP+mot de passe à cet
+  // instant : un signal d'affichage sur un compte déjà authentifié par un
+  // premier facteur, jamais un nouveau chemin d'accès (aucune garantie de
+  // sécurité ne s'appuie dessus). false → l'écran affiche « compte non
+  // provisionné pour la MFA », sans champ de code. Ne jamais réutiliser ce
+  // champ pour qualifier un ÉCHEC de vérification : un code refusé reste
+  // "Code TOTP invalide." générique, qu'un secret existe ou non — sinon on
+  // réouvre par une autre porte ce que l'absence d'enrôlement en libre-service
+  // (cf. CLAUDE.md, Questions ouvertes) visait à empêcher.
+  totpEnrole: z.boolean().nullable()
 });
 export type ConnexionReponse = z.infer<typeof connexionReponseSchema>;
 

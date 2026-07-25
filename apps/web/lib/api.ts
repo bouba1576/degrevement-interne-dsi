@@ -3,6 +3,7 @@ import {
   apercuRoutageReponseSchema,
   calendrierSlaVueSchema,
   circuitVueSchema,
+  connexionReponseSchema,
   controleVueSchema,
   delegationVueSchema,
   demandeDetailSchema,
@@ -30,6 +31,8 @@ import {
   type ApprouverRequete,
   type CalendrierSlaVue,
   type CircuitVue,
+  type ConnexionReponse,
+  type ConnexionRequete,
   type ControleVue,
   type CreerDelegationRequete,
   type CreerDemandeRequete,
@@ -45,6 +48,7 @@ import {
   type KpiValeur,
   type LigneAvecContexte,
   type ModifierCalendrierSlaRequete,
+  type MfaVerifieRequete,
   type ModifierCircuitRequete,
   type ModifierDemandeRequete,
   type ModifierModuleRequete,
@@ -168,6 +172,24 @@ export function fetchSession(): Promise<SessionUtilisateur> {
 
 export function deconnecter(): Promise<{ deconnecte: true }> {
   return requete("/api/auth/logout", z.object({ deconnecte: z.literal(true) }), { method: "POST" });
+}
+
+// --- LoginScreen (Phase 9.2) — @Public() sur ces deux routes -----------
+
+export function login(donnees: ConnexionRequete): Promise<ConnexionReponse> {
+  return requete("/api/auth/login", connexionReponseSchema, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(donnees)
+  });
+}
+
+export function verifierMfa(donnees: MfaVerifieRequete): Promise<ConnexionReponse> {
+  return requete("/api/auth/mfa/verify", connexionReponseSchema, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(donnees)
+  });
 }
 
 // --- Nouvelle demande (Phase 9.2) ------------------------------------

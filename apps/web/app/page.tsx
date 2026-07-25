@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { HomeScreen } from "@/components/screens/HomeScreen";
 import { NouvelleDemandeScreen } from "@/components/screens/nouvelle-demande/NouvelleDemandeScreen";
@@ -8,7 +8,8 @@ import { CorbeillesScreen } from "@/components/screens/corbeilles/CorbeillesScre
 import { DossierDetailScreen } from "@/components/screens/dossier-detail/DossierDetailScreen";
 import { ControleScreen } from "@/components/screens/controle/ControleScreen";
 import { AdminScreen } from "@/components/screens/admin/AdminScreen";
-import { ApiError, deconnecter, fetchSession } from "@/lib/api";
+import { LoginScreen } from "@/components/screens/auth/LoginScreen";
+import { deconnecter, fetchSession } from "@/lib/api";
 import type { SessionUtilisateur } from "@pgd/contracts";
 
 const TITRES: Record<string, { titre: string; sousTitre?: string }> = {
@@ -20,17 +21,29 @@ const TITRES: Record<string, { titre: string; sousTitre?: string }> = {
   admin: { titre: "Administration", sousTitre: "Référentiels — ADMIN_PGD" }
 };
 
-// Premier écran réellement connecté (Phase 9.2) : la session simulée posée
-// pour la coquille statique est retirée — GET /api/auth/session (réel,
-// Phase 2) porte maintenant l'identité affichée. Pas de page de connexion
-// pour l'instant (hors périmètre de cette étape) : un 401 ici signifie
-// simplement qu'aucun cookie de session n'existe encore dans ce navigateur,
-// affiché lisiblement plutôt que planté.
+// GET /api/auth/session porte l'identité affichée. Un échec ici — 401 (aucun
+// cookie), ou toute autre erreur — signifie simplement « pas de session
+// valide » : LoginScreen s'affiche dans les deux cas plutôt qu'un message
+// technique (un problème de connectivité réel se manifestera de toute façon
+// à la soumission du formulaire, via ApiError affiché par LoginScreen
+// lui-même).
 export default function Page() {
   const [utilisateur, setUtilisateur] = useState<SessionUtilisateur | null>(null);
-  const [erreur, setErreur] = useState<string | null>(null);
+  const [chargementSession, setChargementSession] = useState(true);
   const [route, setRoute] = useState("home");
   const [dossierId, setDossierId] = useState<string | null>(null);
+
+  const rechargerSession = useCallback(() => {
+    setChargementSession(true);
+    fetchSession()
+      .then(setUtilisateur)
+      .catch(() => setUtilisateur(null))
+      .finally(() => setChargementSession(false));
+  }, []);
+
+  useEffect(() => {
+    rechargerSession();
+  }, [rechargerSession]);
 
   function naviguer(nouvelleRoute: string) {
     setDossierId(null);
@@ -42,36 +55,22 @@ export default function Page() {
     setRoute("detail");
   }
 
-  useEffect(() => {
-    fetchSession()
-      .then(setUtilisateur)
-      .catch((e: unknown) =>
-        setErreur(e instanceof ApiError ? e.message : "Impossible de contacter l'API.")
-      );
-  }, []);
-
   async function onDeconnexion() {
     await deconnecter().catch(() => {});
     setUtilisateur(null);
+    setRoute("home");
   }
 
-  if (erreur) {
-    return (
-      <main className="flex min-h-screen items-center justify-center p-26">
-        <p className="text-13 text-gris600">
-          {erreur} — aucune page de connexion n'existe encore côté apps/web (Phase 9.2 : coquille et HomeScreen
-          uniquement). Une session valide (cookie posé par POST /api/auth/login) est nécessaire.
-        </p>
-      </main>
-    );
-  }
-
-  if (!utilisateur) {
+  if (chargementSession) {
     return (
       <main className="flex min-h-screen items-center justify-center p-26">
         <p className="text-13 text-gris600">Chargement de la session…</p>
       </main>
     );
+  }
+
+  if (!utilisateur) {
+    return <LoginScreen onConnecte={rechargerSession} />;
   }
 
   const { titre, sousTitre } = TITRES[route] ?? { titre: route };

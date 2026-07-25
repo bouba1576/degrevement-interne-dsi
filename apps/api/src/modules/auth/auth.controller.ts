@@ -82,7 +82,7 @@ export class AuthController {
     if (rolesExigentMfa === 0) {
       const jetons = await this.sessionService.creerSession({ id: utilisateur.id, identifiantAd, roles });
       this.poserCookiesSession(res, jetons);
-      return { requiresMfa: false, methode: null, challengeId: null, redirectUrl: null };
+      return { requiresMfa: false, methode: null, challengeId: null, redirectUrl: null, totpEnrole: null };
     }
 
     let challengeId: string;
@@ -123,7 +123,8 @@ export class AuthController {
       requiresMfa: true,
       methode: challenge.methode,
       challengeId,
-      redirectUrl: challenge.redirectUrl ?? null
+      redirectUrl: challenge.redirectUrl ?? null,
+      totpEnrole: challenge.methode === "TOTP" ? utilisateur.totpSecret !== null : null
     };
   }
 
@@ -178,7 +179,7 @@ export class AuthController {
     const jetons = await this.sessionService.creerSession({ id: utilisateur.id, identifiantAd: utilisateur.identifiantAd, roles });
     this.poserCookiesSession(res, jetons);
 
-    return { requiresMfa: false, methode: "TOTP", challengeId: null, redirectUrl: null };
+    return { requiresMfa: false, methode: "TOTP", challengeId: null, redirectUrl: null, totpEnrole: true };
   }
 
   // Extension au contrat docs/06 §2 — le Duo Universal Prompt redirige ici le
