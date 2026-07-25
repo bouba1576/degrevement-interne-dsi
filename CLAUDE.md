@@ -492,6 +492,30 @@ délégataire actif → 200, délégation expirée → 403.
 
 ---
 
+## Phase 10 — Qualité (docs/05 §10, en cours)
+
+### 10.1 — Couverture `src/modules/**` (baseline puis progrès ciblé)
+
+Baseline mesurée en ouverture de phase : **73.84 % statements / 66.55 % branches / 64.31 % functions / 72.79 % lines**, sous la cible ≥80 %. Écart concentré sur `auth/` (33.09 %) plutôt que réparti uniformément — `session.service.ts` (20.8 %) et `rate-limit.service.ts` (33.3 %) portent respectivement la révocation de session JWT et le verrouillage anti-bruteforce, la couche la moins couverte du module le plus sensible (porte d'entrée de toute session applicative). Aucun test n'existait pour l'un ou l'autre avant ce tour.
+
+Comblé par `apps/api/test/session-service.integration.spec.ts` (intégration réelle contre Redis, pas de mock — révocation immédiate vérifiée en supprimant la session Redis plutôt qu'en attendant l'expiration de la signature JWT, `marquerMfaSatisfaite`, `rafraichir` avec jeton invalide/session révoquée) et `rate-limit-service.integration.spec.ts` (seuil lu depuis l'environnement réel via `loadEnv()`, jamais supposé ; isolation par action et par identifiant — un utilisateur ne peut jamais consommer le quota d'un autre). `session.service.ts` : 20.8 % → 97.9 %. `rate-limit.service.ts` : 33.3 % → 100 %. `auth/** ` global : 33.09 % → 60 %.
+
+**Ports à 0 % (`ldap.port.ts`, `mfa.port.ts`, `crm.port.ts`, `ged.port.ts`) vérifiés, pas exclus par supposition** : lecture des quatre fichiers confirme des interfaces TypeScript pures (effacées à la compilation) plus une seule ligne `export const XXX_PORT = "..."` chacune — le 0 % ne porte que sur cette ligne unique de constante, pas un trou de couverture réel. Aucun effort à y consacrer.
+
+**Restant, volontairement pas traité dans ce tour** : `lignes/services` (47.77 %), `demandes.controller.ts` (57.74 %). Distinction posée avant d'y revenir : `CrmStubAdapter` (bouchon, remplacé avant recette, cf. « Ports d'intégration ») ne mérite pas le même investissement de couverture que `crm-import.service.ts` (logique métier qui consomme `CrmPort` via l'interface, survit intégralement au remplacement de l'adaptateur). Le même principe vaudra pour `GedStubAdapter`/`BscsAdapter`/`GaiaAdapter`.
+
+### 10.2 / 10.4 — Pipeline CI (premier pipeline du projet)
+
+**Aucune CI n'existait avant ce tour** (`.github/workflows` absent, confirmé par recherche, pas supposé) — chaque sweep de fin de phase de ce projet, jusqu'ici, a été rejoué manuellement sur un poste de dev. `.github/workflows/ci.yml` : services Postgres 16/Redis 7/RabbitMQ 3-management réels (pas de mock, cohérent avec la convention « tests contre référentiels »), configurés avec les identifiants/ports par défaut qu'`apps/api/test/setup-env.ts` et `apps/worker/test/setup-env.ts` posent déjà (`??=`) — aucune variable `DATABASE_URL`/`REDIS_URL`/`RABBITMQ_*` dupliquée dans le workflow, la coïncidence avec les mêmes valeurs qu'un `pnpm test` lancé depuis un poste de dev est délibérée.
+
+**T1 (claim concurrent, PGD-051/R7) posé comme étape dédiée et nommée**, avant la suite complète — pas noyé dans un résumé générique : jusqu'ici rejoué uniquement à la main (« rejoué cinq fois pour écarter le flakiness », Phase 6). Un échec futur s'identifie immédiatement dans l'UI CI comme « la concurrence du claim est cassée », et ne peut pas disparaître silencieusement si la tâche `test` générique est réorganisée plus tard.
+
+**Vérifié en conditions réelles avant d'être considéré fiable, pas seulement écrit** : trois conteneurs Postgres/Redis/RabbitMQ jetables montés sur des ports distincts de la stack de dev (pour partir d'un état réellement vierge, pas d'une base déjà migrée/seedée), migrations + seed rejoués dessus, puis suite complète — `apps/api` (35/35 suites, 195/195 tests, `ldap-provider.integration.spec.ts` et `si-service.integration.spec.ts` compris, aucun worker actif pour entrer en course avec ce dernier) et `apps/worker` (7/7 suites, 25/25 tests, RabbitMQ réel — topologie, si-push, sla-escalation, locks-sweeper, notifications, retry). Conteneurs jetables détruits après vérification.
+
+**Pas encore déclenché sur GitHub réellement** (le fichier existe et a été validé localement contre une reproduction fidèle de l'environnement CI, mais n'a pas encore tourné sur un vrai runner GitHub Actions — aucun push n'a été fait sans autorisation explicite). À confirmer au premier push sur `main`/`bmad-method`.
+
+---
+
 ## Commandes
 
 ```bash

@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  push:
+    branches: [main, bmad-method]
+  pull_request:
+
+# Un seul job séquentiel plutôt qu'une matrice de jobs parallèles : les
+# services (Postgres/Redis/RabbitMQ) sont partagés par lint/typecheck/build/
+# test dans ce job, ce qui évite de payer trois fois le coût de démarrage des
+# conteneurs pour un gain de parallélisme marginal sur un monorepo de cette
+# taille. À revoir si le temps total devient un problème réel, pas avant.
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: pgd
+          POSTGRES_PASSWORD: pgd
+          POSTGRES_DB: pgd
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pgd"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      rabbitmq:
+        image: rabbitmq:3-management
+        env:
+          RABBITMQ_DEFAULT_USER: pgd
+          RABBITMQ_DEFAULT_PASS: pgd
+          RABBITMQ_DEFAULT_VHOST: /pgd
+        ports:
+          - 5672:5672
+          - 15672:15672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s
+          --health-timeout 10s
+          --health-retries 10
+
+    # Volontairement PAS de variables d'environnement ici au-delà du strict
+    # nécessaire : apps/api/test/setup-env.ts et apps/worker/test/setup-env.ts
+    # posent déjà des valeurs de test par défaut (??=) pour JWT_SECRET,
+    # REFRESH_TOKEN_SECRET, TOTP_ENCRYPTION_KEY, LDAP_*, DUO_* — les mêmes
+    # valeurs qu'un `pnpm --filter @pgd/api test` lancé depuis un poste de dev.
+    # Les services ci-dessus sont configurés avec les identifiants/ports par
+    # défaut attendus par ces mêmes fichiers (pgd/pgd, 127.0.0.1:5432/6379,
+    # vhost /pgd) : aucune variable DATABASE_URL/REDIS_URL/RABBITMQ_* à
+    # dupliquer ici, la coïncidence est délibérée, pas accidentelle.
+    env:
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Installer les dépendances (lockfile figé)
+        run: pnpm install --frozen-lockfile
+
+      - name: Générer le client Prisma
+        run: pnpm db:generate
+
+      - name: Appliquer les migrations
+        run: pnpm db:migrate
+
+      - name: Charger les référentiels et le jeu de démonstration
+        run: pnpm db:seed
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Vérification des types
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
+
+      # Premier citoyen du pipeline, pas une case à cocher noyée dans la
+      # suite complète (docs/05 §10.2) : T1 (PGD-051) est la condition non
+      # négociable qui a conditionné le feu vert de la Phase 6 — 50 requêtes
+      # concurrentes de claim sur la MÊME tâche, exactement 1 succès et 49
+      # × 409. Jusqu'ici rejoué uniquement à la main sur un poste de dev
+      # ("rejoué cinq fois pour écarter le flakiness", Phase 6). Une étape
+      # dédiée et nommée explicitement : un échec ici s'identifie
+      # immédiatement dans l'UI CI comme "la concurrence du claim est cassée",
+      # jamais noyé dans un résumé générique de suite de tests, et ne peut pas
+      # disparaître silencieusement si la tâche `test` générique est
+      # réorganisée plus tard.
+      - name: Test de concurrence sur le claim (T1, SF-PGD-072, R7)
+        run: pnpm --filter @pgd/api test -- tache-claim.integration.spec.ts
+
+      - name: Suite de tests complète (api, worker, ui)
+        run: pnpm test
