@@ -10,6 +10,7 @@ import { ControleScreen } from "@/components/screens/controle/ControleScreen";
 import { AdminScreen } from "@/components/screens/admin/AdminScreen";
 import { LoginScreen } from "@/components/screens/auth/LoginScreen";
 import { MesDemandesScreen } from "@/components/screens/mes-demandes/MesDemandesScreen";
+import { AuditSecuriteScreen } from "@/components/screens/audit/AuditSecuriteScreen";
 import { deconnecter, fetchSession, listerDemandes } from "@/lib/api";
 import type { SessionUtilisateur } from "@pgd/contracts";
 
@@ -20,7 +21,8 @@ const TITRES: Record<string, { titre: string; sousTitre?: string }> = {
   corbeilles: { titre: "Corbeilles partagées", sousTitre: "Affectation par rôle (pull)" },
   detail: { titre: "Dossier" },
   controle: { titre: "Contrôle a posteriori", sousTitre: "Contrôles à froid, hors chemin bloquant" },
-  admin: { titre: "Administration", sousTitre: "Référentiels — ADMIN_PGD" }
+  admin: { titre: "Administration", sousTitre: "Référentiels — ADMIN_PGD" },
+  audit: { titre: "Journal de sécurité", sousTitre: "Connexions, MFA, refus RBAC/SoD — ADMIN_PGD" }
 };
 
 // GET /api/auth/session porte l'identité affichée. Un échec ici — 401 (aucun
@@ -101,7 +103,7 @@ export default function Page() {
   }
 
   const { titre, sousTitre } = TITRES[route] ?? { titre: route };
-  const ecransConnus = ["home", "nouvelle", "mes", "corbeilles", "detail", "controle", "admin"];
+  const ecransConnus = ["home", "nouvelle", "mes", "corbeilles", "detail", "controle", "admin", "audit"];
 
   return (
     <AppShell
@@ -120,6 +122,7 @@ export default function Page() {
       {route === "detail" && dossierId && <DossierDetailScreen dossierId={dossierId} utilisateur={utilisateur} />}
       {route === "controle" && <ControleScreen onOuvrirDossier={ouvrirDossier} />}
       {route === "admin" && <AdminScreen />}
+      {route === "audit" && <AuditSecuriteScreen />}
       {!ecransConnus.includes(route) && (
         <p className="text-13 text-gris600">Écran « {route} » à construire (Phase 9.2, étapes suivantes).</p>
       )}

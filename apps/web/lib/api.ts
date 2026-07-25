@@ -8,6 +8,7 @@ import {
   delegationVueSchema,
   demandeDetailSchema,
   demandesListeReponseSchema,
+  journalSecuriteVueSchema,
   erreurSchema,
   etapeDossierSchema,
   formulesDeLigneSchema,
@@ -48,6 +49,8 @@ import {
   type ListerDemandesQuery,
   type FormulesDeLigne,
   type JournalAuditVue,
+  type JournalSecuriteQuery,
+  type JournalSecuriteVue,
   type KpiValeur,
   type LigneAvecContexte,
   type ModifierCalendrierSlaRequete,
@@ -509,4 +512,20 @@ export function compterBrouillons(circuit: string): Promise<number> {
   return requeteAvecTotal(`/api/demandes?circuit=${circuit}&statut=BROUILLON&limit=1`, z.array(z.unknown())).then(
     (r) => r.total
   );
+}
+
+// --- AuditSecuriteScreen (Phase 9.2) — @Roles("ADMIN_PGD") ---------------
+
+// Journal de SÉCURITÉ (connexions, MFA, refus RBAC/SoD) — pas le journal
+// d'audit métier par dossier (journalAuditDemande, déjà consommé par
+// DossierDetailScreen). Deux sources réelles distinctes, cf. CLAUDE.md.
+export function journalSecurite(query: JournalSecuriteQuery): Promise<{ data: JournalSecuriteVue[]; total: number }> {
+  const params = new URLSearchParams();
+  if (query.utilisateur) params.set("utilisateur", query.utilisateur);
+  if (query.evenement) params.set("evenement", query.evenement);
+  if (query.depuis) params.set("depuis", query.depuis);
+  if (query.jusqua) params.set("jusqua", query.jusqua);
+  params.set("page", String(query.page));
+  params.set("limit", String(query.limit));
+  return requeteAvecTotal(`/api/audit/securite?${params.toString()}`, z.array(journalSecuriteVueSchema));
 }
