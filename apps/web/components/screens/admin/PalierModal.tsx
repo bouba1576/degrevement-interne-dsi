@@ -24,6 +24,7 @@ export interface PalierModalValeur {
 
 export interface PalierModalProps {
   palier: PalierVue | null;
+  circuitParDefaut?: EnumCircuit;
   onFermer: () => void;
   onConfirmer: (valeur: PalierModalValeur) => void;
   chargement: boolean;
@@ -43,7 +44,7 @@ function etapeParDefaut(): EtapeEdition {
 // `modeAffectation` n'est pas exposé : ENUM_AFFECTATION n'a qu'une seule
 // valeur possible ("PULL", R5 — jamais de désignation nominative), un
 // sélecteur à un seul choix n'ajouterait rien.
-export function PalierModal({ palier, onFermer, onConfirmer, chargement }: PalierModalProps) {
+export function PalierModal({ palier, circuitParDefaut, onFermer, onConfirmer, chargement }: PalierModalProps) {
   const [roles, setRoles] = useState<RoleVue[] | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [valeur, setValeur] = useState<PalierModalValeur>(
@@ -60,7 +61,7 @@ export function PalierModal({ palier, onFermer, onConfirmer, chargement }: Palie
             .sort((a, b) => a.ordre - b.ordre)
             .map((e) => ({ roleCode: e.roleCode, typeActeur: e.typeActeur, bloquant: e.bloquant, slaHeures: String(e.slaHeures) }))
         }
-      : { circuit: "DOBB", segment: "B2B", sousFlux: "", borneMin: "0", borneMax: "", labelPalier: "", etapes: [etapeParDefaut()] }
+      : { circuit: circuitParDefaut ?? "DOBB", segment: "B2B", sousFlux: "", borneMin: "0", borneMax: "", labelPalier: "", etapes: [etapeParDefaut()] }
   );
 
   useEffect(() => {

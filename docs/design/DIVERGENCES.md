@@ -208,6 +208,31 @@ Structure déjà alignée sur la maquette (`docs/design/screens2.jsx:198-258`) :
 
 Vérifié en direct (même dossier DOBB, rôle `RESPONSABLE_DOBB`) : icône cadenas sur « Récupérer », puce de rôle active noire confirmée correcte. Aucune tâche en retard dans le jeu de données disponible pour vérifier la bordure rouge/badge « SLA dépassé » en conditions réelles — logique identique à celle déjà vérifiée pour `SlaTimer`/`CalendrierSlaService` (Phase 6), pas une nouvelle règle non testée.
 
+### AdminScreen — onglet « Processus » (Paliers), 1/7
+
+`AdminScreen` a 7 onglets, chacun construit indépendamment (vérifié par les imports de chaque `*AdminTab.tsx` avant de commencer — aucun composant de liste/formulaire partagé, seulement des atomes génériques `Field`/`Badge`/`Modal` de `@pgd/ui`). Chaque onglet fait donc l'objet de son propre audit et de son propre commit ; celui-ci couvre uniquement « Processus », choisi en premier car le plus visuellement complexe et le candidat le plus probable à un vrai défaut.
+
+La maquette (`docs/design/screens3.jsx`, `MatriceView`, lignes 536-772) est un éditeur riche : rail de circuits à gauche, canevas de tranches à droite avec timeline verticale des étapes, simulateur de montant en direct, et une modale « Nouveau processus » qui crée un circuit entier à la volée. Le réel (`PaliersAdminTab.tsx`, avant ce tour) n'était qu'une liste plate de tous les paliers mélangés, sans navigation par circuit, sans timeline, sans simulateur.
+
+**Non repris de la maquette, par catégorie déjà établie, pas par omission** :
+- « Nouveau processus » (créer un circuit à la volée) — **catégorie 1** : `EnumCircuit` est un ENUM Postgres à 3 valeurs fixes (DOBB/DXC/DF), contredit le modèle de données.
+- Glisser-déposer pour réordonner les étapes — **déjà tranché**, pas rouvert : `PalierModal.tsx` porte déjà un commentaire explicite (« boutons haut/bas... le glisser-déposer accessible au clavier est un chantier en soi, arbitrage explicite, pas un raccourci pris par défaut »).
+- Avatars des membres par rôle dans la timeline — **catégorie 2**, même trou déjà consigné pour `CorbeillesScreen` (`E3.membersOfRole` sans route réelle équivalente).
+- Édition inline dans le canevas (la maquette bascule toute la vue en mode édition) — le CRUD reste dans `PalierModal`, cohérence avec `RoleModal`/`MotifModal` ailleurs dans `AdminScreen` : changer uniquement cet onglet pour de l'édition inline casserait la convention du reste de l'écran, pas une omission à corriger.
+
+| Élément | Maquette | Réalisation (avant) | Catégorie | Action |
+|---|---|---|---|---|
+| Rail de circuits + canevas des tranches du circuit sélectionné | Présent | Liste plate, tous circuits mélangés | Défaut d'implémentation | Corrigé — rail utilisant `CircuitVue` (déjà admin-éditable via `CircuitsAdminTab`, réutilisé ici en lecture seule pour éviter toute duplication d'édition) |
+| Timeline verticale (Soumission → étapes ordonnées → Validé) | Présente | Chips plates (`{ordre}. {roleCode} ({typeActeur})`) | Défaut d'implémentation | Corrigé |
+| Libellé humain du rôle dans la chaîne | Présent (`E3.roleLabel`) | Code brut (`roleCode`) | Défaut d'implémentation | Corrigé — jointure via `listerRoles()`, déjà utilisé ailleurs (`PalierModal`) |
+| Simulateur de montant (« Tester un montant ») | Présent | Absent | Défaut d'implémentation | Corrigé — comparaison de bornes en lecture pure sur les paliers déjà chargés, aucune règle métier dupliquée (R1/R2/R11 restent dans `RuleEngineService`) |
+| Alerte trous scopée au circuit affiché | Oui | Liste globale tous circuits, en tête d'onglet | Défaut d'implémentation | Corrigé — filtrée par `circuitActif` |
+| Code process affiché (« PO2_B-17 » etc.) | Présent | Absent | Défaut d'implémentation | Corrigé — `CircuitVue.processCode`, déjà un champ réel (`CircuitsAdminTab`) |
+
+Vérifié en direct (session `ADMIN_PGD`) sur les trois circuits réels : DOBB (1 tranche provisoire, confirme visuellement la question ouverte « Aucun dossier DOBB/DXC au-delà de 5M ne peut être soumis »), DF (3 tranches réelles avec chaîne FRA visible dès 5M — badge « Contrôle » violet cohérent avec `TypeActeurBadge`). Simulateur testé avec un montant réel (6 000 000 sur DOBB) : badge « tranche trouvée », carte de palier surlignée en vert, badge « déclenchée » — comportement conforme à la maquette.
+
+
+
 ## Point d'attention transverse — masquage de bouton par rôle
 
 La maquette peut masquer ou désactiver des boutons selon le rôle courant (ex. `defaultRouteFor`, conditions d'affichage dans les écrans de corbeille/admin). **Si portée, cette logique est un confort d'affichage, jamais un contrôle d'accès** : le serveur reste seul juge de ce qu'un appel peut effectivement faire, exactement comme rappelé règle non négociable 2 de CLAUDE.md (« un contrôle côté client est un confort, jamais une garantie »). Un bouton visible dont l'action est refusée côté serveur est un comportement normal, pas un bug à corriger en assouplissant l'API.
