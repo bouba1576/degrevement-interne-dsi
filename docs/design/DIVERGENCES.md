@@ -231,7 +231,25 @@ La maquette (`docs/design/screens3.jsx`, `MatriceView`, lignes 536-772) est un �
 
 Vérifié en direct (session `ADMIN_PGD`) sur les trois circuits réels : DOBB (1 tranche provisoire, confirme visuellement la question ouverte « Aucun dossier DOBB/DXC au-delà de 5M ne peut être soumis »), DF (3 tranches réelles avec chaîne FRA visible dès 5M — badge « Contrôle » violet cohérent avec `TypeActeurBadge`). Simulateur testé avec un montant réel (6 000 000 sur DOBB) : badge « tranche trouvée », carte de palier surlignée en vert, badge « déclenchée » — comportement conforme à la maquette.
 
+### AdminScreen — onglet « Rôles », 2/7
 
+Vérification structurelle faite **avant** de commencer (pas supposée) : `RolesAdminTab.tsx` n'est pas un simple CRUD plat comme redouté possible — comparé au code source de la maquette (`docs/design/screens3.jsx:863-909`, `RolesView`), qui affiche un vrai tableau (en-tête avec compteur, colonnes Type/Niveau/Circuit/Statut/Membres), contre une liste plate sans aucune de ces colonnes côté réel (avant ce tour). Même classe de défaut que « Processus » — un composant simplifié en liste plate — mais de moindre ampleur (pas de rail de navigation, pas de canevas).
+
+**Trouvaille structurelle avant tout correctif** : `RoleVue.dansMatrice` (`packages/contracts/src/admin-referentiels.ts`) est un champ réel, déjà envoyé dans le payload de `RoleModal` (`dansMatrice: v.dansMatrice`) — mais **jamais affiché** dans la liste avant ce tour. Un champ réel jamais montré, pas un chantier de backend.
+
+**Non repris de la maquette, par catégorie déjà établie, pas par omission** :
+- Colonne « Circuit » (pivot vs circuit spécifique) — **catégorie 3** : `Role` (`packages/database/prisma/schema.prisma:188-204`) n'a **aucun champ circuit** ; l'appartenance à un circuit ne se déduit que via la relation indirecte `EtapeRegle` (potentiellement multi-circuits pour un rôle pivot) — la maquette invente une structure absente du modèle, pas une case à cocher oubliée.
+- Badges de type I/V/A/C/S/X — la maquette confond le type de **rôle** avec le type d'**acteur de tâche** (`typeActeur` V/A/C, une propriété de la tâche, pas du rôle — déjà relevé dans `CorbeillesScreen.tsx`, commentaire dédié). Le vrai `EnumTypeRole` est `METIER`/`PIVOT`/`SYSTEME` (`packages/database/prisma/schema.prisma:109-114`), un axe différent ; `RoleModal.tsx` utilise déjà ces trois valeurs réelles, reprises ici à l'identique — reproduire I/V/A/C/S/X aurait été recopier une invention de la maquette qui contredit le schéma.
+- Avatars des membres par rôle — **catégorie 2**, même trou déjà consigné pour `CorbeillesScreen`/« Processus » (aucune route de listing d'utilisateurs).
+
+| Élément | Maquette | Réalisation (avant) | Catégorie | Action |
+|---|---|---|---|---|
+| Tableau avec en-tête (icône + titre + compteur) | Présent (« N dans la matrice · M au total ») | Liste plate, sans compteur | Défaut d'implémentation | Corrigé |
+| Statut « Dans la matrice »/« Hors matrice » | Présent, lignes hors matrice atténuées (opacité) | Absent — `dansMatrice` jamais affiché malgré un champ réel | Défaut d'implémentation | Corrigé |
+| Tri (rôles dans la matrice en tête) | Présent | Ordre brut de l'API | Défaut d'implémentation | Corrigé |
+| Badge de type coloré | Présent (mais sémantique fausse, I/V/A/C/S/X — cf. ci-dessus) | Badge neutre, texte brut | Défaut d'implémentation, corrigé avec la vraie sémantique | Corrigé — `METIER`/`info` (bleu), `PIVOT`/`accent` (orange), `SYSTEME`/`fort` (noir) : **décision de design assumée**, pas extraite (aucune source ne mappe ces trois valeurs à une couleur), cohérente avec les autres familles sémantiques de `tonBadge` |
+
+Vérifié en direct (session `ADMIN_PGD`, 25 rôles réels) : compteur exact (22 dans la matrice · 25 au total), 3 rôles `SYSTEME` (`ADMIN_PGD`, `SERVICE_TECHNIQUE`, `SUPERVISEUR`) correctement affichés « Hors matrice » et atténués, badges de type colorés par famille réelle.
 
 ## Point d'attention transverse — masquage de bouton par rôle
 
