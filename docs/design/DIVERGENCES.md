@@ -265,6 +265,30 @@ Vérification structurelle faite avant de commencer, comme pour « Rôles » : l
 
 Vérifié en direct (session `ADMIN_PGD`) : 3 cartes réelles (DOBB · B2B — 3 motifs, DXC · B2C — 2 motifs, DF · WHOLESALE — 2 motifs), icône `flag` correctement rendue (glyphe compact, vérifié par capture zoomée avant de conclure — ressemble à un « P » à cette taille mais correspond exactement au tracé SVG de l'icône, pas un défaut de rendu).
 
+### AdminScreen — onglet « Circuits », 4/7 : aucun équivalent maquette, rien à comparer
+
+Vérifié avant de conclure, pas supposé : recherche dédiée de `processCode`/codes process (`PO2_B-17`, `PO5-G-07`, `PO6-07`) dans tout `docs/design/` — la seule occurrence est un affichage **en lecture seule** dans l'en-tête de canevas de « Processus » (`MatriceView`, déjà repris en Phase 9.3, onglet 1/7). La maquette n'a **aucune vue d'édition** des métadonnées de circuit (libellé, code process) — `AdminScreen` (maquette) n'a d'ailleurs que 6 onglets, pas 7 : « Motifs & circuits » y est un onglet combiné (`docs/design/screens3.jsx:518`) dont la seule vue réelle (`MotifsView`) ne montre que des motifs, jamais de formulaire de circuit.
+
+`CircuitsAdminTab.tsx` (réel) est donc une construction **« spécifié, absent de la maquette »** (catégorie déjà établie plus haut dans ce fichier) : les champs `libelle`/`processCode` sont réels et déjà admin-éditables (`CircuitVue`), mais leur présentation vient de nulle part dans `docs/design/` — pas un écart à corriger, un silence de la maquette déjà comblé d'après une source réelle (le contrat, pas une supposition). Aucun changement apporté à ce tour ; onglet fermé sans commit de code, seule cette note ajoutée.
+
+### AdminScreen — onglet « Paramètres de calcul », 5/7
+
+La maquette combine, dans un seul onglet (`docs/design/screens3.jsx:1027-1075`, `CalcConfigView`), trois blocs que le réel décompose en deux onglets distincts (« décomposés par SENS », convention déjà posée dans `AdminScreen.tsx`) : les taux TSC/TVA (repris ici), le panneau « Rejets SLA » (déjà exclu, catégorie « Écarts tranchés » — contredit `docs/04` sur `minuteur_bloquant=FALSE` pour l'Initiateur, pas rouvert), et le calendrier métier des SLA (son propre onglet, « Calendrier SLA », 6/7 — pas traité ici).
+
+| Élément | Maquette | Réalisation (avant) | Catégorie | Action |
+|---|---|---|---|---|
+| Icône d'en-tête de carte | Présente (`calc`) | Absente | Défaut d'implémentation | Corrigé |
+| Bascule visuelle activé/désactivé (TSC/TVA actifs par défaut) | Interrupteur (`switch`) | Cases à cocher brutes | Défaut d'implémentation | Corrigé — bouton bicolore réutilisant la convention déjà en place dans `ParametresSystemeAdminTab.tsx` (`border-vert700 bg-vertFond`), pas un composant switch inventé pour l'occasion |
+| Panneau d'aperçu (« Aperçu — exemple 1 000 000 FCFA HT ») | Présent | Absent | Défaut d'implémentation | Corrigé, **avec une vérification préalable qui a évité une régression** — voir ci-dessous |
+
+**Le panneau d'aperçu reproduit une formule, pas un chantier de backend — mais a été vérifié contre le service réel avant d'être écrit, pas deviné depuis la maquette.** `ParametreCalculVue` n'expose qu'une seule assiette possible (pas de choix HT vs HT+TSC côté admin) — vérifié en lisant `MontantService.calculer()` (`apps/api/src/modules/demandes/services/montant.service.ts:38-44`) avant d'ajouter la moindre ligne : `tva = (ht + tsc) * tauxTva`, jamais une autre base. Sans cette vérification, l'aperçu aurait pu afficher une assiette fausse.
+
+**Erreur trouvée et corrigée dans la première version de ce correctif, avant commit** : `tauxTsc`/`tauxTva` sont stockés en base comme des **fractions brutes** (`0.03` = 3 %, `packages/database/prisma/schema.prisma:377-378`), et le champ de saisie existant les édite déjà tels quels (convention pré-existante, pas changée ici). La première capture d'écran de vérification live a montré un calcul faux d'un facteur 100 (TSC affichée à 300 FCFA au lieu de 30 000 FCFA sur un exemple à 1 000 000 FCFA HT et un taux de 3 %) — le code appliquait `Number(tauxTsc) / 100` en supposant à tort que le champ contenait un nombre de pourcentage (« 3 ») plutôt que la fraction déjà stockée (« 0.03 »). Corrigé en appliquant la fraction directement (`ht * Number(tauxTsc)`, sans division), avec une conversion d'affichage séparée (`× 100`) uniquement pour le libellé humain (« 3.00 % »). **C'est exactement le genre d'erreur que l'étape de vérification live existe pour attraper** — une capture d'écran prise avant correction aurait fait passer un calcul faux pour un correctif validé.
+
+**Point d'attention distinct, pas corrigé ici** : le champ de saisie « Taux TSC (%) » lui-même (préexistant, pas modifié par ce tour) édite la fraction brute sans conversion d'affichage — un administrateur qui y saisit « 3 » en pensant fixer 3 % fixerait en réalité un taux de 300 %. La maquette convertit explicitement (`+(t.taux * 100).toFixed(2)` à l'affichage, `/100` à la saisie) ; le réel ne le fait pas. Corriger cela changerait la sémantique de sauvegarde d'un champ déjà en production, pas seulement sa présentation — hors périmètre d'un audit visuel, signalé ici pour un correctif dédié plutôt que traité en passant.
+
+Vérifié en direct (session `ADMIN_PGD`), après correction : DOBB/DXC/DF affichent chacun TSC 3,00 % → 30 000 FCFA, TVA 18,00 % (assiette HT+TSC) → 185 400 FCFA, Total TTC 1 215 400 FCFA — cohérent avec `MontantService.calculer()` recalculé à la main.
+
 ## Point d'attention transverse — masquage de bouton par rôle
 
 La maquette peut masquer ou désactiver des boutons selon le rôle courant (ex. `defaultRouteFor`, conditions d'affichage dans les écrans de corbeille/admin). **Si portée, cette logique est un confort d'affichage, jamais un contrôle d'accès** : le serveur reste seul juge de ce qu'un appel peut effectivement faire, exactement comme rappelé règle non négociable 2 de CLAUDE.md (« un contrôle côté client est un confort, jamais une garantie »). Un bouton visible dont l'action est refusée côté serveur est un comportement normal, pas un bug à corriger en assouplissant l'API.

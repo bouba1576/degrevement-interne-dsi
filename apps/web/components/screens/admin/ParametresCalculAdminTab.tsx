@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Field, Modal } from "@pgd/ui";
+import { Field, Icon, Modal, Money } from "@pgd/ui";
 import type { ParametreCalculVue } from "@pgd/contracts";
 import { ApiError, compterBrouillons, listerParametresCalcul, modifierParametreCalcul } from "@/lib/api";
 
@@ -30,7 +30,27 @@ function versEdition(p: ParametreCalculVue): EditionParametre {
 // compte-rendu après) est nécessaire dès que ce nombre est significatif :
 // demandé explicitement en revue plutôt que découvert après coup.
 const SEUIL_CONFIRMATION = 5;
+const MONTANT_EXEMPLE = 1_000_000;
 
+// Port partiel de docs/design/screens3.jsx (CalcConfigView) : icône d'en-tête
+// + bascule visuelle de l'activation par défaut + aperçu de calcul.
+//
+// L'aperçu reproduit la formule EXACTE de MontantService.calculer()
+// (apps/api/src/modules/demandes/services/montant.service.ts) — tva =
+// (ht + tsc) * tauxTva, jamais une assiette alternative devinée : vérifié
+// contre le service réel avant d'être ajouté, pas supposé depuis la
+// maquette. Aucune règle métier nouvelle : `ParametreCalculVue` n'expose
+// qu'une seule assiette possible (pas de choix HT vs HT+TSC côté admin,
+// contrairement à ce qu'un lecteur pourrait supposer en voyant ce composant
+// — cette bascule-là, si elle existe un jour, vit dans la fiche de demande,
+// pas ici). Purement illustratif (montant fixe 1 000 000, jamais une
+// vraie demande), avec les taux et bascules actuellement en cours
+// d'édition — recalculé à chaque frappe, sans appel serveur.
+//
+// Le panneau « Rejets SLA » de la maquette (RejetsSlaPanel) n'est pas
+// repris : contredit `docs/04_MCD_MLD_PGD_PROD.md` (minuteur_bloquant=FALSE
+// pour l'Initiateur) — déjà tranché dans DIVERGENCES.md, catégorie
+// « Écarts tranchés », pas rouvert ici.
 export function ParametresCalculAdminTab() {
   const [parametres, setParametres] = useState<ParametreCalculVue[] | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -104,55 +124,105 @@ export function ParametresCalculAdminTab() {
       {parametres.map((p) => {
         const e = edition[p.circuit];
         if (!e) return null;
+        // tauxTsc/tauxTva sont stockés en base comme des fractions brutes
+        // (0.03 = 3 %, packages/database/prisma/schema.prisma) — le champ de
+        // saisie ci-dessous les édite tels quels (convention déjà en place
+        // avant ce tour, pas changée ici) ; l'aperçu doit donc appliquer la
+        // fraction DIRECTEMENT, jamais divisée par 100 — vérifié contre
+        // MontantService.calculer() avant d'écrire cette ligne, une erreur
+        // ×100 aurait été invisible sans cette vérification.
+        const ht = MONTANT_EXEMPLE;
+        const tsc = e.tscActiveDefaut ? ht * Number(e.tauxTsc) : 0;
+        const tva = e.tvaActiveDefaut ? (ht + tsc) * Number(e.tauxTva) : 0;
+        const ttc = ht + tsc + tva;
+        const tauxTscPourcent = (Number(e.tauxTsc) * 100).toFixed(2);
+        const tauxTvaPourcent = (Number(e.tauxTva) * 100).toFixed(2);
+
         return (
-          <div key={p.circuit} className="rounded-6 border border-gris200 bg-blanc p-4">
-            <h3 className="mb-3 font-mono text-14 font-bold">{p.circuit}</h3>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Taux TSC (%)">
-                <input
-                  type="number"
-                  step="0.01"
-                  value={e.tauxTsc}
-                  onChange={(ev) => setEdition((prev) => ({ ...prev, [p.circuit]: { ...prev[p.circuit]!, tauxTsc: ev.target.value } }))}
-                  className="rounded border border-gris300 px-2 py-1 text-13"
-                />
-              </Field>
-              <Field label="Taux TVA (%)">
-                <input
-                  type="number"
-                  step="0.01"
-                  value={e.tauxTva}
-                  onChange={(ev) => setEdition((prev) => ({ ...prev, [p.circuit]: { ...prev[p.circuit]!, tauxTva: ev.target.value } }))}
-                  className="rounded border border-gris300 px-2 py-1 text-13"
-                />
-              </Field>
+          <div key={p.circuit} className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
+            <div className="rounded-6 border border-gris200 bg-blanc p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <Icon nom="calc" taille={17} />
+                <h3 className="font-mono text-14 font-bold">{p.circuit}</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Taux TSC (%)">
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={e.tauxTsc}
+                    onChange={(ev) => setEdition((prev) => ({ ...prev, [p.circuit]: { ...prev[p.circuit]!, tauxTsc: ev.target.value } }))}
+                    className="rounded border border-gris300 px-2 py-1 text-13"
+                  />
+                </Field>
+                <Field label="Taux TVA (%)">
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={e.tauxTva}
+                    onChange={(ev) => setEdition((prev) => ({ ...prev, [p.circuit]: { ...prev[p.circuit]!, tauxTva: ev.target.value } }))}
+                    className="rounded border border-gris300 px-2 py-1 text-13"
+                  />
+                </Field>
+              </div>
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEdition((prev) => ({ ...prev, [p.circuit]: { ...prev[p.circuit]!, tscActiveDefaut: !e.tscActiveDefaut } }))}
+                  className={`rounded border px-3 py-1 text-12 font-bold ${
+                    e.tscActiveDefaut ? "border-vert700 bg-vertFond text-vertTexteSurClair" : "border-gris300 text-gris700"
+                  }`}
+                >
+                  TSC {e.tscActiveDefaut ? "active" : "inactive"} par défaut
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEdition((prev) => ({ ...prev, [p.circuit]: { ...prev[p.circuit]!, tvaActiveDefaut: !e.tvaActiveDefaut } }))}
+                  className={`rounded border px-3 py-1 text-12 font-bold ${
+                    e.tvaActiveDefaut ? "border-vert700 bg-vertFond text-vertTexteSurClair" : "border-gris300 text-gris700"
+                  }`}
+                >
+                  TVA {e.tvaActiveDefaut ? "active" : "inactive"} par défaut
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => demanderEnregistrement(p.circuit)}
+                disabled={enregistrement === p.circuit}
+                className="mt-3 rounded bg-encre px-3 py-1.5 text-13 font-bold text-blanc disabled:opacity-50"
+              >
+                {enregistrement === p.circuit ? "Enregistrement…" : "Enregistrer"}
+              </button>
             </div>
-            <div className="mt-2 flex gap-4">
-              <label className="flex items-center gap-2 text-13">
-                <input
-                  type="checkbox"
-                  checked={e.tscActiveDefaut}
-                  onChange={(ev) => setEdition((prev) => ({ ...prev, [p.circuit]: { ...prev[p.circuit]!, tscActiveDefaut: ev.target.checked } }))}
-                />
-                TSC active par défaut
-              </label>
-              <label className="flex items-center gap-2 text-13">
-                <input
-                  type="checkbox"
-                  checked={e.tvaActiveDefaut}
-                  onChange={(ev) => setEdition((prev) => ({ ...prev, [p.circuit]: { ...prev[p.circuit]!, tvaActiveDefaut: ev.target.checked } }))}
-                />
-                TVA active par défaut
-              </label>
+
+            <div className="rounded-6 border border-gris200 bg-gris50 p-4">
+              <div className="mb-2 flex items-center gap-2">
+                <Icon nom="eye" taille={15} />
+                <span className="text-12 font-bold text-gris700">Aperçu — exemple 1 000 000 FCFA HT</span>
+              </div>
+              <div className="flex flex-col gap-1 text-13">
+                <div className="flex justify-between">
+                  <span className="text-gris600">Montant HT</span>
+                  <Money valeur={ht} />
+                </div>
+                {e.tscActiveDefaut && (
+                  <div className="flex justify-between">
+                    <span className="text-gris600">TSC ({tauxTscPourcent} %)</span>
+                    <Money valeur={tsc} />
+                  </div>
+                )}
+                {e.tvaActiveDefaut && (
+                  <div className="flex justify-between">
+                    <span className="text-gris600">TVA ({tauxTvaPourcent} %)</span>
+                    <Money valeur={tva} />
+                  </div>
+                )}
+                <div className="mt-1 flex justify-between border-t border-gris200 pt-1 font-bold">
+                  <span>Total TTC</span>
+                  <Money valeur={ttc} fort className="text-orange600" />
+                </div>
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={() => demanderEnregistrement(p.circuit)}
-              disabled={enregistrement === p.circuit}
-              className="mt-3 rounded bg-encre px-3 py-1.5 text-13 font-bold text-blanc disabled:opacity-50"
-            >
-              {enregistrement === p.circuit ? "Enregistrement…" : "Enregistrer"}
-            </button>
           </div>
         );
       })}
