@@ -345,6 +345,19 @@ Contrairement aux écrans précédents de cet audit, `MesDemandesScreen.tsx` por
 
 Vérifié en direct (session initiateur réelle) : icône correctement positionnée, 7 dossiers réels affichés (DOBB/DF confondus), filtres Circuit/Statut fonctionnels.
 
+### ControleScreen — un seul écart réel, les deux autres déjà exclus
+
+`ControleScreen.tsx` porte déjà, dans son propre commentaire, l'exclusion de la section « Contrôles réalisés » (`docs/design/screens3.jsx:439-496`) — aucune route ne liste les `Controle` déjà soumis, question déjà consignée dans CLAUDE.md. La maquette affiche aussi 3 cartes KPI en tête (« À contrôler »/« Contrôlés conformes »/« Anomalies relevées ») ; les deux dernières dépendent de la même donnée absente. Plutôt que trois cartes dont deux resteraient à 0 par construction (jamais une vraie donnée), seule « À contrôler » est reprise — dérivée du même comptage déjà utilisé pour le titre « File de contrôle (N) ».
+
+| Élément | Maquette | Réalisation (avant) | Catégorie | Action |
+|---|---|---|---|---|
+| Carte KPI « À contrôler » | Présente (parmi 3) | Absente | Défaut d'implémentation (partiel — corrigé pour la seule carte réellement disponible) | Corrigé — `KpiCarte`, même composant que `HomeScreen` |
+| Cartes KPI « Contrôlés conformes »/« Anomalies relevées » | Présentes | — | Même trou que « Contrôles réalisés », déjà exclu | Aucune action |
+| Icône bouclier sur le bouton « Contrôler » | Présente | Absente | Défaut d'implémentation | Corrigé |
+| `CircuitPill`/`StatusBadge` sur la carte de tâche | Présents | Absents | Chantier déjà documenté (`TacheVue` sans champ circuit/statut, même trou que `CorbeillesScreen`/« Processus ») | Aucune action — pas rouvert |
+
+Vérifié en direct (session avec rôle `FRA`, 2 tâches réelles en `POST_CLOTURE`) : carte KPI affiche « 2 », cohérent avec le titre de section ; icône bouclier visible sur les deux boutons « Contrôler ».
+
 ## Point d'attention transverse — masquage de bouton par rôle
 
 La maquette peut masquer ou désactiver des boutons selon le rôle courant (ex. `defaultRouteFor`, conditions d'affichage dans les écrans de corbeille/admin). **Si portée, cette logique est un confort d'affichage, jamais un contrôle d'accès** : le serveur reste seul juge de ce qu'un appel peut effectivement faire, exactement comme rappelé règle non négociable 2 de CLAUDE.md (« un contrôle côté client est un confort, jamais une garantie »). Un bouton visible dont l'action est refusée côté serveur est un comportement normal, pas un bug à corriger en assouplissant l'API.

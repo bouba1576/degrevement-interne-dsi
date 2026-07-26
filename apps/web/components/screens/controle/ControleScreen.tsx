@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { KpiCarte, tonBadge } from "@pgd/ui";
 import type { EnumConstat, TacheVue } from "@pgd/contracts";
 import { ApiError, listerTachesControle, soumettreControle } from "@/lib/api";
 import { ControleCard } from "./ControleCard";
@@ -19,6 +20,12 @@ export interface ControleScreenProps {
 // référentiel aujourd'hui (cf. CLAUDE.md) — un découpage par circuit aurait
 // été une règle métier inventée. Les niveaux réellement présents dans les
 // données s'affichent, sans ensemble présupposé.
+//
+// La maquette affiche 3 cartes KPI (« À contrôler »/« Contrôlés conformes »/
+// « Anomalies relevées ») — seule la première est reprise ci-dessous : les
+// deux autres exigeraient de lire les `Controle` déjà soumis, exactement le
+// trou décrit ci-dessus. Une carte isolée plutôt que trois dont deux
+// resteraient à 0 par construction (pas une donnée réelle).
 export function ControleScreen({ onOuvrirDossier }: ControleScreenProps) {
   const [taches, setTaches] = useState<TacheVue[] | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -56,6 +63,12 @@ export function ControleScreen({ onOuvrirDossier }: ControleScreenProps) {
   return (
     <div>
       {erreur && <p className="mb-3 text-13 font-semibold text-rouge700">{erreur}</p>}
+
+      {taches && (
+        <div className="mb-6 grid grid-cols-3 gap-4">
+          <KpiCarte libelle="À contrôler" valeur={taches.length} icone="shield" couleur={tonBadge.accent.texte} />
+        </div>
+      )}
 
       <h3 className="mb-2 text-14 font-bold">File de contrôle {taches ? `(${taches.length})` : ""}</h3>
 
