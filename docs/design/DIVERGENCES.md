@@ -251,6 +251,20 @@ Vérification structurelle faite **avant** de commencer (pas supposée) : `Roles
 
 Vérifié en direct (session `ADMIN_PGD`, 25 rôles réels) : compteur exact (22 dans la matrice · 25 au total), 3 rôles `SYSTEME` (`ADMIN_PGD`, `SERVICE_TECHNIQUE`, `SUPERVISEUR`) correctement affichés « Hors matrice » et atténués, badges de type colorés par famille réelle.
 
+### AdminScreen — onglet « Motifs », 3/7
+
+Vérification structurelle faite avant de commencer, comme pour « Rôles » : la maquette (`docs/design/screens3.jsx:1228-1238`, `MotifsView`) groupe les motifs par circuit en 3 cartes, plutôt que le CRUD plat pur qu'on pourrait supposer pour cet onglet — moins ample que « Processus »/« Rôles » (pas de tableau, pas de compteur de matrice), mais un vrai regroupement visuel malgré tout, pas un simple CRUD à liste unique.
+
+**Non repris — catégorie 3, pas une omission** : la section « Sous-flux » de la maquette (chips au-dessus des motifs, une liste par circuit) n'a aucun référentiel réel derrière : `sousFlux` (`creerDemandeRequeteSchema`, `packages/contracts/src/demande.ts`) est un champ texte libre sur `Demande`, jamais un catalogue administrable — aucun des 7 onglets d'`AdminScreen` n'en gère un CRUD. La maquette la tire d'un tableau statique de démo (`D3.CIRCUITS[c].sousFlux`), pas d'une donnée gérée : la reproduire inventerait un référentiel absent du serveur.
+
+| Élément | Maquette | Réalisation (avant) | Catégorie | Action |
+|---|---|---|---|---|
+| Regroupement par circuit (3 cartes) | Présent | Liste plate, tous circuits mélangés | Défaut d'implémentation | Corrigé — grille utilisant `CircuitVue` (déjà utilisé en lecture seule dans « Processus ») |
+| Icône avant chaque motif (`flag`) | Présente | Absente | Défaut d'implémentation | Corrigé — icône déjà présente dans `packages/ui/src/icons.ts` |
+| Section « Sous-flux » | Présente | — | Catégorie 3 — aucun référentiel réel, champ texte libre sur `Demande` | Aucune action |
+
+Vérifié en direct (session `ADMIN_PGD`) : 3 cartes réelles (DOBB · B2B — 3 motifs, DXC · B2C — 2 motifs, DF · WHOLESALE — 2 motifs), icône `flag` correctement rendue (glyphe compact, vérifié par capture zoomée avant de conclure — ressemble à un « P » à cette taille mais correspond exactement au tracé SVG de l'icône, pas un défaut de rendu).
+
 ## Point d'attention transverse — masquage de bouton par rôle
 
 La maquette peut masquer ou désactiver des boutons selon le rôle courant (ex. `defaultRouteFor`, conditions d'affichage dans les écrans de corbeille/admin). **Si portée, cette logique est un confort d'affichage, jamais un contrôle d'accès** : le serveur reste seul juge de ce qu'un appel peut effectivement faire, exactement comme rappelé règle non négociable 2 de CLAUDE.md (« un contrôle côté client est un confort, jamais une garantie »). Un bouton visible dont l'action est refusée côté serveur est un comportement normal, pas un bug à corriger en assouplissant l'API.

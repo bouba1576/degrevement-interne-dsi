@@ -1,12 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Badge, CircuitPill } from "@pgd/ui";
-import type { MotifVue } from "@pgd/contracts";
-import { ApiError, creerMotif, listerMotifs, modifierMotif, supprimerMotif } from "@/lib/api";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Badge, CircuitPill, Icon } from "@pgd/ui";
+import type { CircuitVue, MotifVue } from "@pgd/contracts";
+import { ApiError, creerMotif, listerCircuits, listerMotifs, modifierMotif, supprimerMotif } from "@/lib/api";
 import { MotifModal, type MotifModalValeur } from "./MotifModal";
 
+// Port de docs/design/screens3.jsx (MotifsView) — grille de 3 cartes, une
+// par circuit, plutôt que la liste plate d'avant (tous circuits mélangés).
+//
+// La section « Sous-flux » de la maquette (chips au-dessus des motifs, une
+// par circuit) n'est PAS reprise : `sousFlux` (`creerDemandeRequeteSchema`,
+// packages/contracts/src/demande.ts) est un champ texte libre sur `Demande`,
+// pas un référentiel administrable — aucun des 7 onglets d'AdminScreen n'en
+// gère un catalogue, et la maquette elle-même le tire d'un tableau statique
+// de démonstration (`D3.CIRCUITS[c].sousFlux`), pas d'une donnée gérée.
+// Reproduire ces chips inventerait un référentiel qui n'existe nulle part
+// côté serveur — catégorie 3, pas une omission.
 export function MotifsAdminTab() {
+  const [circuits, setCircuits] = useState<CircuitVue[] | null>(null);
   const [motifs, setMotifs] = useState<MotifVue[] | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [motifEnEdition, setMotifEnEdition] = useState<MotifVue | null | undefined>(undefined);
@@ -14,7 +26,9 @@ export function MotifsAdminTab() {
 
   const charger = useCallback(async () => {
     try {
-      setMotifs(await listerMotifs());
+      const [listeMotifs, listeCircuits] = await Promise.all([listerMotifs(), listerCircuits()]);
+      setMotifs(listeMotifs);
+      setCircuits(listeCircuits);
       setErreur(null);
     } catch (e) {
       setErreur(e instanceof ApiError ? e.message : "Erreur inattendue.");
@@ -51,7 +65,15 @@ export function MotifsAdminTab() {
     }
   }
 
-  if (!motifs) return <p className="text-13 text-gris600">Chargement…</p>;
+  const motifsParCircuit = useMemo(() => {
+    const table: Record<string, MotifVue[]> = {};
+    for (const m of motifs ?? []) {
+      (table[m.circuit] ??= []).push(m);
+    }
+    return table;
+  }, [motifs]);
+
+  if (!motifs || !circuits) return <p className="text-13 text-gris600">Chargement…</p>;
 
   return (
     <div>
@@ -61,24 +83,36 @@ export function MotifsAdminTab() {
         + Nouveau motif
       </button>
 
-      <div className="flex flex-col gap-2">
-        {motifs.map((m) => (
-          <div key={m.id} className="rounded border border-gris200 bg-blanc p-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CircuitPill code={m.circuit} />
-                <span className="text-13 font-bold">{m.libelle}</span>
-                {!m.actif && <Badge ton="neutre">inactif</Badge>}
-                <span className="text-12 text-gris600">{m.piecesAfferentes.length} pièce(s)</span>
-              </div>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setMotifEnEdition(m)} className="text-12 font-semibold text-encre underline">
-                  Modifier
-                </button>
-                <button type="button" onClick={() => handleSupprimer(m.id)} className="text-12 font-semibold text-rouge700 underline">
-                  Supprimer
-                </button>
-              </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        {circuits.map((c) => (
+          <div key={c.code} className="rounded-6 border border-gris200 bg-blanc p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <CircuitPill code={c.code} />
+              <h3 className="text-14 font-bold">{c.segment}</h3>
+            </div>
+            <div className="mb-2 text-11 font-bold uppercase tracking-wide text-gris600">
+              Motifs ({(motifsParCircuit[c.code] ?? []).length})
+            </div>
+            <div className="flex flex-col gap-2">
+              {(motifsParCircuit[c.code] ?? []).length === 0 && <p className="text-12 text-gris600">Aucun motif configuré.</p>}
+              {(motifsParCircuit[c.code] ?? []).map((m) => (
+                <div key={m.id} className="flex items-center justify-between gap-2 rounded border border-gris100 p-2">
+                  <div className="flex items-center gap-2">
+                    <Icon nom="flag" taille={13} />
+                    <span className="text-13">{m.libelle}</span>
+                    {!m.actif && <Badge ton="neutre">inactif</Badge>}
+                    <span className="text-11 text-gris600">{m.piecesAfferentes.length} pièce(s)</span>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <button type="button" onClick={() => setMotifEnEdition(m)} className="text-11 font-semibold text-encre underline">
+                      Modifier
+                    </button>
+                    <button type="button" onClick={() => handleSupprimer(m.id)} className="text-11 font-semibold text-rouge700 underline">
+                      Supprimer
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         ))}
