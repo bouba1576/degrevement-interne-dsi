@@ -11,7 +11,7 @@ import { AdminScreen } from "@/components/screens/admin/AdminScreen";
 import { LoginScreen } from "@/components/screens/auth/LoginScreen";
 import { MesDemandesScreen } from "@/components/screens/mes-demandes/MesDemandesScreen";
 import { AuditSecuriteScreen } from "@/components/screens/audit/AuditSecuriteScreen";
-import { deconnecter, fetchSession, listerDemandes } from "@/lib/api";
+import { deconnecter, fetchSession, listerDemandes, listerTachesCorbeille } from "@/lib/api";
 import type { SessionUtilisateur } from "@pgd/contracts";
 
 const TITRES: Record<string, { titre: string; sousTitre?: string }> = {
@@ -38,6 +38,7 @@ export default function Page() {
   const [dossierId, setDossierId] = useState<string | null>(null);
   const [routeAvantDossier, setRouteAvantDossier] = useState("home");
   const [compteMesDemandes, setCompteMesDemandes] = useState<number | undefined>(undefined);
+  const [compteCorbeilles, setCompteCorbeilles] = useState<number | undefined>(undefined);
 
   const rechargerSession = useCallback(() => {
     setChargementSession(true);
@@ -74,10 +75,31 @@ export default function Page() {
     void rafraichirCompteMesDemandes();
   }, [rafraichirCompteMesDemandes]);
 
+  // Badge Sidebar « Corbeilles » — jusqu'ici jamais alimenté malgré la prop
+  // déjà présente sur Sidebar/AppShell (même situation que « Mes demandes »
+  // avant sa fermeture, HomeScreen, Phase 9.3). GET /api/taches sans `role`
+  // renvoie déjà, scopé serveur (R4, TacheService.lister), le total across
+  // TOUS les rôles réels + délégués de l'appelant — un seul appel suffit,
+  // pas une boucle par rôle.
+  const rafraichirCompteCorbeilles = useCallback(async () => {
+    if (!utilisateur) return;
+    try {
+      const reponse = await listerTachesCorbeille({ etat: "EN_CORBEILLE" });
+      setCompteCorbeilles(reponse.total);
+    } catch {
+      // Badge secondaire — même tolérance que rafraichirCompteMesDemandes.
+    }
+  }, [utilisateur]);
+
+  useEffect(() => {
+    void rafraichirCompteCorbeilles();
+  }, [rafraichirCompteCorbeilles]);
+
   function naviguer(nouvelleRoute: string) {
     setDossierId(null);
     setRoute(nouvelleRoute);
     void rafraichirCompteMesDemandes();
+    void rafraichirCompteCorbeilles();
   }
 
   function ouvrirDossier(id: string) {
@@ -115,7 +137,9 @@ export default function Page() {
       routeActuelle={route}
       onNaviguer={naviguer}
       onDeconnexion={onDeconnexion}
+      onOuvrirDossier={ouvrirDossier}
       compteMesDemandes={compteMesDemandes}
+      compteCorbeilles={compteCorbeilles}
     >
       {route === "home" && <HomeScreen utilisateur={utilisateur} onNaviguer={naviguer} />}
       {route === "nouvelle" && <NouvelleDemandeScreen utilisateur={utilisateur} />}

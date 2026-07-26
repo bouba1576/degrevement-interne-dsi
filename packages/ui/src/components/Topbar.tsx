@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Avatar } from "./Avatar";
 import { Icon } from "./Icon";
 
@@ -7,13 +8,20 @@ export interface TopbarProps {
   nomUtilisateur: string;
   libelleRole?: string;
   onDeconnexion: () => void;
+  avantAvatar?: ReactNode;
 }
 
 // Remplace RoleMenu (docs/design/app.jsx) : aucune bascule de persona côté
 // réel, une session porte une seule identité authentifiée (SessionUtilisateur,
 // packages/contracts/src/auth.ts). Nom + avatar + déconnexion directe — pas
 // de menu déroulant pour une seule action.
-export function Topbar({ titre, sousTitre, nomUtilisateur, libelleRole, onDeconnexion }: TopbarProps) {
+//
+// `avantAvatar` — slot pour la cloche de notifications (NotificationBell,
+// apps/web/components/NotificationBell.tsx), positionnée comme dans la
+// maquette (docs/design/app.jsx, bouton bell avant le bloc rôle/avatar).
+// Topbar reste un composant de présentation pur : il ne fait aucun appel
+// réseau lui-même, l'appelant (AppShell) injecte le comportement.
+export function Topbar({ titre, sousTitre, nomUtilisateur, libelleRole, onDeconnexion, avantAvatar }: TopbarProps) {
   return (
     <header className="sticky top-0 z-entete flex h-15 items-center gap-4 border-b border-gris200 bg-blanc px-26">
       <div>
@@ -21,6 +29,7 @@ export function Topbar({ titre, sousTitre, nomUtilisateur, libelleRole, onDeconn
         {sousTitre && <p className="text-13 font-medium text-gris600">{sousTitre}</p>}
       </div>
       <div className="ml-auto flex items-center gap-3">
+        {avantAvatar}
         <div className="flex items-center gap-2.5 rounded-full border border-gris200 py-1 pl-1.5 pr-2">
           <Avatar nom={nomUtilisateur} taille={32} />
           <div className="max-w-[150px] leading-[1.1]">

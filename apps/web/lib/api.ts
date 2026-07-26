@@ -18,6 +18,7 @@ import {
   moduleVueSchema,
   modifierParametreCalculReponseSchema,
   motifVueSchema,
+  notificationSchema,
   paliersListeReponseSchema,
   palierVueSchema,
   parametreCalculVueSchema,
@@ -47,6 +48,7 @@ import {
   type DemandeDetail,
   type EtapeDossier,
   type ListerDemandesQuery,
+  type ListerNotificationsQuery,
   type FormulesDeLigne,
   type JournalAuditVue,
   type JournalSecuriteQuery,
@@ -66,6 +68,7 @@ import {
   type ModifierRoleRequete,
   type ModuleVue,
   type MotifVue,
+  type NotificationVue,
   type PaliersListeReponse,
   type PalierVue,
   type ParametreCalculVue,
@@ -528,4 +531,20 @@ export function journalSecurite(query: JournalSecuriteQuery): Promise<{ data: Jo
   params.set("page", String(query.page));
   params.set("limit", String(query.limit));
   return requeteAvecTotal(`/api/audit/securite?${params.toString()}`, z.array(journalSecuriteVueSchema));
+}
+
+// --- NotificationBell (coquille, 9.3) — GET/PATCH /api/notifications ----
+// Portée déjà forcée côté serveur sur le destinataire authentifié
+// (NotificationsController.lister, @CurrentUser()) : aucun paramètre
+// destinataire ici, même principe que profil=initiateur.
+export function listerNotifications(query: ListerNotificationsQuery): Promise<{ data: NotificationVue[]; total: number }> {
+  const params = new URLSearchParams();
+  if (query.lu !== undefined) params.set("lu", String(query.lu));
+  params.set("page", String(query.page));
+  params.set("limit", String(query.limit));
+  return requeteAvecTotal(`/api/notifications?${params.toString()}`, z.array(notificationSchema));
+}
+
+export function marquerNotificationLue(id: string): Promise<NotificationVue> {
+  return requete(`/api/notifications/${id}/lu`, notificationSchema, { method: "PATCH" });
 }
