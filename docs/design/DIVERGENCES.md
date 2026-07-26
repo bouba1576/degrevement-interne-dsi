@@ -193,6 +193,21 @@ Tabs (« Aperçu »/« Circuit de validation »/« Pièces »/« Journal d'audit
 
 Vérifié en direct (session mintée avec un rôle `RESPONSABLE_DOBB` temporaire — même mécanisme que ci-dessus, uniquement pour la vérification visuelle, aucune modification de rôles réels en base) sur un dossier DOBB réel avec une tâche actionnable en corbeille (`DOBB-2026-629A73`) : lien « ← Retour » présent et stylé à l'identique du lien de `LoginScreen`, bandeau « Action requise — Responsable DOBB » avec icône cloche, bouton « Récupérer » avec icône cadenas, sous-titre enrichi (« Client Test Montant Direct · Verification live Modifier - reroutage R6 »).
 
+### CorbeillesScreen — écarts corrigés
+
+Structure déjà alignée sur la maquette (`docs/design/screens2.jsx:198-258`) : sélecteur de rôle en puces, sections « Mes tâches récupérées »/« File de la corbeille »/« Récupérées par un collègue ». **Vérifié plutôt que supposé** avant tout correctif : la puce de rôle active (`.chip.active`, `docs/design/styles.css:240`) est **noire** (`var(--black)`), pas orange — la couleur déjà en place (`bg-encre text-blanc`) était donc déjà correcte, pas un défaut à corriger par réflexe d'appliquer partout la même convention orange que les autres écrans.
+
+`CorbeilleInfo` (carte « Corbeille = rôle = groupe AD » avec avatars des membres habilités) déjà exclue — catégorie 2, aucune contrepartie serveur : `membersOfRole` n'a pas d'équivalent réel, cf. question ouverte CLAUDE.md (« Aucune route ne liste ou ne recherche les utilisateurs »). Badge de comptage sur chaque puce de rôle (nombre de tâches en corbeille) non ajouté : exigerait un appel `listerTachesCorbeille` par rôle affiché plutôt que pour le seul rôle actif — coût disproportionné pour un badge décoratif, même logique que le compteur de l'onglet « Journal d'audit » de `DossierDetailScreen` ci-dessus.
+
+| Élément | Maquette | Réalisation (avant) | Catégorie | Action |
+|---|---|---|---|---|
+| Bordure gauche colorée de la carte de tâche (`TaskCard`) | Rouge si SLA dépassé, orange si récupérée par moi | Aucune | Défaut d'implémentation | Corrigé — dérivée de `tache.echeanceSla` (comparaison de dates pour l'affichage, aucun recalcul d'heures ouvrées, R9 reste dans `CalendrierSlaService`) |
+| Badge « SLA dépassé » | Présent quel que soit l'état de la tâche (mine/locked/en corbeille) | Absent — seul le `SlaTimer` complet existait, réservé à « mine » | Défaut d'implémentation | Corrigé — badge indépendant ajouté pour toute tâche en retard ; le `SlaTimer` complet reste réservé à « mine », comme dans la maquette |
+| Icônes dans les boutons d'action (`check`/`unlock`/`lock`) | Présentes | Absentes | Défaut d'implémentation | Corrigé — icônes déjà présentes dans `packages/ui/src/icons.ts` |
+| `CircuitPill`, motif, libellé, « étape N/M » sur la carte de tâche | Présents | Absents | Chantier fonctionnel — `TacheVue` (`packages/contracts/src/tache.ts`) ne porte aucun de ces champs (vérifié, pas supposé) | Non traité — nécessiterait d'étendre `TacheVue` côté API, hors périmètre d'un audit visuel |
+
+Vérifié en direct (même dossier DOBB, rôle `RESPONSABLE_DOBB`) : icône cadenas sur « Récupérer », puce de rôle active noire confirmée correcte. Aucune tâche en retard dans le jeu de données disponible pour vérifier la bordure rouge/badge « SLA dépassé » en conditions réelles — logique identique à celle déjà vérifiée pour `SlaTimer`/`CalendrierSlaService` (Phase 6), pas une nouvelle règle non testée.
+
 ## Point d'attention transverse — masquage de bouton par rôle
 
 La maquette peut masquer ou désactiver des boutons selon le rôle courant (ex. `defaultRouteFor`, conditions d'affichage dans les écrans de corbeille/admin). **Si portée, cette logique est un confort d'affichage, jamais un contrôle d'accès** : le serveur reste seul juge de ce qu'un appel peut effectivement faire, exactement comme rappelé règle non négociable 2 de CLAUDE.md (« un contrôle côté client est un confort, jamais une garantie »). Un bouton visible dont l'action est refusée côté serveur est un comportement normal, pas un bug à corriger en assouplissant l'API.
