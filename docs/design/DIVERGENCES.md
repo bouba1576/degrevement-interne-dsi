@@ -358,6 +358,21 @@ Vérifié en direct (session initiateur réelle) : icône correctement positionn
 
 Vérifié en direct (session avec rôle `FRA`, 2 tâches réelles en `POST_CLOTURE`) : carte KPI affiche « 2 », cohérent avec le titre de section ; icône bouclier visible sur les deux boutons « Contrôler ».
 
+### AuditSecuriteScreen — écran déjà riche, un seul écart réel
+
+`AuditSecuriteScreen.tsx`/`JournalSecuriteTable.tsx` portent déjà, dans leur propre en-tête et commentaire, un périmètre correctement restreint au journal de **sécurité** (connexions, MFA, refus RBAC/SoD) — distinct du journal d'audit métier par dossier, question déjà fermée dans CLAUDE.md. Deux points vérifiés et confirmés non problématiques, pas seulement supposés :
+
+- **Colonnes « Facteur »/« IP »** : absentes de la maquette (`docs/design/screens3.jsx`, onglet Sécurité de `AuditScreen`), présentes dans le réel — un enrichissement au-delà de la maquette, pas un écart à corriger (rien à retirer : la maquette ne les exclut pas explicitement, elle est simplement plus pauvre en colonnes).
+- **Couleurs de badge par type d'événement** (`TON_EVENEMENT` : LOGIN→info, LOGOUT→neutre, MFA_CHALLENGE→accent, RBAC_REFUS/SOD_REFUS→erreur) : déjà cohérentes avec l'intention de la maquette (refus en rouge, connexion neutre), non modifiées.
+
+**Seul écart réel corrigé** :
+
+| Élément | Maquette | Réalisation (avant) | Catégorie | Action |
+|---|---|---|---|---|
+| État vide (`Empty icon="lock" title="Aucun événement"`) | Présent | Texte gris nu, sans icône ni composant `Empty` | Défaut d'implémentation | Corrigé — composant `Empty` partagé (`@pgd/ui`), déjà utilisé ailleurs dans l'application (`DossierTable`, onglets Admin) |
+
+Vérifié en direct (session `ADMIN_PGD`, 600 événements réels) : vue peuplée conforme (colonnes, badges, pagination 12 pages) ; filtre Compte forcé à une valeur inexistante → état vide affiche correctement l'icône cadenas, le titre « Aucun événement » et le sous-texte, dans le style de carte déjà établi ailleurs dans l'application.
+
 ## Point d'attention transverse — masquage de bouton par rôle
 
 La maquette peut masquer ou désactiver des boutons selon le rôle courant (ex. `defaultRouteFor`, conditions d'affichage dans les écrans de corbeille/admin). **Si portée, cette logique est un confort d'affichage, jamais un contrôle d'accès** : le serveur reste seul juge de ce qu'un appel peut effectivement faire, exactement comme rappelé règle non négociable 2 de CLAUDE.md (« un contrôle côté client est un confort, jamais une garantie »). Un bouton visible dont l'action est refusée côté serveur est un comportement normal, pas un bug à corriger en assouplissant l'API.
