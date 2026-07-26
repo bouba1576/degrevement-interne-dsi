@@ -328,6 +328,23 @@ Pour « Contrôle a posteriori », aucun commentaire ne l'excluait explicitement
 
 Aucune tuile n'est masquée par rôle côté client (ni les deux nouvelles, ni les deux déjà en place) — cohérent avec la règle non négociable 2 : un filtrage par rôle ici serait un confort redondant avec la garde serveur réelle, jamais un substitut. Vérifié en direct (session réelle, `jean.kouassi`) : tuile « Mes demandes » affiche 7 dossiers réels, tuile « Contrôle a posteriori » affiche « Contrôles à froid » avec le badge de comptage correctement absent (0 tâche en attente) plutôt qu'un badge « 0 » trompeur.
 
+### MesDemandesScreen — écran déjà proche de la maquette, un seul écart réel
+
+Contrairement aux écrans précédents de cet audit, `MesDemandesScreen.tsx` porte déjà, dans son propre commentaire, une analyse rigoureuse des écarts avec la maquette (`docs/design/screens2.jsx:8-48`) — vérifiée ici plutôt que recopiée, et confirmée solide :
+
+- **Pas d'onglets « en cours / validées / rejetées »** : la maquette simule ce découpage en filtrant un tableau déjà chargé en mémoire (`dossiers.filter(...)`), jamais paginé côté serveur. Le réel utilise une pagination serveur réelle (`page`/`limit`, `listerDemandesQuerySchema`) — reproduire les 3 onglets exigerait soit d'abandonner la vraie pagination, soit d'appeler l'API 3 fois pour des compteurs. Un seul filtre « Statut » avec pagination réelle fait la même chose sans fausser `total` au-delà de la première page.
+- **`RejetsCorbeille` (compte à rebours SLA sur rejet) non porté** : lié à `CONFIG.rejets`, déjà exclu — catégorie « Écarts tranchés » (contredit `docs/04` : `minuteur_bloquant = FALSE` pour l'Initiateur). Pas rouvert ici.
+- **Pas de tri de colonnes** : vérifié avant de conclure — `listerDemandesQuerySchema` n'a aucun paramètre `sort` côté serveur ; trier côté client ne trierait que la page courante (20 lignes sur potentiellement plus), un tri trompeur plutôt qu'absent.
+- **`DossierTable` (composant partagé) omet « Étape » et la résolution de `motif`** : déjà documenté dans le composant lui-même — « Étape » exigerait un appel `/taches` par ligne (N+1) ; le motif réel n'est qu'un `motifId` (uuid) résolu seulement via une route `ADMIN_PGD`, hors de portée d'un initiateur.
+
+**Seul écart réel corrigé** :
+
+| Élément | Maquette | Réalisation (avant) | Catégorie | Action |
+|---|---|---|---|---|
+| Icône loupe dans le champ de recherche | Présente | Absente | Défaut d'implémentation | Corrigé — icône `search`, même position absolue que le champ Identifiant AD de `LoginScreen` |
+
+Vérifié en direct (session initiateur réelle) : icône correctement positionnée, 7 dossiers réels affichés (DOBB/DF confondus), filtres Circuit/Statut fonctionnels.
+
 ## Point d'attention transverse — masquage de bouton par rôle
 
 La maquette peut masquer ou désactiver des boutons selon le rôle courant (ex. `defaultRouteFor`, conditions d'affichage dans les écrans de corbeille/admin). **Si portée, cette logique est un confort d'affichage, jamais un contrôle d'accès** : le serveur reste seul juge de ce qu'un appel peut effectivement faire, exactement comme rappelé règle non négociable 2 de CLAUDE.md (« un contrôle côté client est un confort, jamais une garantie »). Un bouton visible dont l'action est refusée côté serveur est un comportement normal, pas un bug à corriger en assouplissant l'API.

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Icon } from "@pgd/ui";
 import type { Demande, EnumCircuit, EnumStatutDemande } from "@pgd/contracts";
 import { ApiError, listerDemandes } from "@/lib/api";
 import { DossierTable } from "@/components/shared/DossierTable";
@@ -101,12 +102,17 @@ export function MesDemandesScreen({ onOuvrirDossier, onNaviguer }: MesDemandesSc
       <div className="mb-4 flex flex-wrap items-end gap-3 rounded-6 border border-gris200 bg-blanc p-4">
         <label className="flex flex-1 flex-col gap-1 text-13" style={{ minWidth: 220 }}>
           Recherche
-          <input
-            value={q}
-            onChange={(e) => changerFiltre(setQ, e.target.value)}
-            placeholder="Référence, client…"
-            className="rounded border border-gris300 px-2 py-1.5 text-13"
-          />
+          <div className="relative">
+            <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-gris500">
+              <Icon nom="search" taille={15} />
+            </span>
+            <input
+              value={q}
+              onChange={(e) => changerFiltre(setQ, e.target.value)}
+              placeholder="Référence, client…"
+              className="w-full rounded border border-gris300 py-1.5 pl-8 pr-2 text-13"
+            />
+          </div>
         </label>
         <label className="flex flex-col gap-1 text-13">
           Circuit
