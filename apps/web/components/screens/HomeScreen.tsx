@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Badge, Icon, KpiCarte, Money, tonBadge, type NomIcone } from "@pgd/ui";
 import type { SessionUtilisateur, KpiValeur } from "@pgd/contracts";
-import { ApiError, fetchKpi, fetchTachesTotal, type ProfilKpi } from "@/lib/api";
+import { ApiError, fetchKpi, fetchTachesTotal, listerDemandes, listerTachesControle, type ProfilKpi } from "@/lib/api";
 
 const ROLE_ADMIN = "ADMIN_PGD";
 
@@ -13,18 +13,27 @@ export interface HomeScreenProps {
 }
 
 // Port de docs/design/screens1.jsx (HomeScreen), réduit à ce qui a un
-// endpoint réel derrière (Phase 9.2) :
-// - tuiles "Nouvelle demande" (navigation pure, aucun appel) et
-//   "Mes corbeilles" (GET /api/taches?etat=EN_CORBEILLE, total réel) ;
+// endpoint réel derrière :
+// - tuiles "Nouvelle demande" (navigation pure, aucun appel), "Mes
+//   corbeilles" (GET /api/taches?etat=EN_CORBEILLE), "Mes demandes"
+//   (GET /api/demandes?profil=initiateur, question fermée en Phase 9.2 —
+//   le commentaire précédent la citait encore comme un trou backend, une
+//   prémisse périmée trouvée en audit visuel Phase 9.3) et "Contrôle a
+//   posteriori" (GET /api/taches/controle, déjà utilisé sans condition de
+//   rôle par ControleScreen — même endpoint, même principe de tuile que
+//   "Mes corbeilles") ;
 // - sections KPI initiateur/valideur (GET /api/kpi?profil=..., toujours
 //   appelables : le périmètre est forcé côté serveur, un utilisateur sans
 //   dossier/corbeille reçoit simplement des valeurs à 0) ;
 // - section Pilotage UNIQUEMENT si ADMIN_PGD (évite l'appel plutôt que de
 //   compter sur le seul KpiPerimetreGuard — confort, pas un contrôle, le
 //   guard réel reste ce qui protège).
-// La tuile "Mes demandes" (aucun filtre initiateurId côté serveur,
-// CLAUDE.md § Questions ouvertes) et "Activité récente" (aucun flux
-// transversal) sont omises : lacunes backend, pas contournées côté client.
+// "Activité récente" reste omise : aucun flux transversal n'existe côté
+// serveur (CLAUDE.md § Questions ouvertes, toujours vrai) — lacune
+// backend, pas contournée côté client.
+// Aucune tuile n'est masquée par rôle (ni ici, ni pour "Nouvelle demande"
+// déjà en place) : un confort d'affichage par rôle serait redondant avec
+// la garde serveur réelle, jamais l'inverse (règle non négociable 2).
 export function HomeScreen({ utilisateur, onNaviguer }: HomeScreenProps) {
   const prenom = utilisateur.nom.split(" ")[0];
   const estAdmin = utilisateur.roles.includes(ROLE_ADMIN);
@@ -46,6 +55,8 @@ export function HomeScreen({ utilisateur, onNaviguer }: HomeScreenProps) {
           onClick={() => onNaviguer("nouvelle")}
         />
         <TuileCorbeilles onClick={() => onNaviguer("corbeilles")} />
+        <TuileMesDemandes onClick={() => onNaviguer("mes")} />
+        <TuileControle onClick={() => onNaviguer("controle")} />
       </div>
 
       <SectionKpi titre="Mes dossiers initiés" profil="initiateur" />
@@ -125,6 +136,77 @@ function TuileCorbeilles({ onClick }: { onClick: () => void }) {
       <div className="text-15 font-bold">Mes corbeilles</div>
       <div className="mt-0.5 text-12 text-gris600">
         {erreur ? erreur : total === null ? "Chargement…" : `${total} tâche(s) à traiter`}
+      </div>
+    </button>
+  );
+}
+
+function TuileMesDemandes({ onClick }: { onClick: () => void }) {
+  const [total, setTotal] = useState<number | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+
+  useEffect(() => {
+    let annule = false;
+    listerDemandes({ profil: "initiateur", page: 1, limit: 1 })
+      .then((reponse) => {
+        if (!annule) setTotal(reponse.total);
+      })
+      .catch((e: unknown) => {
+        if (!annule) setErreur(e instanceof ApiError ? e.message : "Impossible de charger vos demandes.");
+      });
+    return () => {
+      annule = true;
+    };
+  }, []);
+
+  return (
+    <button type="button" onClick={onClick} className="rounded-6 border border-gris200 bg-blanc p-5 text-left">
+      <div className="mb-3 flex items-center gap-3">
+        <div className="grid h-[42px] w-[42px] place-items-center rounded-8 bg-gris100 text-gris700">
+          <Icon nom="doc" taille={22} />
+        </div>
+      </div>
+      <div className="text-15 font-bold">Mes demandes</div>
+      <div className="mt-0.5 text-12 text-gris600">
+        {erreur ? erreur : total === null ? "Chargement…" : `${total} dossier(s)`}
+      </div>
+    </button>
+  );
+}
+
+function TuileControle({ onClick }: { onClick: () => void }) {
+  const [total, setTotal] = useState<number | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+
+  useEffect(() => {
+    let annule = false;
+    listerTachesControle()
+      .then((reponse) => {
+        if (!annule) setTotal(reponse.taches.length);
+      })
+      .catch((e: unknown) => {
+        if (!annule) setErreur(e instanceof ApiError ? e.message : "Impossible de charger les contrôles.");
+      });
+    return () => {
+      annule = true;
+    };
+  }, []);
+
+  return (
+    <button type="button" onClick={onClick} className="rounded-6 border border-gris200 bg-blanc p-5 text-left">
+      <div className="mb-3 flex items-center gap-3">
+        <div className="grid h-[42px] w-[42px] place-items-center rounded-8 bg-gris100 text-gris700">
+          <Icon nom="shield" taille={22} />
+        </div>
+        {!!total && total > 0 && (
+          <span className="ml-auto">
+            <Badge ton="accent">{total}</Badge>
+          </span>
+        )}
+      </div>
+      <div className="text-15 font-bold">Contrôle a posteriori</div>
+      <div className="mt-0.5 text-12 text-gris600">
+        {erreur ? erreur : total === null ? "Chargement…" : "Contrôles à froid"}
       </div>
     </button>
   );

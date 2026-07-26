@@ -314,6 +314,20 @@ Vérifié en direct (session `ADMIN_PGD`) : 11 modules réels (4 « cœur » non
 
 **Clôture de l'audit visuel systématique d'`AdminScreen` (7/7 onglets)** : Processus (rail + timeline + simulateur reconstruits), Rôles (tableau + statut matrice reconstruits), Motifs (regroupement par circuit reconstruit), Circuits (aucun équivalent maquette, documenté), Paramètres de calcul (icône + bascule + aperçu reconstruits, bug de calcul ×100 trouvé et corrigé avant commit), Calendrier SLA (en-tête + règle visuelle reconstruits, simulateur d'échéance exclu par garde-fou R9), Paramètres système (icônes de cohérence, aucun équivalent maquette). Sept commits indépendants, un par onglet, chacun un point de reprise valide.
 
+### HomeScreen — deux tuiles manquantes retrouvaient une prémisse périmée, pas un vrai trou backend
+
+`docs/design/screens1.jsx:19-87` (`HomeScreen`) prévoit jusqu'à 4 tuiles selon le rôle (Nouvelle demande, Mes corbeilles, Mes demandes, Contrôle a posteriori). Le réel n'en avait que 2 — mais le commentaire du fichier citait encore comme motif un trou backend (« aucun filtre `initiateurId` côté serveur ») **déjà comblé en Phase 9.2** (question fermée, cf. CLAUDE.md « Questions ouvertes » — `GET /api/demandes?profil=initiateur`, déjà utilisé par `MesDemandesScreen` et par le badge Sidebar). Trouvé en vérifiant la prémisse plutôt qu'en la recopiant — même méthode que la correction R6 de Phase 9.2 : une affirmation qui a cessé d'être vraie sans que le code qui la citait soit revu.
+
+Pour « Contrôle a posteriori », aucun commentaire ne l'excluait explicitement — simplement absente. Vérifié avant de construire : `ControleScreen.tsx` appelle déjà `listerTachesControle()` **sans aucune condition de rôle** (le serveur détermine seul ce qui revient à l'appelant) — la même route peut donc alimenter un compteur de tuile, exactement comme `fetchTachesTotal("EN_CORBEILLE")` le fait déjà pour « Mes corbeilles ».
+
+| Élément | Maquette | Réalisation (avant) | Catégorie | Action |
+|---|---|---|---|---|
+| Tuile « Mes demandes » | Présente, avec compteur | Absente — commentaire citant un trou backend périmé | Prémisse obsolète, pas un chantier réel | Corrigé — `listerDemandes({profil:"initiateur", limit:1}).total`, même endpoint que `MesDemandesScreen` |
+| Tuile « Contrôle a posteriori » | Présente, avec compteur | Absente, jamais mentionnée | Défaut d'implémentation (silence, pas un choix) | Corrigé — `listerTachesControle().taches.length`, même route que `ControleScreen`, même principe de tuile que « Mes corbeilles » |
+| Section « Activité récente » | Présente | Absente | Catégorie 2 confirmée toujours vraie — aucun flux d'audit transversal n'existe côté serveur (question ouverte CLAUDE.md, revérifiée, pas seulement recopiée) | Aucune action |
+
+Aucune tuile n'est masquée par rôle côté client (ni les deux nouvelles, ni les deux déjà en place) — cohérent avec la règle non négociable 2 : un filtrage par rôle ici serait un confort redondant avec la garde serveur réelle, jamais un substitut. Vérifié en direct (session réelle, `jean.kouassi`) : tuile « Mes demandes » affiche 7 dossiers réels, tuile « Contrôle a posteriori » affiche « Contrôles à froid » avec le badge de comptage correctement absent (0 tâche en attente) plutôt qu'un badge « 0 » trompeur.
+
 ## Point d'attention transverse — masquage de bouton par rôle
 
 La maquette peut masquer ou désactiver des boutons selon le rôle courant (ex. `defaultRouteFor`, conditions d'affichage dans les écrans de corbeille/admin). **Si portée, cette logique est un confort d'affichage, jamais un contrôle d'accès** : le serveur reste seul juge de ce qu'un appel peut effectivement faire, exactement comme rappelé règle non négociable 2 de CLAUDE.md (« un contrôle côté client est un confort, jamais une garantie »). Un bouton visible dont l'action est refusée côté serveur est un comportement normal, pas un bug à corriger en assouplissant l'API.
