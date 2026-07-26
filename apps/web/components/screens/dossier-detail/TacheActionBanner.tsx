@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Modal, SlaTimer, TypeActeurBadge } from "@pgd/ui";
+import { Icon, Modal, SlaTimer, TypeActeurBadge } from "@pgd/ui";
 import type { EtapeDossier, SessionUtilisateur, TacheVue } from "@pgd/contracts";
 import { ApiError, approuverTache, claimTache, rejeterTache, trouverTache, unclaimTache } from "@/lib/api";
 
@@ -70,6 +70,9 @@ export function TacheActionBanner({ etapes, utilisateur, onActionEffectuee }: Ta
         <div className="flex flex-wrap items-center gap-3">
           <div className="min-w-[200px] flex-1">
             <div className="flex items-center gap-2">
+              <span className="text-orange600">
+                <Icon nom="bell" taille={17} />
+              </span>
               <span className="text-13 font-bold">Action requise — {etapeActionnable.roleLibelle}</span>
               <TypeActeurBadge type={etapeActionnable.typeActeur} />
             </div>
@@ -90,9 +93,9 @@ export function TacheActionBanner({ etapes, utilisateur, onActionEffectuee }: Ta
               type="button"
               disabled={chargement}
               onClick={() => executer(() => claimTache(tache.id))}
-              className="rounded bg-encre px-3 py-1.5 text-13 font-bold text-blanc disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded bg-encre px-3 py-1.5 text-13 font-bold text-blanc disabled:opacity-50"
             >
-              Récupérer
+              <Icon nom="lock" taille={15} /> Récupérer
             </button>
           )}
 

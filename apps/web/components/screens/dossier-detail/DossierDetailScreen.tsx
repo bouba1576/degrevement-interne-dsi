@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CircuitPill, StatusBadge, type StatutDemande } from "@pgd/ui";
+import { CircuitPill, Icon, StatusBadge, type StatutDemande } from "@pgd/ui";
 import type { DemandeDetail, EtapeDossier, SessionUtilisateur } from "@pgd/contracts";
 import { ApiError, abandonnerDemande, listerTachesDemande, modifierDemande, obtenirDetailDemande, rappelerDemande } from "@/lib/api";
 import { ApercuTab } from "./ApercuTab";
@@ -14,6 +14,7 @@ import { ModifierDemandeModal, type ModifierDemandeValeur } from "./ModifierDema
 export interface DossierDetailScreenProps {
   dossierId: string;
   utilisateur: SessionUtilisateur;
+  onRetour: () => void;
 }
 
 const CLE_STATUT: Record<DemandeDetail["demande"]["statut"], StatutDemande> = {
@@ -33,7 +34,7 @@ type Onglet = "apercu" | "circuit" | "pieces" | "audit";
 // Pas d'actions superviseur (archiver/publipostage/export dossier/relancer/
 // debloquer/reaffecter) : fonctionnalité maquette sans contrepartie serveur,
 // catégorie distincte du silence de maquette (cf. DIVERGENCES.md).
-export function DossierDetailScreen({ dossierId, utilisateur }: DossierDetailScreenProps) {
+export function DossierDetailScreen({ dossierId, utilisateur, onRetour }: DossierDetailScreenProps) {
   const [detail, setDetail] = useState<DemandeDetail | null>(null);
   const [etapes, setEtapes] = useState<EtapeDossier[] | null>(null);
   const [onglet, setOnglet] = useState<Onglet>("apercu");
@@ -118,6 +119,13 @@ export function DossierDetailScreen({ dossierId, utilisateur }: DossierDetailScr
 
   return (
     <div>
+      <button
+        type="button"
+        onClick={onRetour}
+        className="mb-3 flex items-center gap-1 text-13 font-semibold text-gris600"
+      >
+        <Icon nom="arrowLeft" taille={13} /> Retour
+      </button>
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-3">
@@ -125,7 +133,10 @@ export function DossierDetailScreen({ dossierId, utilisateur }: DossierDetailScr
             <CircuitPill code={demande.circuit} />
             <StatusBadge statut={CLE_STATUT[demande.statut]} />
           </div>
-          <p className="text-13 text-gris600">{demande.nomClient}</p>
+          <p className="text-13 text-gris600">
+            {demande.nomClient}
+            {demande.libelle ? ` · ${demande.libelle}` : ""}
+          </p>
         </div>
         {peutAbandonnerOuRappeler && (
           <div className="flex gap-2">

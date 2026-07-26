@@ -36,6 +36,7 @@ export default function Page() {
   const [chargementSession, setChargementSession] = useState(true);
   const [route, setRoute] = useState("home");
   const [dossierId, setDossierId] = useState<string | null>(null);
+  const [routeAvantDossier, setRouteAvantDossier] = useState("home");
   const [compteMesDemandes, setCompteMesDemandes] = useState<number | undefined>(undefined);
 
   const rechargerSession = useCallback(() => {
@@ -80,6 +81,7 @@ export default function Page() {
   }
 
   function ouvrirDossier(id: string) {
+    setRouteAvantDossier(route);
     setDossierId(id);
     setRoute("detail");
   }
@@ -119,7 +121,9 @@ export default function Page() {
       {route === "nouvelle" && <NouvelleDemandeScreen utilisateur={utilisateur} />}
       {route === "mes" && <MesDemandesScreen onOuvrirDossier={ouvrirDossier} onNaviguer={naviguer} />}
       {route === "corbeilles" && <CorbeillesScreen utilisateur={utilisateur} onOuvrirDossier={ouvrirDossier} />}
-      {route === "detail" && dossierId && <DossierDetailScreen dossierId={dossierId} utilisateur={utilisateur} />}
+      {route === "detail" && dossierId && (
+        <DossierDetailScreen dossierId={dossierId} utilisateur={utilisateur} onRetour={() => naviguer(routeAvantDossier)} />
+      )}
       {route === "controle" && <ControleScreen onOuvrirDossier={ouvrirDossier} />}
       {route === "admin" && <AdminScreen />}
       {route === "audit" && <AuditSecuriteScreen />}
