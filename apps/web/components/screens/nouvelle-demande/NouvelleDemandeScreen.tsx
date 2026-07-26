@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { z } from "zod";
-import { Money } from "@pgd/ui";
+import { Icon, Money } from "@pgd/ui";
 import type { DemandeDetail, EnumCircuit, SessionUtilisateur, SoumissionReponse } from "@pgd/contracts";
 import { ApiError, creerDemande, definirLignes, erreurRegleMetierSchema, soumettreDemande, type ErreurRegleMetier } from "@/lib/api";
 import { RechercheNd } from "./RechercheNd";
@@ -10,6 +10,12 @@ import { SelecteurLignes, montantLigneParDefaut, type LigneLocale } from "./Sele
 import { ApercuRoutage } from "./ApercuRoutage";
 
 const CIRCUITS: EnumCircuit[] = ["DOBB", "DXC", "DF"];
+
+// Segment associé à chaque circuit (table CLAUDE.md « Projet ») — libellé
+// d'affichage statique, pas une règle métier : n'influence ni le routage ni
+// le calcul, sert uniquement le badge visuel déjà présent dans la maquette
+// (docs/design/screens1.jsx, badge "DOBB · B2B" etc.).
+const SEGMENT_PAR_CIRCUIT: Record<EnumCircuit, string> = { DOBB: "B2B", DXC: "B2C", DF: "Wholesale" };
 
 // Convention déjà établie pour Sidebar (packages/ui) : le code de rôle
 // `INITIATEUR_<CIRCUIT>` est le seul indice réel disponible côté client — pas
@@ -151,11 +157,20 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="max-w-[520px] rounded-6 border border-gris200 bg-blanc p-5">
-        <h3 className="mb-3 text-14 font-bold">
-          {demande ? `Brouillon réf. ${demande.demande.reference}` : "Nouvelle fiche d'ajustement"}
-        </h3>
+    <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="flex flex-col gap-4">
+      <div className="rounded-6 border border-gris200 bg-blanc p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Icon nom="doc" taille={17} />
+            <h3 className="text-14 font-bold">
+              {demande ? `Brouillon réf. ${demande.demande.reference}` : "Nouvelle fiche d'ajustement"}
+            </h3>
+          </div>
+          <span className="rounded-full border border-gris200 bg-gris50 px-3 py-1 text-12 font-bold text-gris700">
+            {circuit} · {SEGMENT_PAR_CIRCUIT[circuit]}
+          </span>
+        </div>
         {!demande && (
           <p className="mb-3 text-12 text-gris600">
             Rien n'est encore enregistré côté serveur — la demande n'est créée qu'au premier enregistrement de lignes.
@@ -239,51 +254,60 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
         enregistrement={enregistrement}
         erreur={erreurEnregistrement}
       />
+      </div>
 
-      {/* Montants affichés uniquement APRÈS "Enregistrer les lignes" : ce
+      {/* Panneau latéral — équivalent du bloc « Calcul automatique / Routage
+          prévu / Soumettre » de la maquette (docs/design/screens1.jsx),
+          aligné en haut à droite du formulaire plutôt qu'empilé dessous.
+          Montants affichés uniquement APRÈS "Enregistrer les lignes" : ce
           sont ceux renvoyés par le serveur (demande.lignes[].montantHtLigne,
           demande.demande.montantTtc), jamais une estimation calculée ici —
           même principe qu'ApercuRoutage. */}
-      {demande && demande.lignes.length > 0 && (
-        <div className="rounded-6 border border-gris200 bg-blanc p-5">
-          <h3 className="mb-3 text-14 font-bold">Montants</h3>
-          <div className="flex flex-col gap-2">
-            {demande.lignes.map((l) => (
-              <div key={l.id} className="flex justify-between text-13">
-                <span className="font-mono text-gris600">{l.nd}</span>
-                <Money valeur={l.montantHtLigne} />
+      <div className="flex flex-col gap-4">
+        {demande && demande.lignes.length > 0 && (
+          <div className="rounded-6 border border-gris200 bg-blanc p-5">
+            <div className="mb-3 flex items-center gap-2">
+              <Icon nom="calc" taille={17} />
+              <h3 className="text-14 font-bold">Montants</h3>
+            </div>
+            <div className="flex flex-col gap-2">
+              {demande.lignes.map((l) => (
+                <div key={l.id} className="flex justify-between text-13">
+                  <span className="font-mono text-gris600">{l.nd}</span>
+                  <Money valeur={l.montantHtLigne} />
+                </div>
+              ))}
+              <div className="mt-2 flex justify-between border-t border-gris200 pt-2">
+                <span className="font-bold">Total TTC</span>
+                <Money valeur={demande.demande.montantTtc} fort className="text-orange600" />
               </div>
-            ))}
-            <div className="mt-2 flex justify-between border-t border-gris200 pt-2">
-              <span className="font-bold">Total TTC</span>
-              <Money valeur={demande.demande.montantTtc} fort className="text-orange600" />
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {demande && demande.lignes.length > 0 && <ApercuRoutage demandeId={demande.demande.id} />}
+        {demande && demande.lignes.length > 0 && <ApercuRoutage demandeId={demande.demande.id} />}
 
-      {demande && (
-        <div className="rounded-6 border border-gris200 bg-blanc p-5">
-          {erreursSoumission && (
-            <ul className="mb-3 list-disc pl-5 text-13 font-semibold text-rouge700">
-              {erreursSoumission.map((v, i) => (
-                <li key={i}>{v.message}</li>
-              ))}
-            </ul>
-          )}
-          {erreurSoumissionUnique && <p className="mb-3 text-13 font-semibold text-rouge700">{erreurSoumissionUnique}</p>}
-          <button
-            type="button"
-            onClick={handleSoumettre}
-            disabled={soumissionEnCours || demande.lignes.length === 0}
-            className="rounded bg-orange px-4 py-2 text-13 font-bold text-noir disabled:opacity-50"
-          >
-            {soumissionEnCours ? "Soumission…" : "Soumettre"}
-          </button>
-        </div>
-      )}
+        {demande && (
+          <div className="rounded-6 border border-gris200 bg-blanc p-5">
+            {erreursSoumission && (
+              <ul className="mb-3 list-disc pl-5 text-13 font-semibold text-rouge700">
+                {erreursSoumission.map((v, i) => (
+                  <li key={i}>{v.message}</li>
+                ))}
+              </ul>
+            )}
+            {erreurSoumissionUnique && <p className="mb-3 text-13 font-semibold text-rouge700">{erreurSoumissionUnique}</p>}
+            <button
+              type="button"
+              onClick={handleSoumettre}
+              disabled={soumissionEnCours || demande.lignes.length === 0}
+              className="w-full rounded bg-orange px-4 py-2 text-13 font-bold text-noir disabled:opacity-50"
+            >
+              {soumissionEnCours ? "Soumission…" : "Soumettre"}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

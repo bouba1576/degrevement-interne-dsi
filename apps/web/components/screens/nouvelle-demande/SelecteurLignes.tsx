@@ -1,6 +1,6 @@
 "use client";
 
-import { StatutLigneBadge } from "@pgd/ui";
+import { Icon, StatutLigneBadge } from "@pgd/ui";
 import type { LigneAvecContexte } from "@pgd/contracts";
 import { SelecteurFormule, type SelecteurFormuleValeur } from "./SelecteurFormule";
 
@@ -74,7 +74,10 @@ export function SelecteurLignes({
 
   return (
     <div className="rounded-6 border border-gris200 bg-blanc p-5">
-      <h3 className="mb-3 text-14 font-bold">Lignes retenues</h3>
+      <div className="mb-3 flex items-center gap-2">
+        <Icon nom="layers" taille={17} />
+        <h3 className="text-14 font-bold">Lignes retenues</h3>
+      </div>
 
       {lignes.length === 0 ? (
         <p className="text-13 text-gris600">Aucune ligne retenue pour l'instant — recherchez un ND ci-dessus.</p>

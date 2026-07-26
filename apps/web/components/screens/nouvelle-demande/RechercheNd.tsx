@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { StatutLigneBadge } from "@pgd/ui";
+import { Icon, StatutLigneBadge } from "@pgd/ui";
 import type { LigneAvecContexte } from "@pgd/contracts";
 import { ApiError, rechercherNd } from "@/lib/api";
 
@@ -46,7 +46,10 @@ export function RechercheNd({ onLigneTrouvee }: RechercheNdProps) {
 
   return (
     <div className="rounded-6 border border-gris200 bg-blanc p-5">
-      <h3 className="mb-3 text-14 font-bold">Rechercher une ligne par ND</h3>
+      <div className="mb-3 flex items-center gap-2">
+        <Icon nom="search" taille={17} />
+        <h3 className="text-14 font-bold">Rechercher une ligne par ND</h3>
+      </div>
       <label className="mb-1 block text-13 font-bold text-gris800">Numéro de ligne (ND)</label>
       <div className="flex gap-2">
         <input
