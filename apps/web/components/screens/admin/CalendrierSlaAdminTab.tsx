@@ -1,9 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Field } from "@pgd/ui";
+import { Field, Icon } from "@pgd/ui";
 import type { CalendrierSlaVue } from "@pgd/contracts";
 import { ApiError, listerCalendriersSla, modifierCalendrierSla } from "@/lib/api";
+
+function heureEnFraction(hhmm: string): number {
+  const [h, m] = hhmm.split(":").map(Number);
+  return (h || 0) + (m || 0) / 60;
+}
 
 const JOURS = [
   { valeur: 1, libelle: "Lun" },
@@ -38,6 +43,17 @@ function versEdition(c: CalendrierSlaVue): EditionCalendrier {
 // SlaEscalationService (apps/worker) partagent la même fonction
 // (ajouterHeuresOuvrees, @pgd/database). Modifier ce référentiel change donc
 // le calcul réel des échéances, pas seulement un affichage.
+//
+// Port partiel de docs/design/screens3.jsx (CalendrierSlaPanel) : en-tête
+// avec résumé, règle visuelle de plage horaire, libellés jour ouvré/fermé.
+// Le « Simulateur d'échéance » de la maquette n'est PAS repris : il calcule
+// une échéance SLA à partir de ce calendrier, exactement ce que
+// `ajouterHeuresOuvrees` fait déjà côté serveur — le dupliquer ici violerait
+// la même règle qui interdit déjà de le dupliquer entre apps/api et
+// apps/worker (cf. CLAUDE.md, « R9 dans SlaEscalationService »). Aucune
+// route ne l'expose non plus en aperçu autonome (vérifié, pas supposé) :
+// construire ce panneau exigerait soit un nouvel endpoint serveur, soit une
+// réimplémentation cliente de R9 — les deux hors périmètre d'un audit visuel.
 export function CalendrierSlaAdminTab() {
   const [calendriers, setCalendriers] = useState<CalendrierSlaVue[] | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -115,8 +131,20 @@ export function CalendrierSlaAdminTab() {
       {calendriers.map((c) => {
         const e = edition[c.id];
         if (!e) return null;
+        const debutFraction = heureEnFraction(e.heureDebut);
+        const finFraction = heureEnFraction(e.heureFin);
+        const heuresParJour = Math.max(0, finFraction - debutFraction);
+
         return (
           <div key={c.id} className="rounded-6 border border-gris200 bg-blanc p-4">
+            <div className="mb-3 flex items-center gap-2 border-b border-gris100 pb-3">
+              <Icon nom="clock" taille={17} />
+              <h3 className="text-14 font-bold">{e.libelle || c.libelle}</h3>
+              <span className="ml-auto text-12 text-gris600">
+                {e.joursOuvres.length} j ouvrés · {heuresParJour.toFixed(1)} h/jour · {e.joursFeries.length} férié(s)
+              </span>
+            </div>
+
             <div className="grid grid-cols-3 gap-3">
               <Field label="Libellé">
                 <input
@@ -143,20 +171,39 @@ export function CalendrierSlaAdminTab() {
               </Field>
             </div>
 
+            {/* Règle visuelle de la plage horaire — décorative, dérivée des
+                deux champs heure de début/fin déjà connus localement, aucun
+                calcul de SLA ici. */}
+            <div className="relative mt-2 h-6 rounded bg-gris100">
+              <div
+                className="absolute top-0 h-full rounded bg-orange/60"
+                style={{ left: `${(debutFraction / 24) * 100}%`, width: `${(heuresParJour / 24) * 100}%` }}
+              />
+              {[0, 6, 12, 18, 24].map((h) => (
+                <span key={h} className="absolute -bottom-4 text-11 text-gris500" style={{ left: `${(h / 24) * 100}%` }}>
+                  {h}h
+                </span>
+              ))}
+            </div>
+
             <Field label="Jours ouvrés">
-              <div className="flex gap-1.5">
-                {JOURS.map((j) => (
-                  <button
-                    key={j.valeur}
-                    type="button"
-                    onClick={() => basculerJour(c.id, j.valeur)}
-                    className={`rounded border px-2.5 py-1 text-12 font-bold ${
-                      e.joursOuvres.includes(j.valeur) ? "border-encre bg-encre text-blanc" : "border-gris200 text-gris700"
-                    }`}
-                  >
-                    {j.libelle}
-                  </button>
-                ))}
+              <div className="mt-6 flex gap-1.5">
+                {JOURS.map((j) => {
+                  const actif = e.joursOuvres.includes(j.valeur);
+                  return (
+                    <button
+                      key={j.valeur}
+                      type="button"
+                      onClick={() => basculerJour(c.id, j.valeur)}
+                      className={`flex flex-col items-center gap-0.5 rounded border px-2.5 py-1.5 text-12 font-bold ${
+                        actif ? "border-encre bg-encre text-blanc" : "border-gris200 text-gris700"
+                      }`}
+                    >
+                      <span>{j.libelle}</span>
+                      <span className="text-11 font-normal">{actif ? "Ouvré" : "Fermé"}</span>
+                    </button>
+                  );
+                })}
               </div>
             </Field>
 

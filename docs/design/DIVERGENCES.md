@@ -289,6 +289,21 @@ La maquette combine, dans un seul onglet (`docs/design/screens3.jsx:1027-1075`, 
 
 Vérifié en direct (session `ADMIN_PGD`), après correction : DOBB/DXC/DF affichent chacun TSC 3,00 % → 30 000 FCFA, TVA 18,00 % (assiette HT+TSC) → 185 400 FCFA, Total TTC 1 215 400 FCFA — cohérent avec `MontantService.calculer()` recalculé à la main.
 
+### AdminScreen — onglet « Calendrier SLA », 6/7
+
+La maquette (`docs/design/screens3.jsx:1077-1175`, `CalendrierSlaPanel`) combine trois éléments : la configuration (jours ouvrés, plage horaire avec règle visuelle, fériés) et un « Simulateur d'échéance » (curseur d'heures + résultat calculé). Le réel n'avait que la configuration, sans en-tête ni règle visuelle.
+
+**Non repris — le simulateur, pas une omission mais un garde-fou R9** : calculer une échéance SLA à partir de ce calendrier est exactement ce que fait `ajouterHeuresOuvrees` (`packages/database`, partagée par `CalendrierSlaService` et `SlaEscalationService`) — le dupliquer côté client violerait la même règle qui interdit déjà de le dupliquer entre `apps/api` et `apps/worker` (cf. CLAUDE.md, section dédiée à R9 dans `SlaEscalationService`). Vérifié avant de conclure : aucune route n'expose ce calcul en aperçu autonome (recherche dédiée sur `ajouterHeuresOuvrees`/« simuler », négative) — construire ce panneau exigerait soit un nouvel endpoint serveur, soit une réimplémentation cliente de R9, les deux hors périmètre d'un audit visuel.
+
+| Élément | Maquette | Réalisation (avant) | Catégorie | Action |
+|---|---|---|---|---|
+| En-tête de carte (icône + titre + résumé) | Présent (« N j ouvrés · H h/jour · N férié(s) ») | Absent | Défaut d'implémentation | Corrigé |
+| Règle visuelle de la plage horaire | Présente (bande positionnée sur 0-24h) | Absente (deux champs `time` nus) | Défaut d'implémentation | Corrigé — dérivée des deux champs déjà connus localement (`heureDebut`/`heureFin`), aucun calcul de SLA |
+| Sous-libellé « Ouvré »/« Fermé » sous chaque jour | Présent | Absent (couleur seule) | Défaut d'implémentation | Corrigé |
+| Simulateur d'échéance | Présent | — | Garde-fou R9 (duplication de `ajouterHeuresOuvrees`), pas une catégorie de silence de maquette | Aucune action |
+
+Vérifié en direct (session `ADMIN_PGD`, calendrier réel « Calendrier CI ») : résumé exact (5 j ouvrés · 10,0 h/jour · 12 férié(s)), règle visuelle positionnée correctement sur la bande 8h-18h, 12 jours fériés réels affichés (2026-2027, jours fériés ivoiriens).
+
 ## Point d'attention transverse — masquage de bouton par rôle
 
 La maquette peut masquer ou désactiver des boutons selon le rôle courant (ex. `defaultRouteFor`, conditions d'affichage dans les écrans de corbeille/admin). **Si portée, cette logique est un confort d'affichage, jamais un contrôle d'accès** : le serveur reste seul juge de ce qu'un appel peut effectivement faire, exactement comme rappelé règle non négociable 2 de CLAUDE.md (« un contrôle côté client est un confort, jamais une garantie »). Un bouton visible dont l'action est refusée côté serveur est un comportement normal, pas un bug à corriger en assouplissant l'API.
