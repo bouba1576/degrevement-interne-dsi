@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Badge } from "@pgd/ui";
+import { Badge, Icon } from "@pgd/ui";
 import type { ModuleVue, ParametreGlobalVue } from "@pgd/contracts";
 import {
   ApiError,
@@ -14,6 +14,12 @@ import {
 // Regroupe Module et ParametreGlobal : deux référentiels simples (bascule /
 // clé-valeur), sans rapport de contenu, mais assez petits pour ne pas
 // mériter chacun leur onglet (cf. échange de décomposition, CLAUDE.md).
+//
+// Aucune maquette de référence pour cet onglet : le seul « ModulesScreen »
+// de docs/design/ vit dans screens4.jsx, déjà exclu en bloc (numérotation
+// morte PGD-2x, cf. DIVERGENCES.md). Les icônes de section ci-dessous sont
+// une décision de cohérence interne avec les 6 autres onglets d'AdminScreen
+// (tous désormais icône + titre, Phase 9.3), pas une extraction de maquette.
 export function ParametresSystemeAdminTab() {
   const [modules, setModules] = useState<ModuleVue[] | null>(null);
   const [parametres, setParametres] = useState<ParametreGlobalVue[] | null>(null);
@@ -79,7 +85,10 @@ export function ParametresSystemeAdminTab() {
       {erreur && <p className="text-13 font-semibold text-rouge700">{erreur}</p>}
 
       <section>
-        <h3 className="mb-2 text-14 font-bold">Modules</h3>
+        <div className="mb-2 flex items-center gap-2">
+          <Icon nom="layers" taille={17} />
+          <h3 className="text-14 font-bold">Modules</h3>
+        </div>
         <div className="flex flex-col gap-2">
           {modules.map((m) => (
             <div key={m.code} className="flex items-center justify-between rounded border border-gris200 bg-blanc p-3">
@@ -109,7 +118,10 @@ export function ParametresSystemeAdminTab() {
       </section>
 
       <section>
-        <h3 className="mb-2 text-14 font-bold">Paramètres globaux</h3>
+        <div className="mb-2 flex items-center gap-2">
+          <Icon nom="gear" taille={17} />
+          <h3 className="text-14 font-bold">Paramètres globaux</h3>
+        </div>
         <div className="flex flex-col gap-2">
           {parametres.map((p) => (
             <div key={p.cle} className="rounded border border-gris200 bg-blanc p-3">

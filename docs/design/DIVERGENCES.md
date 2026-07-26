@@ -304,6 +304,16 @@ La maquette (`docs/design/screens3.jsx:1077-1175`, `CalendrierSlaPanel`) combine
 
 Vérifié en direct (session `ADMIN_PGD`, calendrier réel « Calendrier CI ») : résumé exact (5 j ouvrés · 10,0 h/jour · 12 férié(s)), règle visuelle positionnée correctement sur la bande 8h-18h, 12 jours fériés réels affichés (2026-2027, jours fériés ivoiriens).
 
+### AdminScreen — onglet « Paramètres système », 7/7 : aucun équivalent maquette utilisable
+
+Le seul `ModulesScreen` de `docs/design/` vit dans `screens4.jsx`, déjà exclu **en bloc** (numérotation morte PGD-2x, cf. section dédiée plus haut dans ce fichier) — pas une source valable à comparer, rouvrir cette exclusion pour ce seul besoin serait un excès de zèle déjà mis en garde par CLAUDE.md.
+
+Icônes de section ajoutées (`layers` pour « Modules », `gear` pour « Paramètres globaux ») par **cohérence interne** avec les 6 autres onglets d'`AdminScreen`, tous désormais icône + titre — pas une extraction de maquette (aucune n'existe), une décision de cohérence assumée et documentée comme telle, dans le même esprit que les autres décisions de design assumées de ce fichier.
+
+Vérifié en direct (session `ADMIN_PGD`) : 11 modules réels (4 « cœur » non désactivables — `audit`, `auth`, `demandes`, `lignes`, `rules`, `workflow`), 7 paramètres globaux réels dont les deux destinataires de notification encore à `null` (cohérent avec les questions ouvertes CLAUDE.md déjà documentées — escalade SLA et erreur SI, non tranchées) et `mfa_methode_defaut: DUO` (cohérent avec la question ouverte sur le repli DUO indisponible).
+
+**Clôture de l'audit visuel systématique d'`AdminScreen` (7/7 onglets)** : Processus (rail + timeline + simulateur reconstruits), Rôles (tableau + statut matrice reconstruits), Motifs (regroupement par circuit reconstruit), Circuits (aucun équivalent maquette, documenté), Paramètres de calcul (icône + bascule + aperçu reconstruits, bug de calcul ×100 trouvé et corrigé avant commit), Calendrier SLA (en-tête + règle visuelle reconstruits, simulateur d'échéance exclu par garde-fou R9), Paramètres système (icônes de cohérence, aucun équivalent maquette). Sept commits indépendants, un par onglet, chacun un point de reprise valide.
+
 ## Point d'attention transverse — masquage de bouton par rôle
 
 La maquette peut masquer ou désactiver des boutons selon le rôle courant (ex. `defaultRouteFor`, conditions d'affichage dans les écrans de corbeille/admin). **Si portée, cette logique est un confort d'affichage, jamais un contrôle d'accès** : le serveur reste seul juge de ce qu'un appel peut effectivement faire, exactement comme rappelé règle non négociable 2 de CLAUDE.md (« un contrôle côté client est un confort, jamais une garantie »). Un bouton visible dont l'action est refusée côté serveur est un comportement normal, pas un bug à corriger en assouplissant l'API.
