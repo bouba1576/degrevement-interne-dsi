@@ -85,6 +85,9 @@ La maquette code en dur `["SM_DF","DF","DGA_DG","ADMIN"]`. Le serveur porte déj
 ### Taux TSC/TVA et bases de calcul (`CONFIG.taxes`)
 La maquette code en dur les taux (TSC 3 %, TVA 18 %) et le choix d'assiette (HT vs HT+TSC). Le serveur porte déjà ces valeurs dans `PARAMETRE_CALCUL`, admin-configurable par circuit (Phase 5). Le composant `CalcConfigView` (`screens3.jsx`) peut servir de référence visuelle pour l'écran d'administration correspondant, à condition de lire/écrire les valeurs réelles via l'API, jamais une constante.
 
+### Libellé de l'étape 2 du fil d'authentification — « 2FA » (maquette) vs « MFA » (réel)
+`docs/design/screens_auth.jsx:159` libelle la seconde étape du fil `StepPip` « 2FA ». `LoginScreen.tsx` affiche « MFA ». **Gardé volontairement tel quel** : le mécanisme réel couvre DUO **et** TOTP (`MfaPort`, D3), « MFA » (authentification multifacteur) est le terme exact et déjà utilisé partout ailleurs dans le code et la documentation (`requiresMfa`, `MFA_INDISPONIBLE`, `requiertMfa`) ; « 2FA » est un raccourci de la maquette qui n'introduirait aucune précision supplémentaire. Différence de libellé assumée, pas une question ouverte.
+
 ## Questions requalifiées par la maquette (à trancher avec le métier, pas des divergences à corriger)
 
 ### Escalade SLA — cible du transfert
@@ -128,6 +131,28 @@ La maquette (`docs/design/screens2.jsx:600-691`, `ApproveModal`) implémente ce 
 **Le backend réel supporte déjà ce pattern** — ce n'est pas un gap serveur. `approuverRequeteSchema` (`packages/contracts/src/tache.ts`) porte `revue?: RevueChamp[]`, et `RevueChamp = {champ, vu: boolean, correction?: string}` (forme réelle, à ne pas confondre avec `{champ, valeur, verdict, commentaire}` de la maquette — vocabulaire différent, `vu`/`correction` plutôt que `verdict`/`commentaire`, à respecter si cette UI est construite un jour). L'écran construit (`TacheActionBanner.tsx`) appelle `approuverTache(tache.id, {})` — `revue` toujours omis, jamais peuplé. Purement un manque côté `apps/web`, pas une limite d'API.
 
 **Différence structurelle supplémentaire, pas seulement l'absence de la revue** : la maquette fusionne approbation et rejet en une seule modale dont la décision est dérivée des champs signalés. Le contrat réel garde deux routes séparées (`POST /api/taches/{id}/approuver`, `POST /api/taches/{id}/rejeter`, motif obligatoire pour ce dernier) — l'écran construit respecte déjà cette séparation (deux actions distinctes dans `TacheActionBanner`). Construire cette UI un jour ne veut donc pas dire porter `ApproveModal` tel quel : la revue champ par champ doit alimenter l'action Approuver existante, pas fusionner les deux décisions.
+
+## Audit de fidélité visuelle systématique (Phase 9.3)
+
+Contrairement aux sections précédentes (maquette vs PRD, ou écran construit vs les deux), cette section documente un audit **capture d'écran contre capture d'écran**, bloc par bloc, entre `docs/design/` rendu tel quel (harnais statique, aucun bundler) et `apps/web` réellement en exécution — une vérification par `getComputedStyle` seule ne peut pas détecter l'**absence** d'un élément (elle ne peut interroger que des éléments déjà sélectionnés), d'où la nécessité d'une comparaison visuelle directe pour ce type de défaut. Portée par le principe désormais contraignant : les choix visuels de la maquette (mise en page, iconographie, couleurs) valident au même titre que les règles métier, sauf exception listée en tête de ce fichier.
+
+### LoginScreen — écarts corrigés
+
+| Élément | Maquette | Réalisation (avant) | Catégorie | Action |
+|---|---|---|---|---|
+| Illustration du panneau sombre (`PlatformIllustration`) | Présente (SVG carte + badges de statut) | Absente | Défaut d'implémentation | Corrigé — SVG porté fidèlement depuis `screens_auth.jsx` |
+| Liste de 3 fonctionnalités (saisie/routage, corbeilles, traçabilité) | Présente | Absente | Défaut d'implémentation | Corrigé — bloc ajouté avec icônes `edit`/`inbox`/`shield` |
+| Couleur du bouton « Continuer » | Orange (`bg-orange`), texte noir | Noir (`bg-encre`), texte blanc | Défaut d'implémentation | Corrigé — alignée sur la convention CTA déjà en vigueur ailleurs dans l'app |
+| Couleur de l'étape active du fil d'authentification (`StepPip`) | Orange, texte noir | Noir/encre, texte blanc | Défaut d'implémentation, trouvé en comparaison écran-à-écran (absent du calibrage initial) | Corrigé — `bg-orange text-noir` |
+| Icônes décoratives dans les champs (personne dans Identifiant AD, cadenas dans Mot de passe et Code TOTP) + suffixe fixe `@orange.ci` | Présentes | Absentes (champs texte nus) | Défaut d'implémentation, trouvé en comparaison écran-à-écran | Corrigé — icônes positionnées en absolu, suffixe visuel ; l'état interne reste un identifiant complet (`identifiantAd: string`), la concaténation `${local}@orange.ci` n'a lieu qu'au moment de l'appel API, aucune structure de données modifiée |
+| Icône avant « Connexion » (`IconBadge`, icône `user`) | Présente | **Présente à l'identique** — le calibrage initial la signalait absente, corrigé après capture d'écran directe | Non-défaut (désaccord assumé avec le calibrage initial) | Aucune action |
+| « Comptes de démonstration » | Présent | Absent | Catégorie 2 (aucune contrepartie serveur — pas de résolution de compte de démo côté API) | Aucune action, décision déjà actée |
+| Texte du pied de page (« MVP — authentification AD/LDAP & 2FA simulées ») | Présent | Remplacé par un texte factuel (« Authentification Active Directory + MFA (DUO / TOTP) ») | Catégorie 4 (la maquette décrit son propre état de prototype, faux une fois porté) | Aucune action, décision déjà actée |
+| Style de la bannière d'erreur | Fond rosé, bordure rouge, icône alerte | Identique | Non-défaut | Aucune action — message différent car contexte différent (échec LDAP réel vs identifiant de démo inconnu), pas un défaut de style |
+
+Vérifié en direct après correction (Playwright, capture réelle de `http://localhost:3001/login` servi par le conteneur `web`) : illustration, liste de fonctionnalités, bouton orange (état activé) et icônes de champ rendent tous à l'identique de la maquette ; une tentative de connexion réelle avec un identifiant saisi sans domaine (`jean.kouassi` → concaténé en `jean.kouassi@orange.ci`) atteint bien le serveur et reçoit un vrai `401`/« Identifiants invalides. », confirmant que la concaténation ne casse pas le flux réel.
+
+**Incident rencontré pendant la vérification, pas spécifique à cet écran** : le conteneur `web` (dev, `next dev` avec bind-mount `.:/repo`) n'a pas détecté certains changements de fichier via son file-watcher malgré un bind-mount à jour (mtime et contenu confirmés identiques hôte/conteneur) — plusieurs éditions consécutives n'ont déclenché qu'une recompilation partielle. `docker compose restart web` a suffi à forcer une recompilation propre à chaque fois. Symptôme distinct des incidents `EACCES`/symlink déjà documentés plus haut dans CLAUDE.md (aucune erreur, juste une non-détection de changement) — à surveiller si ça se reproduit sur les écrans suivants de cet audit.
 
 ## Point d'attention transverse — masquage de bouton par rôle
 
