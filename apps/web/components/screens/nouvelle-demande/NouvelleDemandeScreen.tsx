@@ -5,7 +5,9 @@ import { z } from "zod";
 import { Icon, Money } from "@pgd/ui";
 import type {
   DemandeDetail,
+  DirectionResponsabiliteVue,
   EnumCircuit,
+  EnumLocalisation,
   FacteurDegrevementVue,
   MotifVue,
   SessionUtilisateur,
@@ -17,6 +19,7 @@ import {
   creerDemande,
   definirLignes,
   erreurRegleMetierSchema,
+  listerDirectionsReferentiel,
   listerFacteursReferentiel,
   listerMotifsActifs,
   listerUniversFmi,
@@ -67,14 +70,15 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
   const [circuit, setCircuit] = useState<EnumCircuit>(() => circuitParDefaut(utilisateur.roles));
   const [nomClient, setNomClient] = useState("");
   const [commentaire, setCommentaire] = useState("");
-  // PGD-032/SF-PGD-330 — aucun endpoint ne liste les services référentiels
-  // réels aujourd'hui (recherche dédiée, négative) : impossible de proposer
-  // un vrai select. Seul le chemin "Autre" (texte libre) est donc actionnable
-  // ici ; la case à cocher démontre malgré tout le comportement exigé —
-  // masqué ET vidé quand on quitte "Autre" — sur le seul champ qui existe
-  // réellement dans le contrat (`responsabiliteServiceAutre`). Vérifié en
-  // direct (Phase 9.2) : décocher puis recocher rouvre un champ vide, pas la
-  // valeur précédente.
+  // PGD-032/SF-PGD-330 — jusqu'à l'étape C/D (Phase 10.6), aucun endpoint ne
+  // listait les services référentiels réels : seul le chemin "Autre" (texte
+  // libre) était actionnable. `GET /api/referentiels/directions` (Phase A)
+  // ouvre désormais un vrai select ci-dessous ; "Autre" reste pour le cas non
+  // référencé, les deux sont mutuellement exclusifs (choisir l'un vide
+  // l'autre — le serveur l'impose déjà via `normaliserServiceResponsable`,
+  // repris ici côté UI pour ne jamais donner l'impression que les deux sont
+  // actifs à la fois). Vérifié en direct (Phase 9.2) : décocher puis recocher
+  // "Autre" rouvre un champ vide, pas la valeur précédente.
   const [serviceAutreActif, setServiceAutreActif] = useState(false);
   const [responsabiliteServiceAutre, setResponsabiliteServiceAutre] = useState("");
 
@@ -115,6 +119,46 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
 
   const motifSelectionne = motifs?.find((m) => m.id === motifId) ?? null;
 
+  // Carte « DOBB/DXC » (Phase 10.6, étape C/D) — champs partagés par les deux
+  // circuits (compteClient/formuleAbonnement/recurrentMensuel/direction+
+  // service), plus les champs propres à DOBB seul (localisation/canalRemontee/
+  // dates réception/numeroAppel). DF exclu : sa maquette ne montre aucun de
+  // ces champs (mémo distinct, cf. « E », question ouverte séparée) — pas de
+  // règle serveur qui les interdise pour DF, mais aucune source ne les y
+  // montre non plus, donc pas construits pour DF ici.
+  const [compteClient, setCompteClient] = useState("");
+  const [formuleAbonnement, setFormuleAbonnement] = useState("");
+  const [recurrentMensuel, setRecurrentMensuel] = useState(false);
+  const [directionRespId, setDirectionRespId] = useState("");
+  const [serviceRespId, setServiceRespId] = useState("");
+  const [localisation, setLocalisation] = useState<EnumLocalisation | "">("");
+  const [canalRemontee, setCanalRemontee] = useState("");
+  const [dateReceptionBo, setDateReceptionBo] = useState("");
+  const [dateReceptionOci, setDateReceptionOci] = useState("");
+  const [numeroAppel, setNumeroAppel] = useState("");
+
+  const [directions, setDirections] = useState<DirectionResponsabiliteVue[] | null>(null);
+
+  // Indépendant du circuit (Phase A) — un seul appel, même principe qu'univers/facteurs.
+  useEffect(() => {
+    void listerDirectionsReferentiel().then(setDirections);
+  }, []);
+
+  const directionSelectionnee = directions?.find((d) => d.id === directionRespId) ?? null;
+
+  function choisirDirection(id: string) {
+    setDirectionRespId(id);
+    // Un service choisi pour l'ancienne direction n'a aucune raison de rester
+    // valide pour la nouvelle — même principe que la réinitialisation du
+    // motif au changement de circuit.
+    setServiceRespId("");
+  }
+
+  function choisirServiceReel(id: string) {
+    setServiceRespId(id);
+    if (id) toggleServiceAutre(false);
+  }
+
   const [demande, setDemande] = useState<DemandeDetail | null>(null);
   const [lignesLocales, setLignesLocales] = useState<LigneLocale[]>([]);
   const [enregistrement, setEnregistrement] = useState(false);
@@ -131,6 +175,10 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
     // partirait quand même à la soumission serait invisible à l'œil, visible
     // seulement en mesurant — donc on la vide ici, pas seulement en CSS.
     if (!actif) setResponsabiliteServiceAutre("");
+    // Mutuellement exclusif avec un service réel (étape C/D) — activer
+    // "Autre" invalide toute sélection réelle en cours, même logique que
+    // choisirServiceReel dans l'autre sens.
+    else setServiceRespId("");
   }
 
   const infosCompletes = nomClient.trim().length > 0 && commentaire.trim().length > 0;
@@ -151,7 +199,9 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
           nomClient: nomClient.trim(),
           commentaire: commentaire.trim(),
           responsabiliteServiceAutre:
-            circuit === "DOBB" && serviceAutreActif ? responsabiliteServiceAutre.trim() : undefined,
+            (circuit === "DOBB" || circuit === "DXC") && serviceAutreActif
+              ? responsabiliteServiceAutre.trim()
+              : undefined,
           agentInitiateur: agentInitiateur.trim() || undefined,
           matriculeInitiateur: matriculeInitiateur.trim() || undefined,
           agentSaisie: agentSaisie.trim() || undefined,
@@ -159,7 +209,17 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
           libelle: libelle.trim() || undefined,
           motifId: motifId || undefined,
           universFmiCode: universFmiCode || undefined,
-          facteurCode: facteurCode || undefined
+          facteurCode: facteurCode || undefined,
+          compteClient: compteClient.trim() || undefined,
+          formuleAbonnement: formuleAbonnement.trim() || undefined,
+          recurrentMensuel: (circuit === "DOBB" || circuit === "DXC") && recurrentMensuel ? true : undefined,
+          directionRespId: directionRespId || undefined,
+          serviceRespId: serviceRespId || undefined,
+          localisation: circuit === "DOBB" && localisation ? localisation : undefined,
+          canalRemontee: circuit === "DOBB" ? canalRemontee.trim() || undefined : undefined,
+          dateReceptionBo: circuit === "DOBB" ? dateReceptionBo || undefined : undefined,
+          dateReceptionOci: circuit === "DOBB" ? dateReceptionOci || undefined : undefined,
+          numeroAppel: circuit === "DOBB" ? numeroAppel.trim() || undefined : undefined
         });
       }
       const misAJour = await definirLignes(demandeActuelle.demande.id, {
@@ -263,23 +323,6 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
           onChange={(e) => setNomClient(e.target.value)}
           disabled={!!demande}
         />
-
-        {circuit === "DOBB" && !demande && (
-          <div className="mb-3">
-            <label className="flex items-center gap-2 text-13">
-              <input type="checkbox" checked={serviceAutreActif} onChange={(e) => toggleServiceAutre(e.target.checked)} />
-              Responsabilité par service : « Autre » (non référencé)
-            </label>
-            {serviceAutreActif && (
-              <input
-                className="mt-2 w-full rounded border border-gris300 px-3 py-2 text-13"
-                value={responsabiliteServiceAutre}
-                onChange={(e) => setResponsabiliteServiceAutre(e.target.value)}
-                placeholder="Préciser le service"
-              />
-            )}
-          </div>
-        )}
 
         <label className="mb-1 block text-13 font-bold text-gris800">
           Commentaire <span className="text-rouge">*</span>
@@ -411,6 +454,166 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
           </div>
         </div>
       </div>
+
+      {/* Carte « DOBB/DXC » (Phase 10.6, étape C/D) — champs partagés par les
+          deux circuits + champs propres à DOBB seul, cf. commentaire d'état
+          ci-dessus. Absente pour DF (aucune source ne les y montre). */}
+      {(circuit === "DOBB" || circuit === "DXC") && (
+        <div className="rounded-6 border border-gris200 bg-blanc p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <Icon nom="flow" taille={17} />
+            <h3 className="text-14 font-bold">{circuit === "DOBB" ? "Fiche d'ajustement B2B" : "Fiche d'ajustement B2C"}</h3>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-13 font-bold text-gris800">Compte client</label>
+              <input
+                className="w-full rounded border border-gris300 px-3 py-2 text-13 font-mono disabled:opacity-60"
+                value={compteClient}
+                onChange={(e) => setCompteClient(e.target.value)}
+                placeholder={circuit === "DOBB" ? "ex. B2B-880142" : "ex. B2C-4471902"}
+                disabled={!!demande}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-13 font-bold text-gris800">
+                {circuit === "DOBB" ? "Formule d'abonnement" : "Formule Internet"}
+              </label>
+              <input
+                className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
+                value={formuleAbonnement}
+                onChange={(e) => setFormuleAbonnement(e.target.value)}
+                disabled={!!demande}
+              />
+            </div>
+
+            {circuit === "DOBB" && (
+              <>
+                <div>
+                  <label className="mb-1 block text-13 font-bold text-gris800">Numéro d'appel</label>
+                  <input
+                    className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                    value={numeroAppel}
+                    onChange={(e) => setNumeroAppel(e.target.value)}
+                    placeholder="ex. 27 22 00 00 00"
+                    disabled={!!demande}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-13 font-bold text-gris800">Localisation</label>
+                  <select
+                    className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
+                    value={localisation}
+                    onChange={(e) => setLocalisation(e.target.value as EnumLocalisation | "")}
+                    disabled={!!demande}
+                  >
+                    <option value="">— Choisir —</option>
+                    <option value="NATIONAL">National</option>
+                    <option value="INTERNATIONAL">International</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-13 font-bold text-gris800">Canal de remontée</label>
+                  <input
+                    className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                    value={canalRemontee}
+                    onChange={(e) => setCanalRemontee(e.target.value)}
+                    disabled={!!demande}
+                  />
+                </div>
+                <div />
+                <div>
+                  <label className="mb-1 block text-13 font-bold text-gris800">Date réception BO</label>
+                  <input
+                    className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                    type="date"
+                    value={dateReceptionBo}
+                    onChange={(e) => setDateReceptionBo(e.target.value)}
+                    disabled={!!demande}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-13 font-bold text-gris800">Date réception OCI</label>
+                  <input
+                    className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                    type="date"
+                    value={dateReceptionOci}
+                    onChange={(e) => setDateReceptionOci(e.target.value)}
+                    disabled={!!demande}
+                  />
+                </div>
+              </>
+            )}
+
+            <div>
+              <label className="flex items-center gap-2 text-13 font-bold text-gris800">
+                <input
+                  type="checkbox"
+                  checked={recurrentMensuel}
+                  onChange={(e) => setRecurrentMensuel(e.target.checked)}
+                  disabled={!!demande}
+                />
+                Montant récurrent mensuel
+              </label>
+            </div>
+            <div />
+
+            <div>
+              <label className="mb-1 block text-13 font-bold text-gris800">Responsabilité — direction</label>
+              <select
+                className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
+                value={directionRespId}
+                onChange={(e) => choisirDirection(e.target.value)}
+                disabled={!!demande || !directions || serviceAutreActif}
+              >
+                <option value="">— Choisir —</option>
+                {directions?.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.libelle}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-13 font-bold text-gris800">Responsabilité — service</label>
+              <select
+                className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
+                value={serviceRespId}
+                onChange={(e) => choisirServiceReel(e.target.value)}
+                disabled={!!demande || !directionSelectionnee || serviceAutreActif}
+              >
+                <option value="">— Choisir —</option>
+                {directionSelectionnee?.services.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.libelle}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label className="flex items-center gap-2 text-13">
+                <input
+                  type="checkbox"
+                  checked={serviceAutreActif}
+                  onChange={(e) => toggleServiceAutre(e.target.checked)}
+                  disabled={!!demande}
+                />
+                Responsabilité par service : « Autre » (non référencé)
+              </label>
+              {serviceAutreActif && (
+                <input
+                  className="mt-2 w-full rounded border border-gris300 px-3 py-2 text-13"
+                  value={responsabiliteServiceAutre}
+                  onChange={(e) => setResponsabiliteServiceAutre(e.target.value)}
+                  placeholder="Préciser le service"
+                  disabled={!!demande}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <RechercheNd
         onLigneTrouvee={(contexte) =>
