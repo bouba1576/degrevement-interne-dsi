@@ -105,3 +105,121 @@ dn: cn=GG-DGR-ADMIN-PGD,ou=groups,dc=pgd,dc=orange,dc=ci
 objectClass: groupOfNames
 cn: GG-DGR-ADMIN-PGD
 member: uid=jean.kouassi,ou=users,dc=pgd,dc=orange,dc=ci
+
+# --- Chaînes DOBB et DXC, même socle persistant (CLAUDE.md) ---
+# RESPONSABLE_DOBB -> MANAGER_DOBB -> MANAGER_SENIOR_DOBB -> DOBB
+# RESPONSABLE_DXC  -> MANAGER_DXC  -> MANAGER_SENIOR_DXC  -> DXC
+# Chaînes lues en base (etape_regle) avant création, pas supposées par
+# analogie avec DF — aucun des 9 rôles manquants du catalogue n'y apparaît.
+
+dn: uid=responsable.dobb,ou=users,dc=pgd,dc=orange,dc=ci
+objectClass: inetOrgPerson
+uid: responsable.dobb
+cn: Responsable DOBB (test)
+sn: DOBB
+givenName: Responsable
+mail: responsable.dobb@orange.ci
+userPassword: MotDePasseTest123!
+
+dn: uid=manager.dobb,ou=users,dc=pgd,dc=orange,dc=ci
+objectClass: inetOrgPerson
+uid: manager.dobb
+cn: Manager DOBB (test)
+sn: DOBB
+givenName: Manager
+mail: manager.dobb@orange.ci
+userPassword: MotDePasseTest123!
+
+dn: uid=senior.dobb,ou=users,dc=pgd,dc=orange,dc=ci
+objectClass: inetOrgPerson
+uid: senior.dobb
+cn: Manager Senior DOBB (test)
+sn: DOBB
+givenName: Senior
+mail: senior.dobb@orange.ci
+userPassword: MotDePasseTest123!
+
+dn: uid=dobb,ou=users,dc=pgd,dc=orange,dc=ci
+objectClass: inetOrgPerson
+uid: dobb
+cn: Validateur DOBB (test)
+sn: DOBB
+givenName: Validateur
+mail: dobb@orange.ci
+userPassword: MotDePasseTest123!
+
+dn: uid=responsable.dxc,ou=users,dc=pgd,dc=orange,dc=ci
+objectClass: inetOrgPerson
+uid: responsable.dxc
+cn: Responsable DXC (test)
+sn: DXC
+givenName: Responsable
+mail: responsable.dxc@orange.ci
+userPassword: MotDePasseTest123!
+
+dn: uid=manager.dxc,ou=users,dc=pgd,dc=orange,dc=ci
+objectClass: inetOrgPerson
+uid: manager.dxc
+cn: Manager DXC (test)
+sn: DXC
+givenName: Manager
+mail: manager.dxc@orange.ci
+userPassword: MotDePasseTest123!
+
+dn: uid=senior.dxc,ou=users,dc=pgd,dc=orange,dc=ci
+objectClass: inetOrgPerson
+uid: senior.dxc
+cn: Manager Senior DXC (test)
+sn: DXC
+givenName: Senior
+mail: senior.dxc@orange.ci
+userPassword: MotDePasseTest123!
+
+dn: uid=dxc,ou=users,dc=pgd,dc=orange,dc=ci
+objectClass: inetOrgPerson
+uid: dxc
+cn: Validateur DXC (test)
+sn: DXC
+givenName: Validateur
+mail: dxc@orange.ci
+userPassword: MotDePasseTest123!
+
+dn: cn=GG-DGR-RESPONSABLE-DOBB,ou=groups,dc=pgd,dc=orange,dc=ci
+objectClass: groupOfNames
+cn: GG-DGR-RESPONSABLE-DOBB
+member: uid=responsable.dobb,ou=users,dc=pgd,dc=orange,dc=ci
+
+dn: cn=GG-DGR-MANAGER-DOBB,ou=groups,dc=pgd,dc=orange,dc=ci
+objectClass: groupOfNames
+cn: GG-DGR-MANAGER-DOBB
+member: uid=manager.dobb,ou=users,dc=pgd,dc=orange,dc=ci
+
+dn: cn=GG-DGR-MANAGER_SENIOR-DOBB,ou=groups,dc=pgd,dc=orange,dc=ci
+objectClass: groupOfNames
+cn: GG-DGR-MANAGER_SENIOR-DOBB
+member: uid=senior.dobb,ou=users,dc=pgd,dc=orange,dc=ci
+
+dn: cn=GG-DGR-DOBB,ou=groups,dc=pgd,dc=orange,dc=ci
+objectClass: groupOfNames
+cn: GG-DGR-DOBB
+member: uid=dobb,ou=users,dc=pgd,dc=orange,dc=ci
+
+dn: cn=GG-DGR-RESPONSABLE-DXC,ou=groups,dc=pgd,dc=orange,dc=ci
+objectClass: groupOfNames
+cn: GG-DGR-RESPONSABLE-DXC
+member: uid=responsable.dxc,ou=users,dc=pgd,dc=orange,dc=ci
+
+dn: cn=GG-DGR-MANAGER-DXC,ou=groups,dc=pgd,dc=orange,dc=ci
+objectClass: groupOfNames
+cn: GG-DGR-MANAGER-DXC
+member: uid=manager.dxc,ou=users,dc=pgd,dc=orange,dc=ci
+
+dn: cn=GG-DGR-MANAGER_SENIOR-DXC,ou=groups,dc=pgd,dc=orange,dc=ci
+objectClass: groupOfNames
+cn: GG-DGR-MANAGER_SENIOR-DXC
+member: uid=senior.dxc,ou=users,dc=pgd,dc=orange,dc=ci
+
+dn: cn=GG-DGR-DXC,ou=groups,dc=pgd,dc=orange,dc=ci
+objectClass: groupOfNames
+cn: GG-DGR-DXC
+member: uid=dxc,ou=users,dc=pgd,dc=orange,dc=ci

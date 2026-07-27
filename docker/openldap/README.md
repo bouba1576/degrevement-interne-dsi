@@ -44,6 +44,14 @@ Même mot de passe dev que `jean.kouassi` : `MotDePasseTest123!`.
 - `senior.df@orange.ci` — `GG-DGR-MANAGER_SENIOR-DF`
 - `validateur.df@orange.ci` — `GG-DGR-DF`
 - `fra.controleur@orange.ci` — `GG-DGR-FRA`
+- `responsable.dobb@orange.ci` — `GG-DGR-RESPONSABLE-DOBB`
+- `manager.dobb@orange.ci` — `GG-DGR-MANAGER-DOBB`
+- `senior.dobb@orange.ci` — `GG-DGR-MANAGER_SENIOR-DOBB`
+- `dobb@orange.ci` — `GG-DGR-DOBB`
+- `responsable.dxc@orange.ci` — `GG-DGR-RESPONSABLE-DXC`
+- `manager.dxc@orange.ci` — `GG-DGR-MANAGER-DXC`
+- `senior.dxc@orange.ci` — `GG-DGR-MANAGER_SENIOR-DXC`
+- `dxc@orange.ci` — `GG-DGR-DXC`
 
 **NE PAS nettoyer ces entrées en fin de session** — contrairement aux
 identités jetables des vérifications e2e ponctuelles, ce socle est
