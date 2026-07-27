@@ -106,6 +106,25 @@ objectClass: groupOfNames
 cn: GG-DGR-ADMIN-PGD
 member: uid=jean.kouassi,ou=users,dc=pgd,dc=orange,dc=ci
 
+# --- 7ème identité DF — palier 3 (>50M), R2 (terminaison DF puis DGA/DG) ---
+# Trouvé en vérifiant le nombre réel de paliers DF (3, pas 1) : le palier
+# haut ajoute DGA_DG entre DF et FRA, absent du socle initial (calibré sur
+# le seul palier intermédiaire). requiertMfa=true (vérifié en base).
+
+dn: uid=dga.dg,ou=users,dc=pgd,dc=orange,dc=ci
+objectClass: inetOrgPerson
+uid: dga.dg
+cn: DGA/DG (test)
+sn: DG
+givenName: DGA
+mail: dga.dg@orange.ci
+userPassword: MotDePasseTest123!
+
+dn: cn=GG-DGR-DGA-DG,ou=groups,dc=pgd,dc=orange,dc=ci
+objectClass: groupOfNames
+cn: GG-DGR-DGA-DG
+member: uid=dga.dg,ou=users,dc=pgd,dc=orange,dc=ci
+
 # --- Chaînes DOBB et DXC, même socle persistant (CLAUDE.md) ---
 # RESPONSABLE_DOBB -> MANAGER_DOBB -> MANAGER_SENIOR_DOBB -> DOBB
 # RESPONSABLE_DXC  -> MANAGER_DXC  -> MANAGER_SENIOR_DXC  -> DXC

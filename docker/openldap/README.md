@@ -44,6 +44,7 @@ Même mot de passe dev que `jean.kouassi` : `MotDePasseTest123!`.
 - `senior.df@orange.ci` — `GG-DGR-MANAGER_SENIOR-DF`
 - `validateur.df@orange.ci` — `GG-DGR-DF`
 - `fra.controleur@orange.ci` — `GG-DGR-FRA`
+- `dga.dg@orange.ci` — `GG-DGR-DGA-DG` (palier 3 DF, >50M, R2)
 - `responsable.dobb@orange.ci` — `GG-DGR-RESPONSABLE-DOBB`
 - `manager.dobb@orange.ci` — `GG-DGR-MANAGER-DOBB`
 - `senior.dobb@orange.ci` — `GG-DGR-MANAGER_SENIOR-DOBB`
