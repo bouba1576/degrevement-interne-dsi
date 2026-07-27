@@ -18,11 +18,15 @@ import type { Request, Response } from "express";
 import { loadEnv } from "@pgd/config";
 import {
   type ConnexionReponse,
+  connexionReponseSchema,
   connexionRequeteSchema,
   mfaVerifieRequeteSchema,
+  sessionUtilisateurSchema,
   totpEnrollConfirmRequeteSchema,
+  totpEnrollReponseSchema,
   type SessionUtilisateur
 } from "@pgd/contracts";
+import { ApiZodBody, ApiZodResponse } from "../../common/swagger/zod-schema";
 import { Public } from "../../common/decorators/public.decorator";
 import { Authenticated } from "../../common/decorators/authenticated.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
@@ -54,6 +58,8 @@ export class AuthController {
   @Public()
   @Post("login")
   @HttpCode(200)
+  @ApiZodBody(connexionRequeteSchema)
+  @ApiZodResponse(200, connexionReponseSchema)
   async login(@Body() body: unknown, @Res({ passthrough: true }) res: Response): Promise<ConnexionReponse> {
     const { identifiantAd, motDePasse } = connexionRequeteSchema.parse(body);
 
@@ -131,6 +137,8 @@ export class AuthController {
   @Public()
   @Post("mfa/verify")
   @HttpCode(200)
+  @ApiZodBody(mfaVerifieRequeteSchema)
+  @ApiZodResponse(200, connexionReponseSchema)
   async mfaVerify(@Body() body: unknown, @Res({ passthrough: true }) res: Response): Promise<ConnexionReponse> {
     const { challengeId, code } = mfaVerifieRequeteSchema.parse(body);
 
@@ -233,6 +241,7 @@ export class AuthController {
   @Authenticated()
   @Post("mfa/enroll/totp")
   @HttpCode(200)
+  @ApiZodResponse(200, totpEnrollReponseSchema)
   async enrollTotp(@CurrentUser() utilisateur: UtilisateurRequete) {
     return this.mfaService.demarrerEnrolementTotp(utilisateur.id, utilisateur.identifiantAd);
   }
@@ -240,6 +249,7 @@ export class AuthController {
   @Authenticated()
   @Post("mfa/enroll/totp/confirm")
   @HttpCode(200)
+  @ApiZodBody(totpEnrollConfirmRequeteSchema)
   async confirmEnrollTotp(
     @CurrentUser() utilisateur: UtilisateurRequete,
     @Body() body: unknown
@@ -288,6 +298,7 @@ export class AuthController {
 
   @Authenticated()
   @Get("session")
+  @ApiZodResponse(200, sessionUtilisateurSchema)
   async session(@CurrentUser() utilisateur: UtilisateurRequete): Promise<SessionUtilisateur> {
     const enBase = await this.prisma.utilisateur.findUniqueOrThrow({ where: { id: utilisateur.id } });
     return {

@@ -1,6 +1,15 @@
 import { Controller, Get, Param, Query } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
-import { rechercheNdQuerySchema, type FormulesDeLigne, type Ligne, type LigneAvecContexte } from "@pgd/contracts";
+import {
+  formulesDeLigneSchema,
+  ligneAvecContexteSchema,
+  ligneSchema,
+  rechercheNdQuerySchema,
+  type FormulesDeLigne,
+  type Ligne,
+  type LigneAvecContexte
+} from "@pgd/contracts";
+import { ApiZodQuery, ApiZodResponse } from "../../common/swagger/zod-schema";
 import { Authenticated } from "../../common/decorators/authenticated.decorator";
 import { LigneService } from "./services/ligne.service";
 
@@ -16,6 +25,8 @@ export class LignesController {
   // GET /api/lignes?nd= (SF-PGD-310)
   @Authenticated()
   @Get()
+  @ApiZodQuery(rechercheNdQuerySchema)
+  @ApiZodResponse(200, ligneAvecContexteSchema)
   async rechercherParNd(@Query() query: unknown): Promise<LigneAvecContexte | null> {
     const { nd } = rechercheNdQuerySchema.parse(query);
     return this.ligneService.rechercherParNd(nd);
@@ -24,6 +35,7 @@ export class LignesController {
   // GET /api/lignes/{id} (SF-PGD-300)
   @Authenticated()
   @Get(":id")
+  @ApiZodResponse(200, ligneSchema)
   async trouverParId(@Param("id") id: string): Promise<Ligne> {
     return this.ligneService.trouverParId(id);
   }
@@ -31,6 +43,7 @@ export class LignesController {
   // GET /api/lignes/{id}/formules (SF-PGD-320)
   @Authenticated()
   @Get(":id/formules")
+  @ApiZodResponse(200, formulesDeLigneSchema)
   async formulesDeLigne(@Param("id") id: string): Promise<FormulesDeLigne> {
     return this.ligneService.formulesDeLigne(id);
   }

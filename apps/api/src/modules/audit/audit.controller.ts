@@ -2,6 +2,7 @@ import { Controller, Get, Param, Query, Res } from "@nestjs/common";
 import type { Response } from "express";
 import { ApiTags } from "@nestjs/swagger";
 import { exportAuditQuerySchema, journalSecuriteQuerySchema, type JournalAuditVue, type JournalSecuriteVue } from "@pgd/contracts";
+import { ApiZodQuery } from "../../common/swagger/zod-schema";
 import { Authenticated } from "../../common/decorators/authenticated.decorator";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { AuditService } from "./audit.service";
@@ -39,6 +40,7 @@ export class AuditController {
   // segments), seul le cas à profondeur égale collisionne.
   @Roles("ADMIN_PGD")
   @Get("securite")
+  @ApiZodQuery(journalSecuriteQuerySchema)
   async journalSecurite(@Query() query: unknown): Promise<{ data: JournalSecuriteVue[]; meta: { total: number } }> {
     const dto = journalSecuriteQuerySchema.parse(query);
     const { entrees, total } = await this.audit.journalSecurite(dto);
@@ -53,6 +55,7 @@ export class AuditController {
 
   @Roles("ADMIN_PGD")
   @Get(":demandeId/export")
+  @ApiZodQuery(exportAuditQuerySchema)
   async exporter(@Param("demandeId") demandeId: string, @Query() query: unknown, @Res() res: Response): Promise<void> {
     const dto = exportAuditQuerySchema.parse(query);
     const fichier = await this.audit.exporter(demandeId, dto);

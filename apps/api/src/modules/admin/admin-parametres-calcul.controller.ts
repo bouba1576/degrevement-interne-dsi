@@ -1,10 +1,13 @@
 import { Body, Controller, Get, Param, Patch } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 import {
+  modifierParametreCalculReponseSchema,
   modifierParametreCalculRequeteSchema,
+  parametreCalculVueSchema,
   type ModifierParametreCalculReponse,
   type ParametreCalculVue
 } from "@pgd/contracts";
+import { ApiZodBody, ApiZodResponse } from "../../common/swagger/zod-schema";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { AdminParametresCalculService } from "./services/admin-parametres-calcul.service";
 
@@ -23,12 +26,15 @@ export class AdminParametresCalculController {
 
   @Roles("ADMIN_PGD")
   @Get(":circuit")
+  @ApiZodResponse(200, parametreCalculVueSchema)
   async trouver(@Param("circuit") circuit: string): Promise<ParametreCalculVue> {
     return this.parametres.trouver(circuit);
   }
 
   @Roles("ADMIN_PGD")
   @Patch(":circuit")
+  @ApiZodBody(modifierParametreCalculRequeteSchema)
+  @ApiZodResponse(200, modifierParametreCalculReponseSchema)
   async modifier(@Param("circuit") circuit: string, @Body() body: unknown): Promise<ModifierParametreCalculReponse> {
     const dto = modifierParametreCalculRequeteSchema.parse(body);
     return this.parametres.modifier(circuit, dto);

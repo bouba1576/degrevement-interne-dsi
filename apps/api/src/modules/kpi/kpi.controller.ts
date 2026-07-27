@@ -1,6 +1,7 @@
 import { Controller, Get, Query, UseGuards } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 import { kpiQuerySchema, type KpiDefinitionVue, type KpiValeur } from "@pgd/contracts";
+import { ApiZodQuery } from "../../common/swagger/zod-schema";
 import { Authenticated } from "../../common/decorators/authenticated.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import type { UtilisateurRequete } from "../../common/guards/auth.guard";
@@ -22,6 +23,7 @@ export class KpiController {
   @Authenticated()
   @UseGuards(KpiPerimetreGuard)
   @Get()
+  @ApiZodQuery(kpiQuerySchema)
   async calculer(@Query() query: unknown, @CurrentUser() utilisateur: UtilisateurRequete): Promise<KpiValeur[]> {
     const dto = kpiQuerySchema.parse(query);
     return this.engine.calculer(dto, utilisateur);

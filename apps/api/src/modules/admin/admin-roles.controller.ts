@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
-import { creerRoleRequeteSchema, modifierRoleRequeteSchema, type RoleVue } from "@pgd/contracts";
+import { creerRoleRequeteSchema, modifierRoleRequeteSchema, roleVueSchema, type RoleVue } from "@pgd/contracts";
+import { ApiZodBody, ApiZodResponse } from "../../common/swagger/zod-schema";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { AdminRolesService } from "./services/admin-roles.service";
 
@@ -17,6 +18,7 @@ export class AdminRolesController {
 
   @Roles("ADMIN_PGD")
   @Get(":code")
+  @ApiZodResponse(200, roleVueSchema)
   async trouver(@Param("code") code: string): Promise<RoleVue> {
     return this.roles.trouver(code);
   }
@@ -24,6 +26,8 @@ export class AdminRolesController {
   @Roles("ADMIN_PGD")
   @Post()
   @HttpCode(201)
+  @ApiZodBody(creerRoleRequeteSchema)
+  @ApiZodResponse(201, roleVueSchema)
   async creer(@Body() body: unknown): Promise<RoleVue> {
     const dto = creerRoleRequeteSchema.parse(body);
     return this.roles.creer(dto);
@@ -31,6 +35,8 @@ export class AdminRolesController {
 
   @Roles("ADMIN_PGD")
   @Patch(":code")
+  @ApiZodBody(modifierRoleRequeteSchema)
+  @ApiZodResponse(200, roleVueSchema)
   async modifier(@Param("code") code: string, @Body() body: unknown): Promise<RoleVue> {
     const dto = modifierRoleRequeteSchema.parse(body);
     return this.roles.modifier(code, dto);

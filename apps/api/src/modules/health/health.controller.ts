@@ -2,7 +2,8 @@ import { Controller, Get } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 import { connect } from "node:net";
 import { loadEnv } from "@pgd/config";
-import type { Sante, SanteDetail } from "@pgd/contracts";
+import { santeDetailSchema, santeSchema, type Sante, type SanteDetail } from "@pgd/contracts";
+import { ApiZodResponse } from "../../common/swagger/zod-schema";
 import { Public } from "../../common/decorators/public.decorator";
 import { PrismaService } from "../../infra/prisma/prisma.service";
 import { CacheService } from "../../infra/redis/cache.service";
@@ -21,12 +22,14 @@ export class HealthController {
 
   @Public()
   @Get()
+  @ApiZodResponse(200, santeSchema)
   liveness(): Sante {
     return { statut: "ok", horodatage: new Date().toISOString() };
   }
 
   @Public()
   @Get("ready")
+  @ApiZodResponse(200, santeDetailSchema)
   async readiness(): Promise<SanteDetail> {
     const [postgresql, redis, rabbitmq, ad, mfa] = await Promise.all([
       this.verifierPostgres(),

@@ -17,10 +17,15 @@ import {
 import { FileInterceptor } from "@nestjs/platform-express";
 import { ApiTags } from "@nestjs/swagger";
 import {
+  apercuRoutageReponseSchema,
   creerDemandeRequeteSchema,
   definirLignesRequeteSchema,
+  demandeDetailSchema,
   listerDemandesQuerySchema,
   modifierDemandeRequeteSchema,
+  pieceJointeSchema,
+  siVueSchema,
+  soumissionReponseSchema,
   type ApercuRoutageReponse,
   type Demande,
   type DemandeDetail,
@@ -29,6 +34,7 @@ import {
   type SiVue,
   type SoumissionReponse
 } from "@pgd/contracts";
+import { ApiZodBody, ApiZodQuery, ApiZodResponse } from "../../common/swagger/zod-schema";
 import { Authenticated } from "../../common/decorators/authenticated.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { Roles } from "../../common/decorators/roles.decorator";
@@ -70,6 +76,8 @@ export class DemandesController {
   // d'autre, structurellement, pas par un contrôle qu'on pourrait oublier.
   @Authenticated()
   @Post()
+  @ApiZodBody(creerDemandeRequeteSchema)
+  @ApiZodResponse(201, demandeDetailSchema)
   async creer(@Body() body: unknown, @CurrentUser() utilisateur: UtilisateurRequete): Promise<DemandeDetail> {
     const dto = creerDemandeRequeteSchema.parse(body);
     return this.demandeService.creer(dto, utilisateur.id);
@@ -82,6 +90,7 @@ export class DemandesController {
   // §4, lecture ouverte à tout authentifié).
   @Authenticated()
   @Get()
+  @ApiZodQuery(listerDemandesQuerySchema)
   async lister(
     @Query() query: unknown,
     @CurrentUser() utilisateur: UtilisateurRequete
@@ -93,6 +102,7 @@ export class DemandesController {
 
   @Authenticated()
   @Get(":id")
+  @ApiZodResponse(200, demandeDetailSchema)
   async obtenirDetail(@Param("id") id: string): Promise<DemandeDetail> {
     return this.demandeService.obtenirDetail(id);
   }
@@ -132,6 +142,8 @@ export class DemandesController {
   @Authenticated()
   @UseGuards(InitiateurDemandeGuard)
   @Patch(":id")
+  @ApiZodBody(modifierDemandeRequeteSchema)
+  @ApiZodResponse(200, demandeDetailSchema)
   async modifier(
     @Param("id") id: string,
     @Body() body: unknown,
@@ -144,6 +156,8 @@ export class DemandesController {
   @Authenticated()
   @UseGuards(InitiateurDemandeGuard)
   @Put(":id/lignes")
+  @ApiZodBody(definirLignesRequeteSchema)
+  @ApiZodResponse(200, demandeDetailSchema)
   async definirLignes(
     @Param("id") id: string,
     @Body() body: unknown,
@@ -157,6 +171,7 @@ export class DemandesController {
   @UseGuards(InitiateurDemandeGuard)
   @Post(":id/calcul")
   @HttpCode(200)
+  @ApiZodResponse(200, demandeDetailSchema)
   async recalculer(@Param("id") id: string, @CurrentUser() utilisateur: UtilisateurRequete): Promise<DemandeDetail> {
     return this.demandeService.recalculer(id, utilisateur.id);
   }
@@ -170,6 +185,7 @@ export class DemandesController {
   @UseGuards(InitiateurDemandeGuard)
   @Post(":id/apercu-routage")
   @HttpCode(200)
+  @ApiZodResponse(200, apercuRoutageReponseSchema)
   async apercuRoutage(@Param("id") id: string): Promise<ApercuRoutageReponse> {
     const demande = await this.prisma.demande.findUnique({ where: { id } });
     if (!demande) {
@@ -199,6 +215,7 @@ export class DemandesController {
   @UseGuards(InitiateurDemandeGuard)
   @Post(":id/soumettre")
   @HttpCode(200)
+  @ApiZodResponse(200, soumissionReponseSchema)
   async soumettre(@Param("id") id: string, @CurrentUser() utilisateur: UtilisateurRequete): Promise<SoumissionReponse> {
     return this.workflow.soumettre(id, { id: utilisateur.id, identifiantAd: utilisateur.identifiantAd });
   }
@@ -229,6 +246,7 @@ export class DemandesController {
   @Post(":id/pieces")
   @HttpCode(201)
   @UseInterceptors(FileInterceptor("fichier"))
+  @ApiZodResponse(201, pieceJointeSchema)
   async ajouterPiece(
     @Param("id") id: string,
     @UploadedFile() fichier: Express.Multer.File,
@@ -251,6 +269,7 @@ export class DemandesController {
   // obtenirDetail ci-dessus).
   @Authenticated()
   @Get(":id/si")
+  @ApiZodResponse(200, siVueSchema)
   async obtenirEtatSi(@Param("id") id: string): Promise<SiVue> {
     return this.siService.obtenirEtat(id);
   }
@@ -265,6 +284,7 @@ export class DemandesController {
   @Roles("ADMIN_PGD")
   @Post(":id/si/pousser")
   @HttpCode(200)
+  @ApiZodResponse(200, siVueSchema)
   async rejouerSi(@Param("id") id: string): Promise<SiVue> {
     return this.siService.rejouerManuel(id);
   }

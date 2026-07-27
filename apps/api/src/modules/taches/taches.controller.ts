@@ -2,15 +2,20 @@ import { Body, Controller, Get, HttpCode, Param, Post, Query, UseGuards } from "
 import { ApiTags } from "@nestjs/swagger";
 import {
   approuverRequeteSchema,
+  controleVueSchema,
   creerDelegationRequeteSchema,
+  delegationVueSchema,
   listerTachesQuerySchema,
   rejeterRequeteSchema,
   soumettreControleRequeteSchema,
+  tacheVueSchema,
+  tachesListeReponseSchema,
   type ControleVue,
   type DelegationVue,
   type TacheVue,
   type TachesListeReponse
 } from "@pgd/contracts";
+import { ApiZodBody, ApiZodQuery, ApiZodResponse } from "../../common/swagger/zod-schema";
 import { Authenticated } from "../../common/decorators/authenticated.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { ContexteDelegationActuelle } from "../../common/decorators/contexte-delegation.decorator";
@@ -40,6 +45,8 @@ export class TachesController {
 
   @Authenticated()
   @Get()
+  @ApiZodQuery(listerTachesQuerySchema)
+  @ApiZodResponse(200, tachesListeReponseSchema)
   async lister(@Query() query: unknown, @CurrentUser() utilisateur: UtilisateurRequete): Promise<TachesListeReponse> {
     const dto = listerTachesQuerySchema.parse(query);
     return this.taches.lister(utilisateur.roles, utilisateur.id, dto);
@@ -55,6 +62,7 @@ export class TachesController {
   @Authenticated()
   @UseGuards(CorbeilleRoleGuard)
   @Get(":id")
+  @ApiZodResponse(200, tacheVueSchema)
   async trouver(@Param("id") id: string): Promise<TacheVue> {
     return this.taches.trouver(id);
   }
@@ -63,6 +71,7 @@ export class TachesController {
   @UseGuards(CorbeilleRoleGuard)
   @Post(":id/claim")
   @HttpCode(200)
+  @ApiZodResponse(200, tacheVueSchema)
   async claim(@Param("id") id: string, @CurrentUser() utilisateur: UtilisateurRequete): Promise<TacheVue> {
     return this.taches.claim(id, utilisateur.id);
   }
@@ -71,6 +80,7 @@ export class TachesController {
   @UseGuards(CorbeilleRoleGuard)
   @Post(":id/unclaim")
   @HttpCode(200)
+  @ApiZodResponse(200, tacheVueSchema)
   async unclaim(@Param("id") id: string, @CurrentUser() utilisateur: UtilisateurRequete): Promise<TacheVue> {
     return this.taches.unclaim(id, utilisateur.id);
   }
@@ -83,6 +93,8 @@ export class TachesController {
   @UseGuards(DelegationContextGuard, CorbeilleRoleGuard, SodGuard)
   @Post(":id/approuver")
   @HttpCode(200)
+  @ApiZodBody(approuverRequeteSchema)
+  @ApiZodResponse(200, tacheVueSchema)
   async approuver(
     @Param("id") id: string,
     @Body() body: unknown,
@@ -97,6 +109,8 @@ export class TachesController {
   @UseGuards(DelegationContextGuard, CorbeilleRoleGuard, SodGuard)
   @Post(":id/rejeter")
   @HttpCode(200)
+  @ApiZodBody(rejeterRequeteSchema)
+  @ApiZodResponse(200, tacheVueSchema)
   async rejeter(
     @Param("id") id: string,
     @Body() body: unknown,
@@ -115,6 +129,8 @@ export class TachesController {
   @UseGuards(DelegationContextGuard, CorbeilleRoleGuard, SodGuard)
   @Post(":id/controle")
   @HttpCode(200)
+  @ApiZodBody(soumettreControleRequeteSchema)
+  @ApiZodResponse(200, controleVueSchema)
   async soumettreControle(@Param("id") id: string, @Body() body: unknown, @CurrentUser() utilisateur: UtilisateurRequete): Promise<ControleVue> {
     const dto = soumettreControleRequeteSchema.parse(body);
     return this.controles.soumettre(id, utilisateur, dto);
@@ -127,10 +143,16 @@ export class TachesController {
   // donc rien à filtrer côté schéma non plus). DelegantMembreRoleGuard exige
   // une appartenance RÉELLE (MembreRole) — jamais une délégation reçue,
   // sinon la chaîne de re-délégation contourne entièrement le SoD (R21).
+  // Pas de @ApiZodBody ici (Phase 10.5) : creerDelegationRequeteSchema ne
+  // valide que l'objet APRÈS fusion avec roleCode injecté serveur — le
+  // documenter tel quel présenterait à tort roleCode comme un champ attendu
+  // du client, alors qu'il est toujours écrasé par la valeur réelle de la
+  // tâche.
   @Authenticated()
   @UseGuards(DelegantMembreRoleGuard)
   @Post(":id/deleguer")
   @HttpCode(201)
+  @ApiZodResponse(201, delegationVueSchema)
   async deleguer(@Param("id") id: string, @Body() body: unknown, @CurrentUser() utilisateur: UtilisateurRequete): Promise<DelegationVue> {
     const tache = await this.taches.trouver(id);
     const dto = creerDelegationRequeteSchema.parse({ ...(body as object), roleCode: tache.roleCorbeille });

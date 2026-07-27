@@ -1,6 +1,7 @@
 import { Controller, HttpCode, Param, Post } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
-import type { ImportCrmReponse, TacheVue } from "@pgd/contracts";
+import { importCrmReponseSchema, tacheVueSchema, type ImportCrmReponse, type TacheVue } from "@pgd/contracts";
+import { ApiZodResponse } from "../../common/swagger/zod-schema";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import type { UtilisateurRequete } from "../../common/guards/auth.guard";
@@ -21,6 +22,7 @@ export class AdminController {
   @Roles("ADMIN_PGD")
   @Post("import-crm")
   @HttpCode(200)
+  @ApiZodResponse(200, importCrmReponseSchema)
   async importerCrm(): Promise<ImportCrmReponse> {
     return this.crmImportService.importer();
   }
@@ -31,6 +33,7 @@ export class AdminController {
   @Roles("ADMIN_PGD")
   @Post("escalade-manuelle/:tacheId")
   @HttpCode(200)
+  @ApiZodResponse(200, tacheVueSchema)
   async escaladerManuellement(
     @Param("tacheId") tacheId: string,
     @CurrentUser() utilisateur: UtilisateurRequete

@@ -1,6 +1,7 @@
 import { Controller, Get, HttpCode, Param, Patch, Query, UseGuards } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
-import { listerNotificationsQuerySchema, type NotificationVue } from "@pgd/contracts";
+import { listerNotificationsQuerySchema, notificationSchema, type NotificationVue } from "@pgd/contracts";
+import { ApiZodQuery, ApiZodResponse } from "../../common/swagger/zod-schema";
 import { Authenticated } from "../../common/decorators/authenticated.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import type { UtilisateurRequete } from "../../common/guards/auth.guard";
@@ -18,6 +19,7 @@ export class NotificationsController {
   // par un contrôle sur une ressource déjà identifiée par id.
   @Authenticated()
   @Get()
+  @ApiZodQuery(listerNotificationsQuerySchema)
   async lister(
     @Query() query: unknown,
     @CurrentUser() utilisateur: UtilisateurRequete
@@ -31,6 +33,7 @@ export class NotificationsController {
   @UseGuards(NotificationDestinataireGuard)
   @Patch(":id/lu")
   @HttpCode(200)
+  @ApiZodResponse(200, notificationSchema)
   async marquerLue(@Param("id") id: string): Promise<NotificationVue> {
     return this.notifications.marquerLue(id);
   }
