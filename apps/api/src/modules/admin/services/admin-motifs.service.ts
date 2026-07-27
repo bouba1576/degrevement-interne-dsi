@@ -18,6 +18,20 @@ export class AdminMotifsService {
     return motifs.map((m) => this.versVue(m));
   }
 
+  // GET /api/referentiels/motifs — distinct de lister() (CRUD admin, tout
+  // statut) : un initiateur ne doit jamais pouvoir sélectionner un motif
+  // désactivé dans le formulaire de saisie. Même séparation lister()/
+  // listerActifs() que celle déjà appliquée côté tâches (TacheService.lister
+  // filtré par rôle vs une lecture d'administration).
+  async listerActifs(circuit?: string): Promise<MotifVue[]> {
+    const motifs = await this.prisma.motif.findMany({
+      where: { actif: true, ...(circuit ? { circuit: circuit as never } : {}) },
+      include: { piecesAfferentes: true },
+      orderBy: { libelle: "asc" }
+    });
+    return motifs.map((m) => this.versVue(m));
+  }
+
   async trouver(id: string): Promise<MotifVue> {
     const motif = await this.prisma.motif.findUnique({ where: { id }, include: { piecesAfferentes: true } });
     if (!motif) {

@@ -12,6 +12,7 @@ import { TachesModule } from "./modules/taches/taches.module";
 import { AuditModule } from "./modules/audit/audit.module";
 import { KpiModule } from "./modules/kpi/kpi.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
+import { ReferentielsModule } from "./modules/referentiels/referentiels.module";
 import { AuthGuard } from "./common/guards/auth.guard";
 import { RbacGuard } from "./common/guards/rbac.guard";
 
@@ -28,7 +29,8 @@ import { RbacGuard } from "./common/guards/rbac.guard";
     TachesModule,
     AuditModule,
     KpiModule,
-    NotificationsModule
+    NotificationsModule,
+    ReferentielsModule
   ],
   providers: [
     // Ordre d'exécution Nest = ordre de déclaration : authentification avant RBAC.

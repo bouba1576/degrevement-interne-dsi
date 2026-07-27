@@ -44,6 +44,11 @@ import { TachesModule } from "../taches/taches.module";
     AdminCalendrierSlaService,
     AdminModulesService,
     EscaladeManuelleService
-  ]
+  ],
+  // AdminMotifsService.listerActifs() est réutilisé par ReferentielsModule
+  // (GET /api/referentiels/motifs, lecture ouverte à tout authentifié) —
+  // seule la méthode de lecture filtrée est exposée hors de ce module, pas
+  // le contrôleur admin/motifs (ADMIN_PGD, CRUD complet).
+  exports: [AdminMotifsService]
 })
 export class AdminModule {}
