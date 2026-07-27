@@ -1,10 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { z } from "zod";
 import { Icon, Money } from "@pgd/ui";
-import type { DemandeDetail, EnumCircuit, SessionUtilisateur, SoumissionReponse } from "@pgd/contracts";
-import { ApiError, creerDemande, definirLignes, erreurRegleMetierSchema, soumettreDemande, type ErreurRegleMetier } from "@/lib/api";
+import type {
+  DemandeDetail,
+  EnumCircuit,
+  FacteurDegrevementVue,
+  MotifVue,
+  SessionUtilisateur,
+  SoumissionReponse,
+  UniversFmiVue
+} from "@pgd/contracts";
+import {
+  ApiError,
+  creerDemande,
+  definirLignes,
+  erreurRegleMetierSchema,
+  listerFacteursReferentiel,
+  listerMotifsActifs,
+  listerUniversFmi,
+  soumettreDemande,
+  type ErreurRegleMetier
+} from "@/lib/api";
 import { RechercheNd } from "./RechercheNd";
 import { SelecteurLignes, montantLigneParDefaut, type LigneLocale } from "./SelecteurLignes";
 import { ApercuRoutage } from "./ApercuRoutage";
@@ -60,6 +78,43 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
   const [serviceAutreActif, setServiceAutreActif] = useState(false);
   const [responsabiliteServiceAutre, setResponsabiliteServiceAutre] = useState("");
 
+  // Carte « Identification » (Phase 10.6, étape B) — champs communs aux trois
+  // circuits, tous déjà présents dans creerDemandeRequeteSchema (packages/
+  // contracts/src/demande.ts), aucun n'était câblé avant ce tour. Aucune
+  // validation conditionnelle par circuit côté serveur (vérifié — le schéma
+  // ne porte ni .refine() ni .superRefine(), chaque champ est .optional()
+  // uniformément) : rien à reproduire ici au-delà de ce que le schéma exige
+  // déjà (seul nomClient est requis, inchangé).
+  const [agentInitiateur, setAgentInitiateur] = useState(utilisateur.nom);
+  const [matriculeInitiateur, setMatriculeInitiateur] = useState("");
+  const [agentSaisie, setAgentSaisie] = useState(utilisateur.nom);
+  const [sousFlux, setSousFlux] = useState("");
+  const [libelle, setLibelle] = useState("");
+  const [motifId, setMotifId] = useState("");
+  const [universFmiCode, setUniversFmiCode] = useState("");
+  const [facteurCode, setFacteurCode] = useState("");
+
+  const [motifs, setMotifs] = useState<MotifVue[] | null>(null);
+  const [univers, setUnivers] = useState<UniversFmiVue[] | null>(null);
+  const [facteurs, setFacteurs] = useState<FacteurDegrevementVue[] | null>(null);
+
+  // Univers/facteurs sont indépendants du circuit (Phase A) — un seul appel.
+  useEffect(() => {
+    void listerUniversFmi().then(setUnivers);
+    void listerFacteursReferentiel().then(setFacteurs);
+  }, []);
+
+  // Motifs sont scopés au circuit (GET /api/referentiels/motifs?circuit=) —
+  // rechargés à chaque changement de circuit ; une sélection déjà faite pour
+  // l'ancien circuit n'a aucune raison de rester valide pour le nouveau.
+  useEffect(() => {
+    setMotifId("");
+    setMotifs(null);
+    void listerMotifsActifs(circuit).then(setMotifs);
+  }, [circuit]);
+
+  const motifSelectionne = motifs?.find((m) => m.id === motifId) ?? null;
+
   const [demande, setDemande] = useState<DemandeDetail | null>(null);
   const [lignesLocales, setLignesLocales] = useState<LigneLocale[]>([]);
   const [enregistrement, setEnregistrement] = useState(false);
@@ -96,7 +151,15 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
           nomClient: nomClient.trim(),
           commentaire: commentaire.trim(),
           responsabiliteServiceAutre:
-            circuit === "DOBB" && serviceAutreActif ? responsabiliteServiceAutre.trim() : undefined
+            circuit === "DOBB" && serviceAutreActif ? responsabiliteServiceAutre.trim() : undefined,
+          agentInitiateur: agentInitiateur.trim() || undefined,
+          matriculeInitiateur: matriculeInitiateur.trim() || undefined,
+          agentSaisie: agentSaisie.trim() || undefined,
+          sousFlux: sousFlux.trim() || undefined,
+          libelle: libelle.trim() || undefined,
+          motifId: motifId || undefined,
+          universFmiCode: universFmiCode || undefined,
+          facteurCode: facteurCode || undefined
         });
       }
       const misAJour = await definirLignes(demandeActuelle.demande.id, {
@@ -229,6 +292,124 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
           disabled={!!demande}
         />
         <p className="text-12 text-gris600">Obligatoire à la soumission (R14).</p>
+      </div>
+
+      {/* Carte « Identification » (Phase 10.6, étape B) — communs aux trois
+          circuits, cf. commentaire d'état ci-dessus. Motif scopé au circuit
+          courant ; univers/facteur indépendants du circuit. */}
+      <div className="rounded-6 border border-gris200 bg-blanc p-5">
+        <div className="mb-3 flex items-center gap-2">
+          <Icon nom="building" taille={17} />
+          <h3 className="text-14 font-bold">Identification</h3>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-13 font-bold text-gris800">Agent initiateur</label>
+            <input
+              className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
+              value={agentInitiateur}
+              onChange={(e) => setAgentInitiateur(e.target.value)}
+              disabled={!!demande}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-13 font-bold text-gris800">Matricule / réf. agent initiateur</label>
+            <input
+              className="w-full rounded border border-gris300 px-3 py-2 text-13 font-mono disabled:opacity-60"
+              value={matriculeInitiateur}
+              onChange={(e) => setMatriculeInitiateur(e.target.value)}
+              placeholder="ex. M-2041"
+              disabled={!!demande}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-13 font-bold text-gris800">Agent de saisie</label>
+            <input
+              className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
+              value={agentSaisie}
+              onChange={(e) => setAgentSaisie(e.target.value)}
+              disabled={!!demande}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-13 font-bold text-gris800">Sous-flux</label>
+            <input
+              className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
+              value={sousFlux}
+              onChange={(e) => setSousFlux(e.target.value)}
+              disabled={!!demande}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-13 font-bold text-gris800">Motif</label>
+            <select
+              className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
+              value={motifId}
+              onChange={(e) => setMotifId(e.target.value)}
+              disabled={!!demande || !motifs}
+            >
+              <option value="">— Choisir —</option>
+              {motifs?.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.libelle}
+                </option>
+              ))}
+            </select>
+            {/* R13 — pièces obligatoires du motif, affichées avant l'échec de
+                soumission plutôt que découvertes au 422 (donnée déjà
+                disponible via MotifVue.piecesAfferentes, Phase A). */}
+            {motifSelectionne && motifSelectionne.piecesAfferentes.some((p) => p.obligatoire) && (
+              <p className="mt-1 text-12 text-gris600">
+                Pièces obligatoires :{" "}
+                {motifSelectionne.piecesAfferentes
+                  .filter((p) => p.obligatoire)
+                  .map((p) => p.libelle)
+                  .join(", ")}
+              </p>
+            )}
+          </div>
+          <div>
+            <label className="mb-1 block text-13 font-bold text-gris800">Libellé</label>
+            <input
+              className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
+              value={libelle}
+              onChange={(e) => setLibelle(e.target.value)}
+              disabled={!!demande}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-13 font-bold text-gris800">Univers FMI</label>
+            <select
+              className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
+              value={universFmiCode}
+              onChange={(e) => setUniversFmiCode(e.target.value)}
+              disabled={!!demande || !univers}
+            >
+              <option value="">— Choisir —</option>
+              {univers?.map((u) => (
+                <option key={u.code} value={u.code}>
+                  {u.libelle}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-13 font-bold text-gris800">Facteur de dégrèvement</label>
+            <select
+              className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
+              value={facteurCode}
+              onChange={(e) => setFacteurCode(e.target.value)}
+              disabled={!!demande || !facteurs}
+            >
+              <option value="">— Choisir —</option>
+              {facteurs?.map((f) => (
+                <option key={f.code} value={f.code}>
+                  {f.libelle}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
       </div>
 
       <RechercheNd

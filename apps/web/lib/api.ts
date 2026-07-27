@@ -8,6 +8,8 @@ import {
   delegationVueSchema,
   demandeDetailSchema,
   demandesListeReponseSchema,
+  directionResponsabiliteVueSchema,
+  facteurDegrevementVueSchema,
   journalSecuriteVueSchema,
   erreurSchema,
   etapeDossierSchema,
@@ -18,6 +20,7 @@ import {
   moduleVueSchema,
   modifierParametreCalculReponseSchema,
   motifVueSchema,
+  universFmiVueSchema,
   notificationSchema,
   paliersListeReponseSchema,
   palierVueSchema,
@@ -46,7 +49,9 @@ import {
   type DelegationVue,
   type Demande,
   type DemandeDetail,
+  type DirectionResponsabiliteVue,
   type EtapeDossier,
+  type FacteurDegrevementVue,
   type ListerDemandesQuery,
   type ListerNotificationsQuery,
   type FormulesDeLigne,
@@ -81,7 +86,8 @@ import {
   type SoumettreControleRequete,
   type SoumissionReponse,
   type TacheVue,
-  type TachesListeReponse
+  type TachesListeReponse,
+  type UniversFmiVue
 } from "@pgd/contracts";
 
 // Session par cookie httpOnly (SessionService, apps/api) : `credentials:
@@ -209,6 +215,27 @@ export function creerDemande(donnees: CreerDemandeRequete): Promise<DemandeDetai
     headers: JSON_HEADERS,
     body: JSON.stringify(donnees)
   });
+}
+
+// --- Référentiels de saisie (Phase 10.6, décomposition NouvelleDemandeScreen)
+// GET /api/referentiels/* — ouvert à tout authentifié, distinct de
+// listerMotifs() ci-dessous (GET /api/admin/motifs, ADMIN_PGD-only, tout
+// statut) : celui-ci ne renvoie que les motifs actifs, filtrés serveur.
+export function listerMotifsActifs(circuit?: string): Promise<MotifVue[]> {
+  const query = circuit ? `?circuit=${circuit}` : "";
+  return requete(`/api/referentiels/motifs${query}`, z.array(motifVueSchema));
+}
+
+export function listerUniversFmi(): Promise<UniversFmiVue[]> {
+  return requete("/api/referentiels/univers-fmi", z.array(universFmiVueSchema));
+}
+
+export function listerFacteursReferentiel(): Promise<FacteurDegrevementVue[]> {
+  return requete("/api/referentiels/facteurs", z.array(facteurDegrevementVueSchema));
+}
+
+export function listerDirectionsReferentiel(): Promise<DirectionResponsabiliteVue[]> {
+  return requete("/api/referentiels/directions", z.array(directionResponsabiliteVueSchema));
 }
 
 // GET /api/lignes?nd= — data: null si ND inconnu (jamais 404, SF-PGD-310).
