@@ -381,7 +381,36 @@ Inventaire vérifié contre le contenu réel de `docs/design/` (noms de composan
 
 **Questions métier non tranchées** (inchangées, cf. « Questions ouvertes » plus bas) : seuils/rôles de subdélégation DOBB/DXC, N1/N2 jamais câblés dans aucun palier, destinataires des notifications ESCALADE/ERREUR_SI, rôle habilité au rejeu SI manuel et à l'export d'audit, rattachement agent→direction/service pour le scoping KPI, escalade SLA sans effet de déblocage réel.
 
-**Essai de bout en bout unique, exécuté en clôture** : connexion → création de demande DF → ajout de lignes → aperçu de routage → soumission → claim et approbation (quatre étapes bloquantes, quatre identités distinctes — cf. section R3/SoD dédiée ci-dessus) → contrôle a posteriori FRA → consultation dans Mes demandes → vérification dans le journal de sécurité, sur un dossier fraîchement créé (`DF-2026-AF5715`), sans aucune intervention hors application au-delà du bootstrap des identités de test. Trouvaille non anticipée au passage : R3 (SoD) s'applique aussi au contrôle a posteriori, cf. section dédiée. Identités de test et groupes LDAP éphémères retirés de l'annuaire dev après vérification.
+**Essai de bout en bout unique, exécuté en clôture** : connexion → création de demande DF → ajout de lignes → aperçu de routage → soumission → claim et approbation (quatre étapes bloquantes, quatre identités distinctes — cf. section R3/SoD dédiée ci-dessus) → contrôle a posteriori FRA → consultation dans Mes demandes → vérification dans le journal de sécurité, sur un dossier fraîchement créé (`DF-2026-AF5715`), sans aucune intervention hors application au-delà du bootstrap des identités de test. Trouvaille non anticipée au passage : R3 (SoD) s'applique aussi au contrôle a posteriori, cf. section dédiée. Identités de test et groupes LDAP éphémères retirés de l'annuaire dev après vérification — **mais côté LDAP seulement, cf. section dédiée ci-dessous : le nettoyage Postgres, lui, n'avait pas eu lieu.**
+
+---
+
+## Identités de test persistantes (dev)
+
+Outil de travail, pas une question ouverte — **ne pas nettoyer automatiquement en fin de session**, contrairement aux identités jetables des vérifications e2e ponctuelles (cf. essai de bout en bout de clôture de Phase 9 ci-dessus, ou la convention `mint-session-tmp.e2e-spec.ts` utilisée pendant l'audit visuel de Phase 9.3). Six identités, dev uniquement (`docker/openldap/`, jamais l'AD Orange CI réel), même mot de passe LDAP pour toutes : `MotDePasseTest123!`.
+
+| Identifiant | Rôle(s) | MFA |
+|---|---|---|
+| `jean.kouassi@orange.ci` | `INITIATEUR_DOBB`, `ADMIN_PGD` | TOTP (secret régénéré) |
+| `responsable.df@orange.ci` | `RESPONSABLE_DF` | Aucun — `requiertMfa=false` |
+| `manager.df@orange.ci` | `MANAGER_DF` | Aucun — `requiertMfa=false` |
+| `senior.df@orange.ci` | `MANAGER_SENIOR_DF` | Aucun — `requiertMfa=false` |
+| `validateur.df@orange.ci` | `DF` | TOTP (secret neuf) |
+| `fra.controleur@orange.ci` | `FRA` | TOTP (secret neuf, écrase l'ancien) |
+
+Couvre exactement la chaîne DF vérifiée en direct à la clôture de Phase 9 (`RESPONSABLE_DF → MANAGER_DF → MANAGER_SENIOR_DF → DF → FRA`), plus `jean.kouassi` élargi à `ADMIN_PGD` pour AdminScreen/AuditSecuriteScreen sans perdre `INITIATEUR_DOBB` (NouvelleDemandeScreen/MesDemandesScreen). LDAP : `docker/openldap/seed.ldif` (5 utilisateurs + 6 groupes `GG-DGR-*` ajoutés, même mécanique que `jean.kouassi`/`GG-DGR-INITIATEUR-DOBB` déjà documentée dans `docker/openldap/README.md`) — reproductible sur un conteneur LDAP reconstruit, pas seulement écrit à la main dans le conteneur courant.
+
+**Seuls 3 des 6 comptes ont un second facteur** : `RESPONSABLE_DF`/`MANAGER_DF`/`MANAGER_SENIOR_DF` ont `requiertMfa=false` en base (vérifié, pas supposé — `SELECT requiert_mfa FROM role`) — leur connexion ne déclenche jamais de défi MFA, un secret TOTP pour ces trois-là n'aurait jamais servi. Seuls `DF`/`FRA`/`ADMIN_PGD` l'exigent.
+
+**Secrets TOTP régénérés avec le même mécanisme que l'enrôlement réel de l'app** (`authenticator.generateSecret()`/`authenticator.keyuri()` d'otplib, QR généré avec `qrcode`, secret chiffré avec `chiffrerSecretTotp` avant écriture en base) — jamais un raccourci de test. Script jetable (`apps/api/scripts/bootstrap-totp-tmp.ts`), supprimé après usage, même convention que `mint-session-tmp.e2e-spec.ts`.
+
+**`jean.kouassi` — secret régénéré, l'ancien est désormais invalide.** S'il avait déjà été scanné dans une application d'authentification lors d'une session précédente, ce QR-là ne fonctionne plus : seul le secret le plus récemment communiqué est valable. À rappeler à chaque régénération future, pas seulement celle-ci — un secret TOTP écrasé en base invalide silencieusement toute app d'authentification qui portait l'ancien, sans message d'erreur avant la prochaine tentative de connexion.
+
+**Réactivation de lignes `Utilisateur` existantes, pas création propre — trouvé en vérifiant, pas supposé.** Quatre des cinq identités neuves réutilisent un nom déjà employé pendant l'essai de bout en bout de clôture de Phase 9 (`responsable.df`/`manager.df`/`senior.df`/`fra.controleur`) : le nettoyage de l'époque avait bien vidé **LDAP** (confirmé : aucune des cinq entrées n'existait avant ce chantier), mais **jamais la ligne `Utilisateur` correspondante en base** — `RbacResolutionService.resoudre()` fait un `upsert` par `identifiantAd`, donc une connexion sur un nom déjà connu réactive la ligne existante plutôt que d'en créer une neuve (confirmé par `journal_securite.horodatage` : les quatre premières traces datent du 2026-07-25, jour de clôture de Phase 9, pas d'aujourd'hui). Seul `validateur.df` — nom choisi pour ce chantier, jamais utilisé avant — est une ligne authentiquement neuve.
+
+- `responsable.df`/`manager.df`/`senior.df` : réactivation sans conséquence, aucune donnée métier (`Controle`/`Demande`/`Delegation`) n'y était rattachée ; rôle resynchronisé à l'unique rôle attendu dès la première connexion de ce chantier.
+- `fra.controleur` : la ligne réactivée porte un **vrai** enregistrement `Controle` (le contrôle FRA réel du dossier `DF-2026-AF5715`, 2026-07-25 16:25) — **et ce n'est pas un oubli de nettoyage isolé, c'est structurel** : `controle.controleur_id` porte `ON DELETE RESTRICT` (pas `CASCADE`), donc supprimer cette ligne `Utilisateur` aurait échoué tant que ce `Controle` existe. Une suppression complète de cette identité n'a jamais été possible sans supprimer d'abord une trace d'audit réelle — chose que ce projet ne fait jamais (cf. immuabilité de `JOURNAL_AUDIT`, même principe appliqué ici à `Controle`). Secret TOTP et rôle sont désormais corrects (écrasés par des valeurs neuves), mais la ligne elle-même — et son historique du 25/07 — reste la même qu'en Phase 9.
+- Aucune des trois n'a de conséquence pratique sur l'usage de ce socle aujourd'hui — signalé pour qu'une future tentative de « nettoyage complet » ne soit pas surprise par une violation de contrainte de clé étrangère sur `fra.controleur`, ou par une hypothèse silencieuse de fraîcheur sur les quatre autres.
 
 ---
 

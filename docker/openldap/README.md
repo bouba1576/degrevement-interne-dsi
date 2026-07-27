@@ -30,3 +30,21 @@ exists`) — sans conséquence, à ignorer sur les runs suivants.
 - `jean.kouassi@orange.ci` / `MotDePasseTest123!`
 - Membre du groupe `GG-DGR-INITIATEUR-DOBB` (correspond à `Role.groupeAd` du
   rôle `INITIATEUR_DOBB` seedé par `packages/database/prisma/seed`)
+
+## Socle d'identités de test persistantes
+
+Cf. CLAUDE.md, section « Identités de test persistantes (dev) » pour le
+détail complet (rôles, MFA, réactivation de lignes Postgres existantes).
+Même mot de passe dev que `jean.kouassi` : `MotDePasseTest123!`.
+
+- `jean.kouassi@orange.ci` — élargi à `GG-DGR-ADMIN-PGD` en plus de
+  `GG-DGR-INITIATEUR-DOBB`.
+- `responsable.df@orange.ci` — `GG-DGR-RESPONSABLE-DF`
+- `manager.df@orange.ci` — `GG-DGR-MANAGER-DF`
+- `senior.df@orange.ci` — `GG-DGR-MANAGER_SENIOR-DF`
+- `validateur.df@orange.ci` — `GG-DGR-DF`
+- `fra.controleur@orange.ci` — `GG-DGR-FRA`
+
+**NE PAS nettoyer ces entrées en fin de session** — contrairement aux
+identités jetables des vérifications e2e ponctuelles, ce socle est
+volontairement permanent.
