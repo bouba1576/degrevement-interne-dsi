@@ -2,6 +2,31 @@
 
 Écarts entre `docs/design/` et `docs/01_PRD_Consolide.md`/`docs/04_MCD_MLD_PGD_PROD.md`, trouvés en Phase 9.0. Chaque écart tranché en faveur du PRD, sauf mention contraire explicite. La maquette ne fait jamais foi pour les règles métier, les autorisations ou les calculs — seulement pour la mise en page, la charte, les états de composants.
 
+## Synthèse — audit de fidélité visuelle systématique (Phase 9.3)
+
+Dix écrans/onglets audités par comparaison de captures d'écran réelles (maquette vs `apps/web`, pas seulement `getComputedStyle` — cf. CLAUDE.md, méthode posée en clôture de Phase 9), chacun son propre commit. Défauts réels trouvés et corrigés, du premier au dernier :
+
+| # | Écran / onglet | Défauts réels trouvés et corrigés | Commit |
+|---|---|---|---|
+| 1 | LoginScreen | Illustration du panneau sombre absente, liste de fonctionnalités absente, icône avant le titre absente, couleur du bouton principal (noir au lieu d'orange) | `84d3d00` |
+| 2 | NouvelleDemandeScreen | Mise en page 2 colonnes absente, badge segment par circuit absent, icônes d'en-tête de carte absentes | `f1ac755` |
+| 3 | DossierDetailScreen | Bouton « ← Retour » absent, icône cloche sur « Action requise » absente, icône cadenas sur « Récupérer » absente, sous-titre sans libellé de demande | `4c1ab83` |
+| 4 | CorbeillesScreen | Dépassement SLA non signalé (bordure/badge), icônes absentes sur les boutons d'action | `995a98d` |
+| 5 | AdminScreen — Processus (1/7) | **Reconstruction complète** : liste plate remplacée par rail de circuits + timeline verticale + simulateur de montant (écart invisible à `getComputedStyle`, aucun bloc à comparer) | `3a83af9` |
+| 6 | AdminScreen — Rôles (2/7) | Liste plate → tableau avec badges de type réel (`METIER`/`PIVOT`/`SYSTEME`) et statut dans/hors matrice, jamais affichés auparavant | `b38417a` |
+| 7 | AdminScreen — Motifs (3/7) | Regroupement par circuit (grille) absent, icône de motif absente | `92a9d60` |
+| 8 | AdminScreen — Circuits (4/7) | Aucun équivalent maquette — documentation seule, aucun correctif de code | `0d9493c` |
+| 9 | AdminScreen — Paramètres de calcul (5/7) | Icône d'en-tête absente, bascules de style absentes, aperçu de calcul absent — **bug de calcul ×100 trouvé et corrigé avant commit** (confusion fraction brute / pourcentage) | `0d9493c` |
+| 10 | AdminScreen — Calendrier SLA (6/7) | En-tête de carte absent, règle visuelle de plage horaire absente, sous-libellés « Ouvré »/« Fermé » absents (simulateur d'échéance délibérément exclu, R9) | `5a608c3` |
+| 11 | AdminScreen — Paramètres système (7/7) | Aucun équivalent maquette — icônes ajoutées par cohérence interne seulement | `343ade0` |
+| 12 | HomeScreen | Tuile « Mes demandes » et tuile « Contrôle a posteriori » absentes — prémisse périmée dans le code (trou backend déjà comblé en 9.2, jamais répercuté à l'écran) | `2cef5ca` |
+| 13 | MesDemandesScreen | Icône de recherche absente dans le champ Identifiant/ND | `8afebac` |
+| 14 | ControleScreen | Carte KPI « À contrôler » absente, icône bouclier absente sur le bouton « Contrôler » | `926fb3c` |
+| 15 | AuditSecuriteScreen | État vide : texte gris nu au lieu du composant `Empty` (icône + titre + sous-texte) | `51e4eb4` |
+| 16 | Coquille (Sidebar/Topbar) | **Trois capacités déjà câblées côté composant, jamais alimentées côté appelant** : libellé de rôle jamais passé, badge « Corbeilles » jamais calculé, cloche de notifications jamais construite malgré `GET`/`PATCH /api/notifications` prêts depuis 9.2 — même défaut que celui remonté en clôture de Phase 9 (fonctionnalité backend livrée, invisible côté écran), passé inaperçu de l'inventaire de clôture | `ff32942` |
+
+**Deux trouvailles à retenir** : la reconstruction complète de Processus (aucun bloc n'existait pour qu'une vérification par propriété CSS la détecte) et la cloche de notifications de la coquille (fonctionnalité backend fermée en 9.2, jamais câblée côté écran, échappée à l'inventaire de clôture de Phase 9). Les deux confirment qu'une revue documentaire seule — ou une vérification `getComputedStyle` sur des éléments déjà supposés présents — ne peut pas trouver ce qu'un audit par capture d'écran réelle trouve.
+
 ## Corrections d'accessibilité (Phase 9, étape 3 — extraction des tokens)
 
 Trois contrastes de `docs/design/styles.css` ne passent pas WCAG AA (4.5:1 texte courant, 3:1 texte large/UI). Corrigés à l'extraction dans `packages/ui/tokens/`, jamais reproduits tels quels. Ratios mesurés par calcul de luminance relative (WCAG 2.x).
