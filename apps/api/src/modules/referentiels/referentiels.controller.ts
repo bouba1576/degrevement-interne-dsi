@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from "@nestjs/common";
+import { Controller, Get, Param, Query } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 import { z } from "zod";
 import {
@@ -6,10 +6,12 @@ import {
   facteurDegrevementVueSchema,
   listerMotifsQuerySchema,
   motifVueSchema,
+  parametresCalculPublicVueSchema,
   universFmiVueSchema,
   type DirectionResponsabiliteVue,
   type FacteurDegrevementVue,
   type MotifVue,
+  type ParametresCalculPublicVue,
   type UniversFmiVue
 } from "@pgd/contracts";
 import { ApiZodQuery, ApiZodResponse } from "../../common/swagger/zod-schema";
@@ -60,5 +62,16 @@ export class ReferentielsController {
   @ApiZodResponse(200, z.array(directionResponsabiliteVueSchema))
   async listerDirections(): Promise<DirectionResponsabiliteVue[]> {
     return this.referentiels.listerDirections();
+  }
+
+  // GET /api/referentiels/parametres-calcul/:circuit — projection à 4 champs
+  // (ParametresCalculPublicVue), jamais ParametreCalculVue au complet (6
+  // champs, dont `devise` qu'on ne veut pas exposer ici) : cf. commentaire de
+  // ReferentielsService.parametresCalcul().
+  @Authenticated()
+  @Get("parametres-calcul/:circuit")
+  @ApiZodResponse(200, parametresCalculPublicVueSchema)
+  async parametresCalcul(@Param("circuit") circuit: string): Promise<ParametresCalculPublicVue> {
+    return this.referentiels.parametresCalcul(circuit);
   }
 }

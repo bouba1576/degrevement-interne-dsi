@@ -1,6 +1,12 @@
 import { Injectable } from "@nestjs/common";
-import type { DirectionResponsabiliteVue, FacteurDegrevementVue, UniversFmiVue } from "@pgd/contracts";
+import type {
+  DirectionResponsabiliteVue,
+  FacteurDegrevementVue,
+  ParametresCalculPublicVue,
+  UniversFmiVue
+} from "@pgd/contracts";
 import { PrismaService } from "../../../infra/prisma/prisma.service";
+import { AdminParametresCalculService } from "../../admin/services/admin-parametres-calcul.service";
 
 // Lecture seule — aucun de ces trois référentiels n'a de contrôleur admin
 // aujourd'hui (vérifié par recherche, aucune occurrence), donc rien à
@@ -9,7 +15,10 @@ import { PrismaService } from "../../../infra/prisma/prisma.service";
 // via l'API.
 @Injectable()
 export class ReferentielsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly adminParametresCalcul: AdminParametresCalculService
+  ) {}
 
   async listerUniversFmi(): Promise<UniversFmiVue[]> {
     const rows = await this.prisma.universFmi.findMany({ orderBy: { libelle: "asc" } });
@@ -34,5 +43,20 @@ export class ReferentielsService {
       libelle: d.libelle,
       services: d.services.map((s) => ({ id: s.id, libelle: s.libelle }))
     }));
+  }
+
+  // Projection délibérément étroite (4 des 6 champs de ParametreCalculVue) —
+  // jamais un spread de la vue admin. `circuit` est redondant avec le
+  // paramètre d'URL, `devise` n'a aucun usage ici : les ajouter par
+  // "simplicité" exposerait par ricochet un champ jamais examiné pour cette
+  // route (cf. DIVERGENCES.md, Phase 10.6).
+  async parametresCalcul(circuit: string): Promise<ParametresCalculPublicVue> {
+    const p = await this.adminParametresCalcul.trouver(circuit);
+    return {
+      tauxTsc: p.tauxTsc,
+      tauxTva: p.tauxTva,
+      tscActiveDefaut: p.tscActiveDefaut,
+      tvaActiveDefaut: p.tvaActiveDefaut
+    };
   }
 }

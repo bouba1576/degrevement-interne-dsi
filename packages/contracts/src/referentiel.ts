@@ -39,3 +39,19 @@ export const listerMotifsQuerySchema = z.object({
   circuit: enumCircuit.optional()
 });
 export type ListerMotifsQuery = z.infer<typeof listerMotifsQuerySchema>;
+
+// GET /api/referentiels/parametres-calcul/:circuit (Phase 10.6, carte mémo
+// DF) — projection délibérément étroite de ParametreCalculVue (admin-
+// parametre-calcul.ts, 6 champs : circuit/tauxTsc/tauxTva/tscActiveDefaut/
+// tvaActiveDefaut/devise). Exactement les 4 champs affichables en lecture
+// seule : `circuit` est redondant avec le paramètre d'URL, `devise` n'a
+// aucun usage ici — ne jamais élargir vers le schéma admin complet, la
+// projection explicite (pas un spread) est ce qui empêche une exposition
+// par ricochet si ParametreCalculVue gagne un champ plus tard.
+export const parametresCalculPublicVueSchema = z.object({
+  tauxTsc: z.number(),
+  tauxTva: z.number(),
+  tscActiveDefaut: z.boolean(),
+  tvaActiveDefaut: z.boolean()
+});
+export type ParametresCalculPublicVue = z.infer<typeof parametresCalculPublicVueSchema>;

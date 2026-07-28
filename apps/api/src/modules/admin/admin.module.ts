@@ -49,6 +49,10 @@ import { TachesModule } from "../taches/taches.module";
   // (GET /api/referentiels/motifs, lecture ouverte à tout authentifié) —
   // seule la méthode de lecture filtrée est exposée hors de ce module, pas
   // le contrôleur admin/motifs (ADMIN_PGD, CRUD complet).
-  exports: [AdminMotifsService]
+  // AdminParametresCalculService.trouver() est repris de même (Phase 10.6,
+  // carte mémo DF) — ReferentielsService en projette explicitement 4 des 6
+  // champs (ParametresCalculPublicVue), jamais le contrôleur admin/parametres
+  // (ADMIN_PGD, expose aussi `devise` et l'écriture).
+  exports: [AdminMotifsService, AdminParametresCalculService]
 })
 export class AdminModule {}
