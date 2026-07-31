@@ -141,7 +141,14 @@ export default function Page() {
       compteMesDemandes={compteMesDemandes}
       compteCorbeilles={compteCorbeilles}
     >
-      {route === "home" && <HomeScreen utilisateur={utilisateur} onNaviguer={naviguer} />}
+      {route === "home" && (
+        <HomeScreen
+          utilisateur={utilisateur}
+          onNaviguer={naviguer}
+          compteMesDemandes={compteMesDemandes}
+          compteCorbeilles={compteCorbeilles}
+        />
+      )}
       {route === "nouvelle" && <NouvelleDemandeScreen utilisateur={utilisateur} />}
       {route === "mes" && <MesDemandesScreen onOuvrirDossier={ouvrirDossier} onNaviguer={naviguer} />}
       {route === "corbeilles" && <CorbeillesScreen utilisateur={utilisateur} onOuvrirDossier={ouvrirDossier} />}

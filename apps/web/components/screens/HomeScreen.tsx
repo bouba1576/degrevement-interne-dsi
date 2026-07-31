@@ -10,6 +10,34 @@ const ROLE_ADMIN = "ADMIN_PGD";
 export interface HomeScreenProps {
   utilisateur: SessionUtilisateur;
   onNaviguer: (route: string) => void;
+  // Déjà calculés par le parent (app/page.tsx) pour le badge Sidebar — aucun
+  // appel réseau dédié ici, cf. ongletParDefaut() ci-dessous.
+  compteMesDemandes?: number;
+  compteCorbeilles?: number;
+}
+
+type Onglet = "initiateur" | "valideur" | "pilotage";
+
+// Choix de l'onglet par défaut — PAS une déduction de rôle depuis la
+// taxonomie I/V/A/C de la maquette (déjà écartée, catégorie 3, cf.
+// DIVERGENCES.md) : une observation de ce que le compte a effectivement à
+// faire, avec les mêmes compteurs déjà chargés pour le badge Sidebar
+// (compteMesDemandes = dossiers initiés SOUMIS+EN_COURS, compteCorbeilles =
+// tâches EN_CORBEILLE, tous deux dans app/page.tsx). Pilotage reste
+// prioritaire pour ADMIN_PGD (seule distinction fiable, un vrai rôle) —
+// reprend l'ordre de priorité de la maquette sans deviner qui d'autre y a
+// droit. Sinon, l'onglet qui a effectivement du contenu ; si les deux ou
+// aucun n'en ont, repli assumé sur « Initiateur » — un choix documenté, pas
+// une supposition. Figé au premier rendu (lecture une seule fois, useState
+// paresseux) : si les compteurs arrivent après coup (premier chargement de
+// session, avant que leur propre fetch parent ne résolve), l'onglet ne
+// bascule pas sous l'utilisateur une fois affiché.
+function ongletParDefaut(estAdmin: boolean, compteMesDemandes?: number, compteCorbeilles?: number): Onglet {
+  if (estAdmin) return "pilotage";
+  const aDesDossiers = !!compteMesDemandes && compteMesDemandes > 0;
+  const aDesTaches = !!compteCorbeilles && compteCorbeilles > 0;
+  if (aDesTaches && !aDesDossiers) return "valideur";
+  return "initiateur";
 }
 
 // Port de docs/design/screens1.jsx (HomeScreen), réduit à ce qui a un
@@ -34,9 +62,27 @@ export interface HomeScreenProps {
 // Aucune tuile n'est masquée par rôle (ni ici, ni pour "Nouvelle demande"
 // déjà en place) : un confort d'affichage par rôle serait redondant avec
 // la garde serveur réelle, jamais l'inverse (règle non négociable 2).
-export function HomeScreen({ utilisateur, onNaviguer }: HomeScreenProps) {
+// Défaut caractérisé en Phase 10.6bis (inventaire des branches
+// conditionnelles) : les sections KPI étaient toujours empilées, jamais un
+// choix exclusif par vue comme dans la maquette — corrigé ici par un
+// sélecteur d'onglets, cf. ongletParDefaut() ci-dessus pour la règle de
+// défaut (observation des compteurs réels, pas une déduction de rôle).
+export function HomeScreen({ utilisateur, onNaviguer, compteMesDemandes, compteCorbeilles }: HomeScreenProps) {
   const prenom = utilisateur.nom.split(" ")[0];
   const estAdmin = utilisateur.roles.includes(ROLE_ADMIN);
+  const [onglet, setOnglet] = useState<Onglet>(() =>
+    ongletParDefaut(estAdmin, compteMesDemandes, compteCorbeilles)
+  );
+
+  // Initiateur/Valideur toujours proposés aux deux — le serveur scope déjà
+  // chaque appel (R2) : montrer un onglet qui reviendrait à 0 n'est pas une
+  // fuite. Pilotage seulement si ADMIN_PGD — seule distinction fiable, un
+  // vrai rôle, pas la taxonomie I/V/A/C déjà écartée.
+  const onglets: Array<{ k: Onglet; l: string }> = [
+    { k: "initiateur", l: "Initiateur" },
+    { k: "valideur", l: "Valideur" },
+    ...(estAdmin ? ([{ k: "pilotage", l: "Pilotage" }] as const) : [])
+  ];
 
   return (
     <div>
@@ -59,9 +105,25 @@ export function HomeScreen({ utilisateur, onNaviguer }: HomeScreenProps) {
         <TuileControle onClick={() => onNaviguer("controle")} />
       </div>
 
-      <SectionKpi titre="Mes dossiers initiés" profil="initiateur" />
-      <SectionKpi titre="Mes dossiers à traiter" profil="valideur" />
-      {estAdmin && <SectionKpi titre="Pilotage" profil="pilotage" />}
+      <div className="mb-4 flex gap-2">
+        {onglets.map((o) => (
+          <button
+            key={o.k}
+            type="button"
+            onClick={() => setOnglet(o.k)}
+            className={
+              "rounded px-3 py-1.5 text-13 font-bold " +
+              (onglet === o.k ? "bg-encre text-blanc" : "border border-gris200 text-gris700")
+            }
+          >
+            {o.l}
+          </button>
+        ))}
+      </div>
+
+      {onglet === "initiateur" && <SectionKpi titre="Mes dossiers initiés" profil="initiateur" />}
+      {onglet === "valideur" && <SectionKpi titre="Mes dossiers à traiter" profil="valideur" />}
+      {onglet === "pilotage" && estAdmin && <SectionKpi titre="Pilotage" profil="pilotage" />}
     </div>
   );
 }
