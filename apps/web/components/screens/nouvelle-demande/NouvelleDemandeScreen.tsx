@@ -10,6 +10,7 @@ import type {
   EnumLocalisation,
   FacteurDegrevementVue,
   MotifVue,
+  ParametresCalculPublicVue,
   SessionUtilisateur,
   SoumissionReponse,
   UniversFmiVue
@@ -23,6 +24,7 @@ import {
   listerFacteursReferentiel,
   listerMotifsActifs,
   listerUniversFmi,
+  obtenirParametresCalculReferentiel,
   soumettreDemande,
   type ErreurRegleMetier
 } from "@/lib/api";
@@ -49,6 +51,37 @@ function circuitParDefaut(roles: string[]): EnumCircuit {
   }
   return "DXC";
 }
+
+// Carte « Mémo Wholesale » (Phase 10.6, étape E, DF uniquement) — aucun de
+// ces champs n'a de colonne dédiée dans creerDemandeRequeteSchema (vérifié,
+// zéro occurrence de memoDe/memoA/memoObjectif/memoContexte/memoObservation
+// dans packages/contracts/src/demande.ts). Persistés via `champsCircuit`
+// (sac JSON, demande.service.ts:60/300/404 — prévu explicitement pour « les
+// champs_circuit non promus en colonnes »). Le stockage non typé côté
+// serveur n'est pas une raison de saisir sans garantie : ce schéma est la
+// SEULE validation de forme sur ces champs avant l'envoi.
+const champsCircuitDfSchema = z.object({
+  memoDe: z.string().trim().optional(),
+  memoA: z.string().trim().optional(),
+  memoObjectif: z.string().trim().optional(),
+  memoContexte: z.string().trim().min(1, "Contexte de la réclamation requis (mémo DF)."),
+  memoObservation: z.string().trim().optional(),
+  // Catégorie 4 (docs/design/DIVERGENCES.md) — la maquette (screens1.jsx:419)
+  // libelle ce champ "Montant en € (optionnel)" avec un suffixe "€" et un
+  // hint "Référence devise opérateur." Le système n'opère qu'en XOF
+  // (ParametreCalcul.devise, "XOF" par défaut, vérifié en base) : un texte
+  // "€" porté tel quel serait trompeur une fois réel, exactement comme le
+  // pied de page de LoginScreen affirmant une authentification simulée sur
+  // un système qui authentifie réellement. Renommé montantXof / « Montant
+  // en FCFA » — aucun autre champ de ce bloc ne référence l'euro (vérifié,
+  // grep dédié sur tout screens1.jsx : une seule occurrence, ce champ).
+  montantXof: z
+    .string()
+    .optional()
+    .transform((v) => (v?.trim() ? Number(v.trim()) : undefined))
+    .pipe(z.number().nonnegative("Montant invalide.").optional())
+});
+type ChampsCircuitDf = z.infer<typeof champsCircuitDfSchema>;
 
 export interface NouvelleDemandeScreenProps {
   utilisateur: SessionUtilisateur;
@@ -146,6 +179,28 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
 
   const directionSelectionnee = directions?.find((d) => d.id === directionRespId) ?? null;
 
+  // Carte « Mémo Wholesale » (Phase 10.6, étape E) — DF uniquement, cf.
+  // champsCircuitDfSchema ci-dessus pour la validation avant envoi.
+  const [memoDe, setMemoDe] = useState(utilisateur.nom);
+  const [memoA, setMemoA] = useState("Service Fraude & Revenue Assurance");
+  const [memoObjectif, setMemoObjectif] = useState("Soumettre l'ajustement au contrôle FRA");
+  const [memoContexte, setMemoContexte] = useState("");
+  const [memoObservation, setMemoObservation] = useState("");
+  const [montantXof, setMontantXof] = useState("");
+
+  // « Taxes appliquées » (panneau latéral) — lecture seule, jamais un
+  // override : point 2 de la décomposition, cf. commit dédié
+  // (GET /api/referentiels/parametres-calcul/:circuit, projection à 4
+  // champs). Rechargé à chaque changement de circuit, indépendant de
+  // `demande` (une donnée de circuit, pas de dossier).
+  const [parametresCalcul, setParametresCalcul] = useState<ParametresCalculPublicVue | null>(null);
+  useEffect(() => {
+    setParametresCalcul(null);
+    void obtenirParametresCalculReferentiel(circuit)
+      .then(setParametresCalcul)
+      .catch(() => setParametresCalcul(null));
+  }, [circuit]);
+
   function choisirDirection(id: string) {
     setDirectionRespId(id);
     // Un service choisi pour l'ancienne direction n'a aucune raison de rester
@@ -189,6 +244,30 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
       setErreurEnregistrement("Nom du client et commentaire requis avant d'enregistrer des lignes.");
       return;
     }
+
+    // Validation DF avant tout envoi — mirror des deux champs que la
+    // maquette elle-même traite comme requis (screens1.jsx:203-204,
+    // validate() : memoObjet et memoContexte). `libelle` reste .optional()
+    // côté serveur (aucune règle serveur nouvelle inventée ici) : ce n'est
+    // qu'un confort d'affichage avant de tenter la création, pas une
+    // garantie — la seule garantie réelle sur ce champ reste celle déjà en
+    // vigueur côté serveur (aucune, pour l'instant).
+    let champsCircuit: ChampsCircuitDf | undefined;
+    if (!demande && circuit === "DF") {
+      if (!libelle.trim()) {
+        setErreurEnregistrement("Objet requis (mémo DF).");
+        return;
+      }
+      const validation = champsCircuitDfSchema.safeParse({
+        memoDe, memoA, memoObjectif, memoContexte, memoObservation, montantXof
+      });
+      if (!validation.success) {
+        setErreurEnregistrement(validation.error.issues[0]?.message ?? "Champs du mémo invalides.");
+        return;
+      }
+      champsCircuit = validation.data;
+    }
+
     setEnregistrement(true);
     setErreurEnregistrement(null);
     try {
@@ -199,7 +278,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
           nomClient: nomClient.trim(),
           commentaire: commentaire.trim(),
           responsabiliteServiceAutre:
-            (circuit === "DOBB" || circuit === "DXC") && serviceAutreActif
+            (circuit === "DOBB" || circuit === "DXC" || circuit === "DF") && serviceAutreActif
               ? responsabiliteServiceAutre.trim()
               : undefined,
           agentInitiateur: agentInitiateur.trim() || undefined,
@@ -219,7 +298,8 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
           canalRemontee: circuit === "DOBB" ? canalRemontee.trim() || undefined : undefined,
           dateReceptionBo: circuit === "DOBB" ? dateReceptionBo || undefined : undefined,
           dateReceptionOci: circuit === "DOBB" ? dateReceptionOci || undefined : undefined,
-          numeroAppel: circuit === "DOBB" ? numeroAppel.trim() || undefined : undefined
+          numeroAppel: circuit === "DOBB" ? numeroAppel.trim() || undefined : undefined,
+          champsCircuit: circuit === "DF" ? champsCircuit : undefined
         });
       }
       const misAJour = await definirLignes(demandeActuelle.demande.id, {
@@ -315,7 +395,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
         </select>
 
         <label className="mb-1 block text-13 font-bold text-gris800">
-          Nom du client <span className="text-rouge">*</span>
+          {circuit === "DF" ? "Opérateur" : "Nom du client"} <span className="text-rouge">*</span>
         </label>
         <input
           className="mb-3 w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
@@ -412,7 +492,15 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
             )}
           </div>
           <div>
-            <label className="mb-1 block text-13 font-bold text-gris800">Libellé</label>
+            <label className="mb-1 block text-13 font-bold text-gris800">
+              {circuit === "DF" ? (
+                <>
+                  Objet <span className="text-rouge">*</span>
+                </>
+              ) : (
+                "Libellé"
+              )}
+            </label>
             <input
               className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
               value={libelle}
@@ -558,59 +646,123 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
             </div>
             <div />
 
+            <ResponsabiliteFields
+              directions={directions}
+              directionRespId={directionRespId}
+              choisirDirection={choisirDirection}
+              directionSelectionnee={directionSelectionnee}
+              serviceRespId={serviceRespId}
+              choisirServiceReel={choisirServiceReel}
+              serviceAutreActif={serviceAutreActif}
+              toggleServiceAutre={toggleServiceAutre}
+              responsabiliteServiceAutre={responsabiliteServiceAutre}
+              setResponsabiliteServiceAutre={setResponsabiliteServiceAutre}
+              disabled={!!demande}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Carte « Mémo Wholesale » (Phase 10.6, étape E) — DF uniquement.
+          Compte/référence et Responsabilité direction+service réutilisent
+          les mêmes champs/état que la carte DOBB/DXC ci-dessus (compteClient/
+          directionRespId/serviceRespId existent déjà, seule leur visibilité
+          était limitée à DOBB/DXC) ; le reste (De/À/Objectif/Contexte/
+          Observation/Montant) n'a pas de colonne dédiée et passe par
+          champsCircuit — cf. champsCircuitDfSchema plus haut. */}
+      {circuit === "DF" && (
+        <div className="rounded-6 border border-gris200 bg-blanc p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <Icon nom="doc" taille={17} />
+            <h3 className="text-14 font-bold">Mémo d'ajustement Wholesale</h3>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-13 font-bold text-gris800">Responsabilité — direction</label>
-              <select
+              <label className="mb-1 block text-13 font-bold text-gris800">De (émetteur)</label>
+              <input
                 className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-                value={directionRespId}
-                onChange={(e) => choisirDirection(e.target.value)}
-                disabled={!!demande || !directions || serviceAutreActif}
-              >
-                <option value="">— Choisir —</option>
-                {directions?.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.libelle}
-                  </option>
-                ))}
-              </select>
+                value={memoDe}
+                onChange={(e) => setMemoDe(e.target.value)}
+                disabled={!!demande}
+              />
             </div>
             <div>
-              <label className="mb-1 block text-13 font-bold text-gris800">Responsabilité — service</label>
-              <select
+              <label className="mb-1 block text-13 font-bold text-gris800">À (destinataire)</label>
+              <input
                 className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-                value={serviceRespId}
-                onChange={(e) => choisirServiceReel(e.target.value)}
-                disabled={!!demande || !directionSelectionnee || serviceAutreActif}
-              >
-                <option value="">— Choisir —</option>
-                {directionSelectionnee?.services.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.libelle}
-                  </option>
-                ))}
-              </select>
+                value={memoA}
+                onChange={(e) => setMemoA(e.target.value)}
+                disabled={!!demande}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-13 font-bold text-gris800">Compte / référence</label>
+              <input
+                className="w-full rounded border border-gris300 px-3 py-2 text-13 font-mono disabled:opacity-60"
+                value={compteClient}
+                onChange={(e) => setCompteClient(e.target.value)}
+                placeholder="ex. WS-1142"
+                disabled={!!demande}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-13 font-bold text-gris800">Montant en FCFA (optionnel)</label>
+              <input
+                className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
+                type="number"
+                min="0"
+                value={montantXof}
+                onChange={(e) => setMontantXof(e.target.value)}
+                disabled={!!demande}
+              />
+              <p className="mt-1 text-12 text-gris600">Référence, indicative — sans effet sur le montant TTC réel.</p>
             </div>
 
             <div style={{ gridColumn: "1 / -1" }}>
-              <label className="flex items-center gap-2 text-13">
-                <input
-                  type="checkbox"
-                  checked={serviceAutreActif}
-                  onChange={(e) => toggleServiceAutre(e.target.checked)}
-                  disabled={!!demande}
-                />
-                Responsabilité par service : « Autre » (non référencé)
-              </label>
-              {serviceAutreActif && (
-                <input
-                  className="mt-2 w-full rounded border border-gris300 px-3 py-2 text-13"
-                  value={responsabiliteServiceAutre}
-                  onChange={(e) => setResponsabiliteServiceAutre(e.target.value)}
-                  placeholder="Préciser le service"
-                  disabled={!!demande}
-                />
-              )}
+              <label className="mb-1 block text-13 font-bold text-gris800">Objectif</label>
+              <input
+                className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
+                value={memoObjectif}
+                onChange={(e) => setMemoObjectif(e.target.value)}
+                disabled={!!demande}
+              />
             </div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label className="mb-1 block text-13 font-bold text-gris800">
+                Contexte de la réclamation <span className="text-rouge">*</span>
+              </label>
+              <textarea
+                className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
+                style={{ minHeight: 56 }}
+                value={memoContexte}
+                onChange={(e) => setMemoContexte(e.target.value)}
+                disabled={!!demande}
+              />
+            </div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label className="mb-1 block text-13 font-bold text-gris800">Observation</label>
+              <textarea
+                className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
+                style={{ minHeight: 48 }}
+                value={memoObservation}
+                onChange={(e) => setMemoObservation(e.target.value)}
+                disabled={!!demande}
+              />
+            </div>
+
+            <ResponsabiliteFields
+              directions={directions}
+              directionRespId={directionRespId}
+              choisirDirection={choisirDirection}
+              directionSelectionnee={directionSelectionnee}
+              serviceRespId={serviceRespId}
+              choisirServiceReel={choisirServiceReel}
+              serviceAutreActif={serviceAutreActif}
+              toggleServiceAutre={toggleServiceAutre}
+              responsabiliteServiceAutre={responsabiliteServiceAutre}
+              setResponsabiliteServiceAutre={setResponsabiliteServiceAutre}
+              disabled={!!demande}
+            />
           </div>
         </div>
       )}
@@ -648,6 +800,33 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
           demande.demande.montantTtc), jamais une estimation calculée ici —
           même principe qu'ApercuRoutage. */}
       <div className="flex flex-col gap-4">
+        {/* « Taxes appliquées » — lecture seule, jamais un override (point 2
+            de la décomposition). tscActiveDefaut/tvaActiveDefaut/tauxTsc/
+            tauxTva sont réels (ParametreCalcul), mais aucune route ne permet
+            de les faire varier par dossier (DemandeService.creer lit
+            tauxDuCircuit(dto.circuit), jamais depuis le client) — des
+            switches cliquables mentiraient sur une capacité qui n'existe
+            pas. Indépendant de `demande` : une donnée de circuit, pas de
+            dossier, visible dès la sélection du circuit. */}
+        {parametresCalcul && (
+          <div className="rounded-6 border border-gris200 bg-blanc p-5">
+            <div className="mb-3 flex items-center gap-2">
+              <Icon nom="calc" taille={17} />
+              <h3 className="text-14 font-bold">Taxes appliquées</h3>
+            </div>
+            <div className="flex flex-col gap-1 text-13 text-gris700">
+              <span>
+                TSC {parametresCalcul.tscActiveDefaut ? "appliquée" : "non appliquée"} (
+                {(parametresCalcul.tauxTsc * 100).toFixed(2)} %)
+              </span>
+              <span>
+                TVA {parametresCalcul.tvaActiveDefaut ? "appliquée" : "non appliquée"} (
+                {(parametresCalcul.tauxTva * 100).toFixed(2)} %)
+              </span>
+            </div>
+          </div>
+        )}
+
         {demande && demande.lignes.length > 0 && (
           <div className="rounded-6 border border-gris200 bg-blanc p-5">
             <div className="mb-3 flex items-center gap-2">
@@ -693,5 +872,96 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
         )}
       </div>
     </div>
+  );
+}
+
+// Extrait de la carte DOBB/DXC (Phase 10.6, étape C/D) puis réutilisé tel
+// quel par la carte mémo DF (étape E) — même champs réels (directionRespId/
+// serviceRespId), même bascule "Autre" mutuellement exclusive. Un seul
+// endroit à faire évoluer si cette logique change, plutôt que deux copies
+// susceptibles de diverger silencieusement.
+interface ResponsabiliteFieldsProps {
+  directions: DirectionResponsabiliteVue[] | null;
+  directionRespId: string;
+  choisirDirection: (id: string) => void;
+  directionSelectionnee: DirectionResponsabiliteVue | null;
+  serviceRespId: string;
+  choisirServiceReel: (id: string) => void;
+  serviceAutreActif: boolean;
+  toggleServiceAutre: (actif: boolean) => void;
+  responsabiliteServiceAutre: string;
+  setResponsabiliteServiceAutre: (v: string) => void;
+  disabled: boolean;
+}
+
+function ResponsabiliteFields({
+  directions,
+  directionRespId,
+  choisirDirection,
+  directionSelectionnee,
+  serviceRespId,
+  choisirServiceReel,
+  serviceAutreActif,
+  toggleServiceAutre,
+  responsabiliteServiceAutre,
+  setResponsabiliteServiceAutre,
+  disabled
+}: ResponsabiliteFieldsProps) {
+  return (
+    <>
+      <div>
+        <label className="mb-1 block text-13 font-bold text-gris800">Responsabilité — direction</label>
+        <select
+          className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
+          value={directionRespId}
+          onChange={(e) => choisirDirection(e.target.value)}
+          disabled={disabled || !directions || serviceAutreActif}
+        >
+          <option value="">— Choisir —</option>
+          {directions?.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.libelle}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label className="mb-1 block text-13 font-bold text-gris800">Responsabilité — service</label>
+        <select
+          className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
+          value={serviceRespId}
+          onChange={(e) => choisirServiceReel(e.target.value)}
+          disabled={disabled || !directionSelectionnee || serviceAutreActif}
+        >
+          <option value="">— Choisir —</option>
+          {directionSelectionnee?.services.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.libelle}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div style={{ gridColumn: "1 / -1" }}>
+        <label className="flex items-center gap-2 text-13">
+          <input
+            type="checkbox"
+            checked={serviceAutreActif}
+            onChange={(e) => toggleServiceAutre(e.target.checked)}
+            disabled={disabled}
+          />
+          Responsabilité par service : « Autre » (non référencé)
+        </label>
+        {serviceAutreActif && (
+          <input
+            className="mt-2 w-full rounded border border-gris300 px-3 py-2 text-13"
+            value={responsabiliteServiceAutre}
+            onChange={(e) => setResponsabiliteServiceAutre(e.target.value)}
+            placeholder="Préciser le service"
+            disabled={disabled}
+          />
+        )}
+      </div>
+    </>
   );
 }

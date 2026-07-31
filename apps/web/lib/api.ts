@@ -25,6 +25,7 @@ import {
   paliersListeReponseSchema,
   palierVueSchema,
   parametreCalculVueSchema,
+  parametresCalculPublicVueSchema,
   parametreGlobalVueSchema,
   pieceJointeSchema,
   roleVueSchema,
@@ -77,6 +78,7 @@ import {
   type PaliersListeReponse,
   type PalierVue,
   type ParametreCalculVue,
+  type ParametresCalculPublicVue,
   type ParametreGlobalVue,
   type PieceJointeVue,
   type RejeterRequete,
@@ -236,6 +238,16 @@ export function listerFacteursReferentiel(): Promise<FacteurDegrevementVue[]> {
 
 export function listerDirectionsReferentiel(): Promise<DirectionResponsabiliteVue[]> {
   return requete("/api/referentiels/directions", z.array(directionResponsabiliteVueSchema));
+}
+
+// Projection à 4 champs (jamais ParametreCalculVue au complet, 6 champs
+// admin dont `devise`) — cf. ReferentielsService.parametresCalcul(),
+// packages/contracts/src/referentiel.ts. Nom distinct de
+// listerParametresCalcul() ci-dessous (GET /api/admin/parametres,
+// ADMIN_PGD-only, vue complète) : même collision évitée que
+// listerMotifsActifs() vs le CRUD admin des motifs.
+export function obtenirParametresCalculReferentiel(circuit: string): Promise<ParametresCalculPublicVue> {
+  return requete(`/api/referentiels/parametres-calcul/${circuit}`, parametresCalculPublicVueSchema);
 }
 
 // GET /api/lignes?nd= — data: null si ND inconnu (jamais 404, SF-PGD-310).
