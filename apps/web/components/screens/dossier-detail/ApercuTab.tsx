@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import { Money } from "@pgd/ui";
 import { StatutLigneBadge } from "@pgd/ui";
-import type { Demande, DemandeLigneVue } from "@pgd/contracts";
+import type { Demande, DemandeLigneVue, MotifVue } from "@pgd/contracts";
+import { listerMotifsActifs } from "@/lib/api";
 
 export interface ApercuTabProps {
   demande: Demande;
@@ -40,10 +42,26 @@ function formaterValeur(valeur: unknown): string | null {
   return String(valeur);
 }
 
+// docs/10 remarque FRA #24 — le détail d'un dossier n'affichait que
+// motifId (UUID brut, jamais rendu). MotifVue est déjà consommée par
+// NouvelleDemandeScreen (même route, GET /api/referentiels/motifs?circuit=)
+// — même mécanisme de résolution ici, pas une nouvelle route.
+function useMotifLibelle(circuit: Demande["circuit"], motifId: Demande["motifId"]): string | null {
+  const [motifs, setMotifs] = useState<MotifVue[] | null>(null);
+  useEffect(() => {
+    setMotifs(null);
+    void listerMotifsActifs(circuit).then(setMotifs);
+  }, [circuit]);
+  if (!motifId || !motifs) return null;
+  return motifs.find((m) => m.id === motifId)?.libelle ?? null;
+}
+
 export function ApercuTab({ demande, lignes }: ApercuTabProps) {
+  const motifLibelle = useMotifLibelle(demande.circuit, demande.motifId);
   const lignesCommunes = LIBELLES_COMMUNS.map(([champ, libelle]) => [libelle, formaterValeur(demande[champ])] as const).filter(
     ([, v]) => v !== null
   );
+  if (motifLibelle) lignesCommunes.splice(2, 0, ["Motif", motifLibelle]);
   const champsCircuit = Object.entries(demande.champsCircuit ?? {}).filter(([, v]) => v != null && v !== "");
 
   return (
