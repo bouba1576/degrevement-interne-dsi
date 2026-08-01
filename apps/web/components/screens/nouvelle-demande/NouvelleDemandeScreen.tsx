@@ -40,6 +40,15 @@ const CIRCUITS: EnumCircuit[] = ["DOBB", "DXC", "DF"];
 // (docs/design/screens1.jsx, badge "DOBB · B2B" etc.).
 const SEGMENT_PAR_CIRCUIT: Record<EnumCircuit, string> = { DOBB: "B2B", DXC: "B2C", DF: "Wholesale" };
 
+// LIBELLE dynamique (docs/10, remarques DOBB #3 et DXC #2, Phase 10.6ter) —
+// deux valeurs métier citées littéralement dans la remarque, pas un
+// référentiel administrable (aucune source ne demande de CRUD dessus,
+// contrairement à Motif) : même statut qu'EnumLocalisation ci-dessous,
+// une énumération fixe portée par le composant. DF non concerné (son champ
+// "Objet" du mémo Wholesale est un texte libre distinct, jamais visé par
+// la remarque).
+const LIBELLES_DOBB_DXC = ["Contestation facture", "Régularisation de compte"] as const;
+
 // Convention déjà établie pour Sidebar (packages/ui) : le code de rôle
 // `INITIATEUR_<CIRCUIT>` est le seul indice réel disponible côté client — pas
 // un champ serveur dédié. Simple valeur par défaut ÉDITABLE, jamais une
@@ -501,12 +510,28 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                 "Libellé"
               )}
             </label>
-            <input
-              className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-              value={libelle}
-              onChange={(e) => setLibelle(e.target.value)}
-              disabled={!!demande}
-            />
+            {circuit === "DF" ? (
+              <input
+                className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
+                value={libelle}
+                onChange={(e) => setLibelle(e.target.value)}
+                disabled={!!demande}
+              />
+            ) : (
+              <select
+                className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
+                value={libelle}
+                onChange={(e) => setLibelle(e.target.value)}
+                disabled={!!demande}
+              >
+                <option value="">— Choisir —</option>
+                {LIBELLES_DOBB_DXC.map((l) => (
+                  <option key={l} value={l}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
           <div>
             <label className="mb-1 block text-13 font-bold text-gris800">Univers FMI</label>
