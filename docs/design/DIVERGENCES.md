@@ -143,6 +143,11 @@ La maquette (`ui.jsx`, `Avatar`) lit `user.couleur` et `user.initiales` depuis s
 
 **Limite fonctionnelle connue, pas un bug** : le hachage n'est pas une garantie d'unicité — deux agents d'une même corbeille peuvent obtenir la même teinte, auquel cas l'avatar seul ne les distingue plus visuellement. Les initiales, elles, restent distinctes (sauf homonymie complète), donc l'identification reste possible. Ce n'est pas une régression à corriger : consigné ici pour qu'un signalement futur retrouve l'arbitrage plutôt que de découvrir un « bug » déjà connu.
 
+### Rattachement Direction → Service dans le seed responsabilités (docs/10, remarques DOBB #11/#12)
+Les 17 directions et 14 services de `responsabilites.seed.ts` sont des libellés métier réels (`docs/10_Remarques_Metier_Maquette_240626.txt`, 24/06/2026, appliqués au baseline `docs/09_Specifications_Fonctionnelles_PROD_v3.md` §8.1 — le résultat correspond exactement à `RESP_DIRECTION`/`RESP_SERVICE` de `docs/design/data.jsx:222-223`, confirmation croisée). Mais **le rattachement de chaque service à une direction précise n'a aucune source** : la maquette elle-même traite les deux listes comme deux sélecteurs indépendants (`screens1.jsx:348-349`, aucun filtrage croisé), et ni docs/09 ni docs/10 ne documente une cartographie direction→service.
+
+**Décision assumée** (`responsabilites.seed.ts`) : les 14 services sont dupliqués à l'identique sous chacune des 17 directions (238 lignes) — reproduit fidèlement l'UX plate de la maquette, sans inventer de répartition différenciée. À corriger si une vraie cartographie direction→service est fournie par le métier.
+
 ## Spécifié, absent de la maquette (comblé d'après les sources réelles)
 
 Catégorie distincte des « écarts tranchés » ci-dessous : ici la maquette ne contredit rien, elle est simplement **muette** sur une fonctionnalité que le PRD, le modèle de données, les contrats d'API ou les user stories exigent bel et bien. Le silence de la maquette n'a aucune autorité sur le périmètre — seulement sur la mise en page (règle posée en Phase 9.2, CLAUDE.md § Maquette de référence). Combler veut dire s'appuyer sur une source réelle identifiée, jamais décider librement : si aucune source ne répond non plus, l'entrée reste une question ouverte (CLAUDE.md), pas une invention consignée ici.
