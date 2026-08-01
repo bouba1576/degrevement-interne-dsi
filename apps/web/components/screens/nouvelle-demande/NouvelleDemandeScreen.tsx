@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { z } from "zod";
 import { Icon, Money } from "@pgd/ui";
 import type {
+  CompteClient,
   DemandeDetail,
   DirectionResponsabiliteVue,
   EnumCircuit,
@@ -28,6 +29,7 @@ import {
   soumettreDemande,
   type ErreurRegleMetier
 } from "@/lib/api";
+import { RechercheCompte } from "./RechercheCompte";
 import { RechercheNd } from "./RechercheNd";
 import { SelecteurLignes, montantLigneParDefaut, type LigneLocale } from "./SelecteurLignes";
 import { ApercuRoutage } from "./ApercuRoutage";
@@ -209,6 +211,15 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
       .then(setParametresCalcul)
       .catch(() => setParametresCalcul(null));
   }, [circuit]);
+
+  // docs/10 remarques DOBB #9 / DXC #18 — sélection d'un résultat de
+  // RechercheCompte renseigne compteClient ET nomClient d'un coup (« le nom
+  // remonte après la saisie du numéro »). Reste éditable manuellement
+  // ensuite : la recherche est un raccourci, pas un verrou.
+  function appliquerCompteTrouve(compte: CompteClient) {
+    setCompteClient(compte.numeroCompte);
+    setNomClient(compte.nomClient);
+  }
 
   function choisirDirection(id: string) {
     setDirectionRespId(id);
@@ -577,6 +588,25 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
             <Icon nom="flow" taille={17} />
             <h3 className="text-14 font-bold">{circuit === "DOBB" ? "Fiche d'ajustement B2B" : "Fiche d'ajustement B2C"}</h3>
           </div>
+
+          {!demande && (
+            <div className="mb-3">
+              <RechercheCompte onCompteTrouve={appliquerCompteTrouve} />
+              {/* DOBB (docs/10 #9) demande que la clé de recherche soit le N°
+                  de Case JADE plutôt que le N° de compte — deux clés
+                  différentes, même mécanisme. `numeroCase` n'existe nulle
+                  part dans le schéma (JadePort, en attente d'arbitrage) :
+                  recherche par N° de compte seulement pour l'instant, pas de
+                  recherche par case simulée. */}
+              {circuit === "DOBB" && (
+                <p className="mt-1 text-12 text-gris600">
+                  Recherche par N° de compte pour l'instant — la recherche par N° de Case JADE viendra s'ajouter une fois
+                  ce champ construit.
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-13 font-bold text-gris800">Compte client</label>

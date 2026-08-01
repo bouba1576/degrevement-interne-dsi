@@ -3,6 +3,7 @@ import {
   apercuRoutageReponseSchema,
   calendrierSlaVueSchema,
   circuitVueSchema,
+  comptesRechercheReponseSchema,
   connexionReponseSchema,
   controleVueSchema,
   delegationVueSchema,
@@ -38,6 +39,7 @@ import {
   type ApprouverRequete,
   type CalendrierSlaVue,
   type CircuitVue,
+  type CompteClient,
   type ConnexionReponse,
   type ConnexionRequete,
   type ControleVue,
@@ -259,6 +261,14 @@ export function rechercherNd(nd: string): Promise<LigneAvecContexte | null> {
 
 export function fetchFormulesDeLigne(ligneId: string): Promise<FormulesDeLigne> {
   return requete(`/api/lignes/${ligneId}/formules`, formulesDeLigneSchema);
+}
+
+// GET /api/comptes?q= — SF-PGD-052, insensible casse/espaces, indexé
+// trigramme (pg_trgm, cf. CLAUDE.md § Index de performance). Contrats déjà
+// présents dans packages/contracts (CompteService.rechercher, apps/api) :
+// jamais consommée par apps/web avant docs/10 (remarques DOBB #9, DXC #18).
+export function rechercherCompte(q: string): Promise<CompteClient[]> {
+  return requete(`/api/comptes?q=${encodeURIComponent(q)}`, comptesRechercheReponseSchema);
 }
 
 // R18 : le serveur réagrège TOUTES les lignes du dossier et renvoie les
