@@ -4,6 +4,7 @@ import { useState } from "react";
 import { PaliersAdminTab } from "./PaliersAdminTab";
 import { RolesAdminTab } from "./RolesAdminTab";
 import { MotifsAdminTab } from "./MotifsAdminTab";
+import { LibellesAjustementAdminTab } from "./LibellesAjustementAdminTab";
 import { CircuitsAdminTab } from "./CircuitsAdminTab";
 import { ParametresCalculAdminTab } from "./ParametresCalculAdminTab";
 import { CalendrierSlaAdminTab } from "./CalendrierSlaAdminTab";
@@ -14,7 +15,7 @@ type Onglet = "processus" | "roles" | "motifs" | "circuits" | "parametres-calcul
 const ONGLETS: Array<{ cle: Onglet; libelle: string }> = [
   { cle: "processus", libelle: "Processus" },
   { cle: "roles", libelle: "Rôles" },
-  { cle: "motifs", libelle: "Motifs" },
+  { cle: "motifs", libelle: "Motifs & libellés" },
   { cle: "circuits", libelle: "Circuits" },
   { cle: "parametres-calcul", libelle: "Paramètres de calcul" },
   { cle: "calendrier-sla", libelle: "Calendrier SLA" },
@@ -56,7 +57,12 @@ export function AdminScreen() {
 
       {onglet === "processus" && <PaliersAdminTab />}
       {onglet === "roles" && <RolesAdminTab />}
-      {onglet === "motifs" && <MotifsAdminTab />}
+      {onglet === "motifs" && (
+        <>
+          <MotifsAdminTab />
+          <LibellesAjustementAdminTab />
+        </>
+      )}
       {onglet === "circuits" && <CircuitsAdminTab />}
       {onglet === "parametres-calcul" && <ParametresCalculAdminTab />}
       {onglet === "calendrier-sla" && <CalendrierSlaAdminTab />}

@@ -10,6 +10,8 @@ import { AdminRolesController } from "./admin-roles.controller";
 import { AdminRolesService } from "./services/admin-roles.service";
 import { AdminMotifsController } from "./admin-motifs.controller";
 import { AdminMotifsService } from "./services/admin-motifs.service";
+import { AdminLibellesAjustementController } from "./admin-libelles-ajustement.controller";
+import { AdminLibellesAjustementService } from "./services/admin-libelles-ajustement.service";
 import { AdminParametresGlobauxController } from "./admin-parametres-globaux.controller";
 import { AdminParametresGlobauxService } from "./services/admin-parametres-globaux.service";
 import { AdminCalendrierSlaController } from "./admin-calendrier-sla.controller";
@@ -30,6 +32,7 @@ import { TachesModule } from "../taches/taches.module";
     AdminCircuitsController,
     AdminRolesController,
     AdminMotifsController,
+    AdminLibellesAjustementController,
     AdminParametresGlobauxController,
     AdminCalendrierSlaController,
     AdminModulesController
@@ -40,6 +43,7 @@ import { TachesModule } from "../taches/taches.module";
     AdminCircuitsService,
     AdminRolesService,
     AdminMotifsService,
+    AdminLibellesAjustementService,
     AdminParametresGlobauxService,
     AdminCalendrierSlaService,
     AdminModulesService,
@@ -48,11 +52,13 @@ import { TachesModule } from "../taches/taches.module";
   // AdminMotifsService.listerActifs() est réutilisé par ReferentielsModule
   // (GET /api/referentiels/motifs, lecture ouverte à tout authentifié) —
   // seule la méthode de lecture filtrée est exposée hors de ce module, pas
-  // le contrôleur admin/motifs (ADMIN_PGD, CRUD complet).
+  // le contrôleur admin/motifs (ADMIN_PGD, CRUD complet). Même principe pour
+  // AdminLibellesAjustementService.listerActifs() (GET /api/referentiels/
+  // libelles-ajustement, Phase 10.6ter).
   // AdminParametresCalculService.trouver() est repris de même (Phase 10.6,
   // carte mémo DF) — ReferentielsService en projette explicitement 4 des 6
   // champs (ParametresCalculPublicVue), jamais le contrôleur admin/parametres
   // (ADMIN_PGD, expose aussi `devise` et l'écriture).
-  exports: [AdminMotifsService, AdminParametresCalculService]
+  exports: [AdminMotifsService, AdminLibellesAjustementService, AdminParametresCalculService]
 })
 export class AdminModule {}

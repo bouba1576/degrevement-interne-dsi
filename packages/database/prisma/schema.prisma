@@ -287,6 +287,7 @@ model Circuit {
   configurationsCircuit ConfigurationCircuit[]
   sousFlux              SousFlux[]
   motifs                Motif[]
+  libellesAjustement    LibelleAjustement[]
   parametresCalcul      ParametreCalcul[]
   demandes              Demande[]
 
@@ -369,6 +370,24 @@ model PieceAfferente {
   piecesJointes PieceJointe[]
 
   @@map("piece_afferente")
+}
+
+// LIBELLE dynamique (docs/10 remarques DOBB #3 / DXC #16, Phase 10.6ter) —
+// même forme que Motif (id/circuit/libelle/actif, unique [circuit, libelle])
+// puisque même mécanique CRUD demandée explicitement. Pas de FK depuis
+// Demande : Demande.libelle reste un champ texte libre (comme avant), ce
+// référentiel n'alimente que les OPTIONS du select — élargir en FK serait un
+// changement de portée plus large que « sortir la liste du code en dur ».
+model LibelleAjustement {
+  id      String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  circuit EnumCircuit
+  libelle String
+  actif   Boolean     @default(true)
+
+  circuitRef Circuit @relation(fields: [circuit], references: [code])
+
+  @@unique([circuit, libelle])
+  @@map("libelle_ajustement")
 }
 
 model ParametreCalcul {

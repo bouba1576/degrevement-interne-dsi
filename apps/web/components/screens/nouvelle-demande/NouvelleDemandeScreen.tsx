@@ -10,6 +10,7 @@ import type {
   EnumCircuit,
   EnumLocalisation,
   FacteurDegrevementVue,
+  LibelleAjustementVue,
   MotifVue,
   ParametresCalculPublicVue,
   SessionUtilisateur,
@@ -23,6 +24,7 @@ import {
   erreurRegleMetierSchema,
   listerDirectionsReferentiel,
   listerFacteursReferentiel,
+  listerLibellesAjustementActifs,
   listerMotifsActifs,
   listerUniversFmi,
   obtenirParametresCalculReferentiel,
@@ -41,15 +43,6 @@ const CIRCUITS: EnumCircuit[] = ["DOBB", "DXC", "DF"];
 // le calcul, sert uniquement le badge visuel déjà présent dans la maquette
 // (docs/design/screens1.jsx, badge "DOBB · B2B" etc.).
 const SEGMENT_PAR_CIRCUIT: Record<EnumCircuit, string> = { DOBB: "B2B", DXC: "B2C", DF: "Wholesale" };
-
-// LIBELLE dynamique (docs/10, remarques DOBB #3 et DXC #2, Phase 10.6ter) —
-// deux valeurs métier citées littéralement dans la remarque, pas un
-// référentiel administrable (aucune source ne demande de CRUD dessus,
-// contrairement à Motif) : même statut qu'EnumLocalisation ci-dessous,
-// une énumération fixe portée par le composant. DF non concerné (son champ
-// "Objet" du mémo Wholesale est un texte libre distinct, jamais visé par
-// la remarque).
-const LIBELLES_DOBB_DXC = ["Contestation facture", "Régularisation de compte"] as const;
 
 // Convention déjà établie pour Sidebar (packages/ui) : le code de rôle
 // `INITIATEUR_<CIRCUIT>` est le seul indice réel disponible côté client — pas
@@ -145,6 +138,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
   const [motifs, setMotifs] = useState<MotifVue[] | null>(null);
   const [univers, setUnivers] = useState<UniversFmiVue[] | null>(null);
   const [facteurs, setFacteurs] = useState<FacteurDegrevementVue[] | null>(null);
+  const [libellesAjustement, setLibellesAjustement] = useState<LibelleAjustementVue[] | null>(null);
 
   // Univers/facteurs sont indépendants du circuit (Phase A) — un seul appel.
   useEffect(() => {
@@ -159,6 +153,17 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
     setMotifId("");
     setMotifs(null);
     void listerMotifsActifs(circuit).then(setMotifs);
+  }, [circuit]);
+
+  // LIBELLE (docs/10 remarques DOBB #3 / DXC #16, Phase 10.6ter) — même
+  // mécanique que Motif : référentiel réel scopé au circuit, jamais un
+  // tableau codé en dur (règle non négociable 1 / R11, cf. CLAUDE.md
+  // « Configurabilité complète »). DF exclu côté API (aucun libellé seedé
+  // pour ce circuit — son formulaire utilise « Objet », un texte libre).
+  useEffect(() => {
+    setLibelle("");
+    setLibellesAjustement(null);
+    void listerLibellesAjustementActifs(circuit).then(setLibellesAjustement);
   }, [circuit]);
 
   const motifSelectionne = motifs?.find((m) => m.id === motifId) ?? null;
@@ -533,12 +538,12 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                 className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
                 value={libelle}
                 onChange={(e) => setLibelle(e.target.value)}
-                disabled={!!demande}
+                disabled={!!demande || !libellesAjustement}
               >
                 <option value="">— Choisir —</option>
-                {LIBELLES_DOBB_DXC.map((l) => (
-                  <option key={l} value={l}>
-                    {l}
+                {libellesAjustement?.map((l) => (
+                  <option key={l.id} value={l.libelle}>
+                    {l.libelle}
                   </option>
                 ))}
               </select>

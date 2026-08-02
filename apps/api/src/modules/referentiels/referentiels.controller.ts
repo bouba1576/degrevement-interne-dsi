@@ -4,12 +4,14 @@ import { z } from "zod";
 import {
   directionResponsabiliteVueSchema,
   facteurDegrevementVueSchema,
+  libelleAjustementVueSchema,
   listerMotifsQuerySchema,
   motifVueSchema,
   parametresCalculPublicVueSchema,
   universFmiVueSchema,
   type DirectionResponsabiliteVue,
   type FacteurDegrevementVue,
+  type LibelleAjustementVue,
   type MotifVue,
   type ParametresCalculPublicVue,
   type UniversFmiVue
@@ -17,6 +19,7 @@ import {
 import { ApiZodQuery, ApiZodResponse } from "../../common/swagger/zod-schema";
 import { Authenticated } from "../../common/decorators/authenticated.decorator";
 import { AdminMotifsService } from "../admin/services/admin-motifs.service";
+import { AdminLibellesAjustementService } from "../admin/services/admin-libelles-ajustement.service";
 import { ReferentielsService } from "./services/referentiels.service";
 
 // Phase 10.6 (décomposition NouvelleDemandeScreen) — lectures ouvertes à tout
@@ -30,7 +33,8 @@ import { ReferentielsService } from "./services/referentiels.service";
 export class ReferentielsController {
   constructor(
     private readonly referentiels: ReferentielsService,
-    private readonly motifs: AdminMotifsService
+    private readonly motifs: AdminMotifsService,
+    private readonly libellesAjustement: AdminLibellesAjustementService
   ) {}
 
   // GET /api/referentiels/motifs?circuit= (circuit optionnel)
@@ -41,6 +45,18 @@ export class ReferentielsController {
   async listerMotifs(@Query() query: unknown): Promise<MotifVue[]> {
     const { circuit } = listerMotifsQuerySchema.parse(query);
     return this.motifs.listerActifs(circuit);
+  }
+
+  // GET /api/referentiels/libelles-ajustement?circuit= (docs/10 remarques
+  // DOBB #3 / DXC #16, Phase 10.6ter) — même query schema que motifs (forme
+  // identique, {circuit?}), pas de duplication.
+  @Authenticated()
+  @Get("libelles-ajustement")
+  @ApiZodQuery(listerMotifsQuerySchema)
+  @ApiZodResponse(200, z.array(libelleAjustementVueSchema))
+  async listerLibellesAjustement(@Query() query: unknown): Promise<LibelleAjustementVue[]> {
+    const { circuit } = listerMotifsQuerySchema.parse(query);
+    return this.libellesAjustement.listerActifs(circuit);
   }
 
   @Authenticated()

@@ -92,6 +92,30 @@ export const motifVueSchema = z.object({
 export type MotifVue = z.infer<typeof motifVueSchema>;
 
 // ---------------------------------------------------------------------------
+// LibelleAjustement — docs/10 remarques DOBB #3 / DXC #16 (Phase 10.6ter) :
+// même forme que Motif (id/circuit/libelle/actif), CRUD complet, aucun
+// sous-objet (contrairement aux pièces afférentes de Motif — pas de source
+// qui en réclame ici).
+// ---------------------------------------------------------------------------
+export const creerLibelleAjustementRequeteSchema = z.object({
+  circuit: enumCircuit,
+  libelle: z.string().min(1),
+  actif: z.boolean().optional()
+});
+export type CreerLibelleAjustementRequete = z.infer<typeof creerLibelleAjustementRequeteSchema>;
+
+export const modifierLibelleAjustementRequeteSchema = creerLibelleAjustementRequeteSchema.partial();
+export type ModifierLibelleAjustementRequete = z.infer<typeof modifierLibelleAjustementRequeteSchema>;
+
+export const libelleAjustementVueSchema = z.object({
+  id: z.string().uuid(),
+  circuit: enumCircuit,
+  libelle: z.string(),
+  actif: z.boolean()
+});
+export type LibelleAjustementVue = z.infer<typeof libelleAjustementVueSchema>;
+
+// ---------------------------------------------------------------------------
 // ParametreGlobal — GET/PATCH seulement (clé libre déjà seedée, pas de création
 // ad hoc de nouvelles clés via l'API : le code qui les lit doit les connaître).
 // ---------------------------------------------------------------------------

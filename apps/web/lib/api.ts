@@ -17,6 +17,7 @@ import {
   formulesDeLigneSchema,
   journalAuditVueSchema,
   kpiValeurSchema,
+  libelleAjustementVueSchema,
   ligneAvecContexteSchema,
   moduleVueSchema,
   modifierParametreCalculReponseSchema,
@@ -45,6 +46,7 @@ import {
   type ControleVue,
   type CreerDelegationRequete,
   type CreerDemandeRequete,
+  type CreerLibelleAjustementRequete,
   type CreerMotifRequete,
   type CreerPalierRequete,
   type CreerRoleRequete,
@@ -62,11 +64,13 @@ import {
   type JournalSecuriteQuery,
   type JournalSecuriteVue,
   type KpiValeur,
+  type LibelleAjustementVue,
   type LigneAvecContexte,
   type ModifierCalendrierSlaRequete,
   type MfaVerifieRequete,
   type ModifierCircuitRequete,
   type ModifierDemandeRequete,
+  type ModifierLibelleAjustementRequete,
   type ModifierModuleRequete,
   type ModifierMotifRequete,
   type ModifierPalierRequete,
@@ -228,6 +232,14 @@ export function creerDemande(donnees: CreerDemandeRequete): Promise<DemandeDetai
 export function listerMotifsActifs(circuit?: string): Promise<MotifVue[]> {
   const query = circuit ? `?circuit=${circuit}` : "";
   return requete(`/api/referentiels/motifs${query}`, z.array(motifVueSchema));
+}
+
+// docs/10 remarques DOBB #3 / DXC #16 (Phase 10.6ter) — même distinction que
+// listerMotifsActifs() vs listerMotifs() ci-dessous : celui-ci ne renvoie que
+// les libellés actifs, filtrés serveur.
+export function listerLibellesAjustementActifs(circuit?: string): Promise<LibelleAjustementVue[]> {
+  const query = circuit ? `?circuit=${circuit}` : "";
+  return requete(`/api/referentiels/libelles-ajustement${query}`, z.array(libelleAjustementVueSchema));
 }
 
 export function listerUniversFmi(): Promise<UniversFmiVue[]> {
@@ -490,6 +502,33 @@ export function modifierMotif(id: string, donnees: ModifierMotifRequete): Promis
 
 export function supprimerMotif(id: string): Promise<{ supprime: true }> {
   return requete(`/api/admin/motifs/${id}`, z.object({ supprime: z.literal(true) }), { method: "DELETE" });
+}
+
+// Libellés d'ajustement (docs/10 remarques DOBB #3 / DXC #16, Phase 10.6ter) --
+
+export function listerLibellesAjustement(circuit?: string): Promise<LibelleAjustementVue[]> {
+  const query = circuit ? `?circuit=${circuit}` : "";
+  return requete(`/api/admin/libelles-ajustement${query}`, z.array(libelleAjustementVueSchema));
+}
+
+export function creerLibelleAjustement(donnees: CreerLibelleAjustementRequete): Promise<LibelleAjustementVue> {
+  return requete("/api/admin/libelles-ajustement", libelleAjustementVueSchema, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(donnees)
+  });
+}
+
+export function modifierLibelleAjustement(id: string, donnees: ModifierLibelleAjustementRequete): Promise<LibelleAjustementVue> {
+  return requete(`/api/admin/libelles-ajustement/${id}`, libelleAjustementVueSchema, {
+    method: "PATCH",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(donnees)
+  });
+}
+
+export function supprimerLibelleAjustement(id: string): Promise<{ supprime: true }> {
+  return requete(`/api/admin/libelles-ajustement/${id}`, z.object({ supprime: z.literal(true) }), { method: "DELETE" });
 }
 
 // Circuits (PGD-043) — GET/PATCH seulement, segment immuable -------------
