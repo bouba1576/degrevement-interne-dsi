@@ -74,7 +74,7 @@ export function ApercuRoutage({ demandeId }: ApercuRoutageProps) {
                 <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-gris100 text-12 font-bold">
                   {e.ordre}
                 </span>
-                <span className="flex-1 font-semibold">{e.roleCode}</span>
+                <span className="flex-1 font-semibold">{e.roleLibelle}</span>
                 <span className="text-12 text-gris600">{LIBELLE_TYPE_ACTEUR[e.typeActeur] ?? e.typeActeur}</span>
                 <span className="text-12 text-gris600">{e.slaHeures} h</span>
                 {e.bloquant && <span className="text-12 font-semibold text-orange600">Bloquant</span>}

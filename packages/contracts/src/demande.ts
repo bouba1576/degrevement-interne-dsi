@@ -189,6 +189,7 @@ export type Montants = z.infer<typeof montantsSchema>;
 export const etapePrevisionnelleSchema = z.object({
   ordre: z.number(),
   roleCode: z.string(),
+  roleLibelle: z.string(),
   typeActeur: z.string(),
   bloquant: z.boolean(),
   slaHeures: z.number()

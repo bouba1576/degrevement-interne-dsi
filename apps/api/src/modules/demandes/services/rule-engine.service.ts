@@ -7,6 +7,7 @@ import { CalendrierSlaService } from "./calendrier-sla.service";
 interface EtapeCache {
   ordre: number;
   roleCode: string;
+  roleLibelle: string;
   typeActeur: string;
   bloquant: boolean;
   slaHeures: number;
@@ -93,7 +94,7 @@ export class RuleEngineService {
 
     const configurations = await client.configurationCircuit.findMany({
       where: { circuit: circuit as never, segment, actif: true },
-      include: { etapesRegle: { orderBy: { ordre: "asc" } } }
+      include: { etapesRegle: { orderBy: { ordre: "asc" }, include: { role: { select: { libelle: true } } } } }
     });
 
     const valeur: ConfigurationCache[] = configurations.map((config) => ({
@@ -107,6 +108,7 @@ export class RuleEngineService {
       etapesRegle: config.etapesRegle.map((e) => ({
         ordre: e.ordre,
         roleCode: e.roleCode,
+        roleLibelle: e.role.libelle,
         typeActeur: e.typeActeur,
         bloquant: e.bloquant,
         slaHeures: e.slaHeures,

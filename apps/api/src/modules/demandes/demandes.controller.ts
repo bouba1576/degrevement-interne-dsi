@@ -204,6 +204,7 @@ export class DemandesController {
       etapes: configuration.etapesRegle.map((e) => ({
         ordre: e.ordre,
         roleCode: e.roleCode,
+        roleLibelle: e.roleLibelle,
         typeActeur: e.typeActeur,
         bloquant: e.bloquant,
         slaHeures: e.slaHeures
