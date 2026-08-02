@@ -853,8 +853,15 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
           Montants affichés uniquement APRÈS "Enregistrer les lignes" : ce
           sont ceux renvoyés par le serveur (demande.lignes[].montantHtLigne,
           demande.demande.montantTtc), jamais une estimation calculée ici —
-          même principe qu'ApercuRoutage. */}
-      <div className="flex flex-col gap-4">
+          même principe qu'ApercuRoutage.
+          `lg:sticky lg:top-26` (audit de complétude structurelle) — la
+          maquette pose `position: sticky; top: 86` sur ce même panneau
+          (screens1.jsx:483), jamais reproduit ici : sur un formulaire plus
+          long que le viewport, le panneau défilait hors champ avec le
+          contenu au lieu de rester visible. `top-26` reprend le padding déjà
+          utilisé par `<main className="... p-26">` (AppShell.tsx) pour un
+          alignement cohérent sous la Topbar. */}
+      <div className="flex flex-col gap-4 lg:sticky lg:top-26">
         {/* « Taxes appliquées » — lecture seule, jamais un override (point 2
             de la décomposition). tscActiveDefaut/tvaActiveDefaut/tauxTsc/
             tauxTva sont réels (ParametreCalcul), mais aucune route ne permet
@@ -905,26 +912,32 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
 
         {demande && demande.lignes.length > 0 && <ApercuRoutage demandeId={demande.demande.id} />}
 
-        {demande && (
-          <div className="rounded-6 border border-gris200 bg-blanc p-5">
-            {erreursSoumission && (
-              <ul className="mb-3 list-disc pl-5 text-13 font-semibold text-rouge700">
-                {erreursSoumission.map((v, i) => (
-                  <li key={i}>{v.message}</li>
-                ))}
-              </ul>
-            )}
-            {erreurSoumissionUnique && <p className="mb-3 text-13 font-semibold text-rouge700">{erreurSoumissionUnique}</p>}
-            <button
-              type="button"
-              onClick={handleSoumettre}
-              disabled={soumissionEnCours || demande.lignes.length === 0}
-              className="w-full rounded bg-orange px-4 py-2 text-13 font-bold text-noir disabled:opacity-50"
-            >
-              {soumissionEnCours ? "Soumission…" : "Soumettre"}
-            </button>
-          </div>
-        )}
+        {/* Toujours rendu, désactivé tant qu'aucune ligne n'est enregistrée —
+            même pattern que la maquette (`disabled={!tranche}`,
+            screens1.jsx:569), qui n'a jamais retiré le bouton du DOM.
+            `handleSoumettre` garde déjà `if (!demande) return;` : aucune
+            action n'est possible avant qu'une demande existe, seul le rendu
+            change (audit de complétude structurelle — le bouton était
+            absent, pas seulement désactivé, avant tout enregistrement de
+            ligne). */}
+        <div className="rounded-6 border border-gris200 bg-blanc p-5">
+          {erreursSoumission && (
+            <ul className="mb-3 list-disc pl-5 text-13 font-semibold text-rouge700">
+              {erreursSoumission.map((v, i) => (
+                <li key={i}>{v.message}</li>
+              ))}
+            </ul>
+          )}
+          {erreurSoumissionUnique && <p className="mb-3 text-13 font-semibold text-rouge700">{erreurSoumissionUnique}</p>}
+          <button
+            type="button"
+            onClick={handleSoumettre}
+            disabled={!demande || soumissionEnCours || demande.lignes.length === 0}
+            className="w-full rounded bg-orange px-4 py-2 text-13 font-bold text-noir disabled:opacity-50"
+          >
+            {soumissionEnCours ? "Soumission…" : "Soumettre"}
+          </button>
+        </div>
       </div>
     </div>
   );
