@@ -47,8 +47,18 @@ export function Sidebar({ roles, routeActuelle, onNaviguer, compteMesDemandes, c
       ]
     : [];
 
+  // `sticky top-0 h-screen` (audit de complétude structurelle) — la maquette
+  // pose `position: sticky; top: 0; height: 100vh` sur `.sidebar`
+  // (docs/design/styles.css:76), jamais reproduit ici : `h-full` dépendait
+  // du stretch flex du parent (`AppShell`, `flex min-h-screen`), qui ne
+  // s'applique pas quand le contenu de la colonne de droite dépasse la
+  // hauteur du viewport (percentage height indéfinie sur un ancêtre sans
+  // hauteur fixée) — le fond sombre s'arrêtait alors à la hauteur du menu
+  // (~534px, mesuré en direct) au lieu de couvrir toute la page (~1775px).
+  // `sticky`+`h-screen` fixe la hauteur au viewport indépendamment du
+  // contenu du frère, exactement comme la maquette.
   return (
-    <nav className="flex h-full w-62 shrink-0 flex-col bg-encre text-blanc z-navigation">
+    <nav className="sticky top-0 flex h-screen w-62 shrink-0 flex-col bg-encre text-blanc z-navigation">
       <div className="flex items-center gap-3 border-b border-blanc/10 px-5 py-4">
         <img src="/logo-orange.png" alt="Orange Côte d'Ivoire" className="h-38 w-38 shrink-0 object-contain" />
         <div className="leading-[1.05]">
