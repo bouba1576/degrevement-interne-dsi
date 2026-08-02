@@ -165,6 +165,11 @@ Les 17 directions et 14 services de `responsabilites.seed.ts` sont des libellés
 
 **Décision assumée** (`responsabilites.seed.ts`) : les 14 services sont dupliqués à l'identique sous chacune des 17 directions (238 lignes) — reproduit fidèlement l'UX plate de la maquette, sans inventer de répartition différenciée. À corriger si une vraie cartographie direction→service est fournie par le métier.
 
+### Libellé du circuit sur ApercuTab (écarts DossierDetailScreen, Phase 10.6quinquies point 4) — texte réel retenu, pas la formulation de la maquette
+La maquette affiche « Direction Wholesale & Opérateurs (DF · Wholesale) » pour le circuit d'un dossier — une formulation propre au prototype (`D2.CIRCUITS[d.circuit].nom`, donnée de démo). `Circuit.libelle` porte une valeur réelle en base pour les trois circuits (vérifié : `"DF — Wholesale / Opérateurs"`, `"DXC — B2C"`, `"DOBB — B2B"`), mais avec un texte et une ponctuation différents de ce que montre la maquette.
+
+**Décision assumée** (`ApercuTab.tsx`, `useCircuitLibelle`) : afficher `Circuit.libelle` tel quel, jamais reformulé pour ressembler au texte du prototype. Le contenu suit la donnée réelle, pas le texte affiché par la maquette — même principe déjà appliqué ailleurs dans ce document (ex. `Circuit.segment`, jamais aligné sur un libellé de démo). **Ne pas** un jour modifier `Circuit.libelle` en seed pour le faire correspondre au phrasé de la maquette en pensant corriger un oubli : c'est un choix délibéré, pas une lacune.
+
 ## Spécifié, absent de la maquette (comblé d'après les sources réelles)
 
 Catégorie distincte des « écarts tranchés » ci-dessous : ici la maquette ne contredit rien, elle est simplement **muette** sur une fonctionnalité que le PRD, le modèle de données, les contrats d'API ou les user stories exigent bel et bien. Le silence de la maquette n'a aucune autorité sur le périmètre — seulement sur la mise en page (règle posée en Phase 9.2, CLAUDE.md § Maquette de référence). Combler veut dire s'appuyer sur une source réelle identifiée, jamais décider librement : si aucune source ne répond non plus, l'entrée reste une question ouverte (CLAUDE.md), pas une invention consignée ici.
