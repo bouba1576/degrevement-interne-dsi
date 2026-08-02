@@ -113,6 +113,23 @@ La correction orange n'invente rien : `#9a4a00` est déjà utilisé par la maque
 
 **Anneau de focus clavier (`--focus-anneau-couleur`)** — même famille de correction. La maquette n'utilise `orange` (`#FF7900`) que pour le focus des champs de saisie, jamais pour des boutons/nav/onglets. Réutiliser `orange` tel quel aurait échoué le contraste non-textuel WCAG 1.4.11 (≥3:1) : 2,63:1 sur blanc, 2,48:1 sur gris50 — un anneau de focus invisible sur la majorité des fonds clairs de l'application. `orange600` (`#E96B00`), déjà présent dans la palette (10 occurrences, teinte de survol des boutons primaires), passe partout : 3,20:1 sur blanc, 3,01:1 sur gris50, 6,57:1 sur noir (sidebar). Retenu à la place — même famille de couleur, teinte plus foncée par nécessité de contraste, pas une couleur inventée.
 
+## Audit de complétude structurelle — panneaux et mise en page (Phase 10.6quater)
+
+Distinct de l'audit de fidélité visuelle (Phase 9.3, `getComputedStyle` sur des propriétés numériques d'éléments déjà identifiés) et de l'inventaire des branches conditionnelles (Phase 10.6bis, quelles branches JSX ont été exercées) : ici, la question est la **présence et la position de blocs entiers** dans la mise en page — un panneau collant ou une colonne entière peut manquer sans qu'aucune vérification de propriété CSS ponctuelle ne le révèle. Déclenché par trois captures d'écran réelles montrant un écart possible sur `NouvelleDemandeScreen` (DOBB).
+
+**Méthode retenue, à réutiliser pour tout futur audit structurel** : ce qui fait foi est exclusivement ce que `docs/design/` montre pour CET écran précis (CSS/style inline cité), jamais une supposition de cohérence entre écrans. `DossierDetailScreen` (`ApercuTab`/`CircuitTab`, deux colonnes `1fr 320px`, **sans** `position: sticky`) et `NouvelleDemandeScreen`/`ParametresCalculAdminTab` (deux colonnes **avec** sticky) ont delibérément reçu un traitement différent alors que les trois ont une mise en page à deux colonnes — parce que la maquette elle-même ne pose `position: sticky` que sur les deux derniers (`screens1.jsx:483`, `screens3.jsx:1059`), jamais sur le premier. Recensement exhaustif : `grep -rn sticky docs/design/*.jsx` ne retourne que 3 occurrences dans tout le dépôt (les deux ci-dessus + `screens4.jsx:131`, dans `MasseScreen` — déjà hors périmètre, aucune contrepartie serveur).
+
+| Écran | Écart trouvé | Preuve (maquette vs réel) | Commit |
+|---|---|---|---|
+| `NouvelleDemandeScreen` | Panneau latéral non collant | `screens1.jsx:483` `position:"sticky",top:86` vs zéro occurrence de `sticky` dans tout `apps/web` avant correctif | `cbe3158` |
+| `NouvelleDemandeScreen` | Bouton « Soumettre » absent du DOM avant tout enregistrement de ligne (pas seulement désactivé) | `screens1.jsx:569` toujours rendu, `disabled={!tranche}` vs `{demande && (...)}` (retiré du DOM) | `cbe3158` |
+| Sidebar (`packages/ui`, affecte tous les écrans) | Hauteur limitée au contenu du menu (534px mesuré) au lieu de couvrir toute la page (1775px) | `styles.css:76` `position:sticky;top:0;height:100vh` vs `h-full` dépendant d'un stretch flex qui échoue quand le contenu du frère dépasse le viewport (percentage height indéfinie) | `cfcf6f7` |
+| `ParametresCalculAdminTab` (onglet Admin « Paramètres de calcul ») | Panneau « Aperçu » non collant | `screens3.jsx:1059` `position:"sticky",top:86` (`CalcConfigView`) vs grille deux colonnes déjà correcte mais sans sticky | `7040117` |
+
+**Non touché, décision déjà actée et non rouverte** : `ApercuRoutage` (« Routage prévu ») reste absent tant qu'aucune ligne n'est enregistrée — le panneau maquette calcule côté client via `engine.jsx` (jamais porté, R3 vaut aussi côté client), le réel n'affiche qu'une estimation serveur réelle, qui n'existe simplement pas avant ce moment. Ce n'est pas un bloc structurel manquant, c'est l'absence légitime d'une donnée qui n'existe pas encore.
+
+**Autres écrans vérifiés sans écart** : `HomeScreen`, `MesDemandesScreen`, `CorbeillesScreen`, `ControleScreen`, `AuditSecuriteScreen` (mono-colonne dans la maquette, rien à reproduire) ; `DossierDetailScreen` (deux colonnes sans sticky, déjà conforme).
+
 ## Décisions de design assumées, sans source dans la maquette
 
 ### Statut de ligne (ACTIF/SUSPENDU/RESILIE, R15)
