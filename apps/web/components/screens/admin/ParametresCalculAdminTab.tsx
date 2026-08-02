@@ -195,7 +195,10 @@ export function ParametresCalculAdminTab() {
               </button>
             </div>
 
-            <div className="rounded-6 border border-gris200 bg-gris50 p-4">
+            {/* lg:sticky lg:top-26 (audit de complétude structurelle) — la
+                maquette pose position:sticky;top:86 sur ce même panneau
+                Aperçu (screens3.jsx:1059), jamais reproduit ici. */}
+            <div className="rounded-6 border border-gris200 bg-gris50 p-4 lg:sticky lg:top-26">
               <div className="mb-2 flex items-center gap-2">
                 <Icon nom="eye" taille={15} />
                 <span className="text-12 font-bold text-gris700">Aperçu — exemple 1 000 000 FCFA HT</span>
