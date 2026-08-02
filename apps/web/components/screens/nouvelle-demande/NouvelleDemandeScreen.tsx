@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { z } from "zod";
-import { Icon, Money } from "@pgd/ui";
+import { Badge, Icon, Money } from "@pgd/ui";
 import type {
+  CircuitVue,
   CompteClient,
   DemandeDetail,
   DirectionResponsabiliteVue,
@@ -22,6 +23,7 @@ import {
   creerDemande,
   definirLignes,
   erreurRegleMetierSchema,
+  listerCircuitsReferentiel,
   listerDirectionsReferentiel,
   listerFacteursReferentiel,
   listerLibellesAjustementActifs,
@@ -43,6 +45,20 @@ const CIRCUITS: EnumCircuit[] = ["DOBB", "DXC", "DF"];
 // le calcul, sert uniquement le badge visuel déjà présent dans la maquette
 // (docs/design/screens1.jsx, badge "DOBB · B2B" etc.).
 const SEGMENT_PAR_CIRCUIT: Record<EnumCircuit, string> = { DOBB: "B2B", DXC: "B2C", DF: "Wholesale" };
+
+// Badge sur la carte « Fiche d'ajustement » (Phase 10.6sexies, inventaire
+// champ par champ) — contenu de maquette statique, pas une donnée
+// administrable : screens1.jsx:357/326/402 montre trois badges de nature
+// différente par circuit (un code interne pour DOBB, un libellé de segment
+// pour DXC, un rappel de statut R12 pour DF), aucun champ réel ne les
+// porte tous les trois de façon uniforme. Même statut que SEGMENT_PAR_CIRCUIT
+// ci-dessus : texte d'affichage fixe, pas une règle métier. Tons alignés sur
+// les classes b-orange/b-blue/b-purple de la maquette (screens1.jsx).
+const BADGE_FICHE_PAR_CIRCUIT: Record<EnumCircuit, { texte: string; ton: "accent" | "info" | "special" }> = {
+  DOBB: { texte: "DOBB-DAOB", ton: "accent" },
+  DXC: { texte: "Pôle B2C", ton: "info" },
+  DF: { texte: "Soumis au contrôle FRA", ton: "special" }
+};
 
 // Convention déjà établie pour Sidebar (packages/ui) : le code de rôle
 // `INITIATEUR_<CIRCUIT>` est le seul indice réel disponible côté client — pas
@@ -192,6 +208,17 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
   useEffect(() => {
     void listerDirectionsReferentiel().then(setDirections);
   }, []);
+
+  // Inventaire champ par champ (Phase 10.6sexies) — badge de code process
+  // ("PO2_B-17", etc.) sur la carte Identification, absent avant ce tour.
+  // Circuit.processCode est déjà une donnée admin réelle (AdminCircuitsController,
+  // ModifierCircuitRequete.processCode) : jamais un tableau codé en dur ici,
+  // même principe de configurabilité complète que le reste de l'écran.
+  const [circuits, setCircuits] = useState<CircuitVue[] | null>(null);
+  useEffect(() => {
+    void listerCircuitsReferentiel().then(setCircuits);
+  }, []);
+  const processCode = circuits?.find((c) => c.code === circuit)?.processCode ?? null;
 
   const directionSelectionnee = directions?.find((d) => d.id === directionRespId) ?? null;
 
@@ -449,6 +476,11 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
         <div className="mb-3 flex items-center gap-2">
           <Icon nom="building" taille={17} />
           <h3 className="text-14 font-bold">Identification</h3>
+          {processCode && (
+            <span className="ml-auto">
+              <Badge ton="neutre">{processCode}</Badge>
+            </span>
+          )}
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
@@ -592,6 +624,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
           <div className="mb-3 flex items-center gap-2">
             <Icon nom="flow" taille={17} />
             <h3 className="text-14 font-bold">{circuit === "DOBB" ? "Fiche d'ajustement B2B" : "Fiche d'ajustement B2C"}</h3>
+            <Badge ton={BADGE_FICHE_PAR_CIRCUIT[circuit].ton}>{BADGE_FICHE_PAR_CIRCUIT[circuit].texte}</Badge>
           </div>
 
           {!demande && (
@@ -735,6 +768,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
           <div className="mb-3 flex items-center gap-2">
             <Icon nom="doc" taille={17} />
             <h3 className="text-14 font-bold">Mémo d'ajustement Wholesale</h3>
+            <Badge ton={BADGE_FICHE_PAR_CIRCUIT.DF.ton}>{BADGE_FICHE_PAR_CIRCUIT.DF.texte}</Badge>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
