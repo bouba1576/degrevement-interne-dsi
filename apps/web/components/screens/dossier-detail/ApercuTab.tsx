@@ -42,6 +42,24 @@ function formaterValeur(valeur: unknown): string | null {
   return String(valeur);
 }
 
+// Écarts DossierDetailScreen (Phase 10.6quinquies, point 7) — suite directe
+// de la carte mémo DF (Phase 10.6, étape E) : ces six clés sont les seules
+// écrites dans champsCircuit aujourd'hui (NouvelleDemandeScreen.tsx,
+// champsCircuitDfSchema), jamais nommées ici — affichées telles quelles
+// ("memoDe", "memoA"…) au lieu des libellés français du formulaire. Même
+// mécanique que `typeActeur` (packages/ui/tokens/semantic.ts) : une table
+// de correspondance, repli sur la clé brute pour toute clé future non
+// répertoriée (générique par construction, cf. commentaire de
+// LIBELLES_COMMUNS ci-dessus — jamais une structure figée côté client).
+const LIBELLES_CHAMPS_CIRCUIT: Record<string, string> = {
+  memoDe: "De (émetteur)",
+  memoA: "À (destinataire)",
+  memoObjectif: "Objectif",
+  memoContexte: "Contexte de la réclamation",
+  memoObservation: "Observation",
+  montantXof: "Montant en FCFA"
+};
+
 // docs/10 remarque FRA #24 — le détail d'un dossier n'affichait que
 // motifId (UUID brut, jamais rendu). MotifVue est déjà consommée par
 // NouvelleDemandeScreen (même route, GET /api/referentiels/motifs?circuit=)
@@ -100,7 +118,7 @@ export function ApercuTab({ demande, lignes }: ApercuTabProps) {
                 <div className="mt-3 mb-1 text-12 font-semibold text-gris600">Champs spécifiques au circuit</div>
                 {champsCircuit.map(([cle, valeur]) => (
                   <div key={cle} className="flex items-start gap-4 border-b border-gris100 py-2 last:border-none">
-                    <div className="w-44 shrink-0 text-13 text-gris600">{cle}</div>
+                    <div className="w-44 shrink-0 text-13 text-gris600">{LIBELLES_CHAMPS_CIRCUIT[cle] ?? cle}</div>
                     <div className="flex-1 text-13 font-medium">{formaterValeur(valeur) ?? "—"}</div>
                   </div>
                 ))}
