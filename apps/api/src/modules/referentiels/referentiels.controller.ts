@@ -2,6 +2,7 @@ import { Controller, Get, Param, Query } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 import { z } from "zod";
 import {
+  circuitVueSchema,
   directionResponsabiliteVueSchema,
   facteurDegrevementVueSchema,
   libelleAjustementVueSchema,
@@ -9,6 +10,7 @@ import {
   motifVueSchema,
   parametresCalculPublicVueSchema,
   universFmiVueSchema,
+  type CircuitVue,
   type DirectionResponsabiliteVue,
   type FacteurDegrevementVue,
   type LibelleAjustementVue,
@@ -20,6 +22,7 @@ import { ApiZodQuery, ApiZodResponse } from "../../common/swagger/zod-schema";
 import { Authenticated } from "../../common/decorators/authenticated.decorator";
 import { AdminMotifsService } from "../admin/services/admin-motifs.service";
 import { AdminLibellesAjustementService } from "../admin/services/admin-libelles-ajustement.service";
+import { AdminCircuitsService } from "../admin/services/admin-circuits.service";
 import { ReferentielsService } from "./services/referentiels.service";
 
 // Phase 10.6 (décomposition NouvelleDemandeScreen) — lectures ouvertes à tout
@@ -34,8 +37,20 @@ export class ReferentielsController {
   constructor(
     private readonly referentiels: ReferentielsService,
     private readonly motifs: AdminMotifsService,
-    private readonly libellesAjustement: AdminLibellesAjustementService
+    private readonly libellesAjustement: AdminLibellesAjustementService,
+    private readonly circuits: AdminCircuitsService
   ) {}
+
+  // GET /api/referentiels/circuits — écarts DossierDetailScreen (Phase
+  // 10.6quinquies, point 4) : ApercuTab résout Circuit.libelle pour tout
+  // viewer authentifié d'un dossier, pas seulement ADMIN_PGD (admin/circuits
+  // reste réservé au CRUD).
+  @Authenticated()
+  @Get("circuits")
+  @ApiZodResponse(200, z.array(circuitVueSchema))
+  async listerCircuits(): Promise<CircuitVue[]> {
+    return this.circuits.lister();
+  }
 
   // GET /api/referentiels/motifs?circuit= (circuit optionnel)
   @Authenticated()

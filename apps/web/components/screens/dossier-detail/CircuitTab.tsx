@@ -55,6 +55,10 @@ export function CircuitTab({ demandeId }: CircuitTabProps) {
   if (!etapes) return <p className="text-13 text-gris600">Chargement…</p>;
 
   const etapesBloquantes = etapes.filter((e) => e.bloquant).length;
+  // Écarts DossierDetailScreen (Phase 10.6quinquies, point 5) — typeActeur
+  // "C" (contrôle a posteriori, cf. Convention R12) est déjà porté par
+  // `etapes` (EtapeDossier.typeActeur), aucune donnée nouvelle.
+  const etapesControle = etapes.filter((e) => e.typeActeur === "C").length;
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px] lg:items-start">
@@ -78,6 +82,16 @@ export function CircuitTab({ demandeId }: CircuitTabProps) {
             <span className="text-gris600">Étapes bloquantes</span>
             <span className="font-bold">{etapesBloquantes}</span>
           </div>
+          <div className="flex justify-between">
+            <span className="text-gris600">Contrôle a posteriori</span>
+            <span className="font-bold">{etapesControle}</span>
+          </div>
+          {/* Écarts DossierDetailScreen (Phase 10.6quinquies, point 5) —
+              rappel direct du principe de configurabilité complète (CLAUDE.md
+              « Mécanismes structurants »), pas une fantaisie de maquette. */}
+          <p className="mt-2 text-12 text-gris600">
+            Chaîne déterminée par la matrice de décision consolidée — aucune règle codée en dur.
+          </p>
         </div>
       </div>
     </div>

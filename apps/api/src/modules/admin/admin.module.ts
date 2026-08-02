@@ -59,6 +59,11 @@ import { TachesModule } from "../taches/taches.module";
   // carte mémo DF) — ReferentielsService en projette explicitement 4 des 6
   // champs (ParametresCalculPublicVue), jamais le contrôleur admin/parametres
   // (ADMIN_PGD, expose aussi `devise` et l'écriture).
-  exports: [AdminMotifsService, AdminLibellesAjustementService, AdminParametresCalculService]
+  // AdminCircuitsService.lister() est repris de même (Phase 10.6quinquies,
+  // écarts DossierDetailScreen point 4) — GET /api/referentiels/circuits,
+  // ouvert à tout authentifié : ApercuTab (n'importe quel viewer d'un
+  // dossier) a besoin de Circuit.libelle, jamais du contrôleur admin/circuits
+  // (ADMIN_PGD, expose aussi l'écriture PATCH).
+  exports: [AdminMotifsService, AdminLibellesAjustementService, AdminParametresCalculService, AdminCircuitsService]
 })
 export class AdminModule {}

@@ -264,6 +264,13 @@ export function obtenirParametresCalculReferentiel(circuit: string): Promise<Par
   return requete(`/api/referentiels/parametres-calcul/${circuit}`, parametresCalculPublicVueSchema);
 }
 
+// Écarts DossierDetailScreen (Phase 10.6quinquies, point 4) — distinct de
+// listerCircuits() ci-dessous (GET /api/admin/circuits, ADMIN_PGD-only) :
+// ApercuTab résout Circuit.libelle pour tout viewer authentifié du dossier.
+export function listerCircuitsReferentiel(): Promise<CircuitVue[]> {
+  return requete("/api/referentiels/circuits", z.array(circuitVueSchema));
+}
+
 // GET /api/lignes?nd= — data: null si ND inconnu (jamais 404, SF-PGD-310).
 // Le serveur normalise déjà espaces/casse (LigneService.rechercherParNd) ;
 // aucune normalisation dupliquée ici.

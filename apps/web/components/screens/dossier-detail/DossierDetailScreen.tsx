@@ -3,7 +3,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { CircuitPill, Icon, StatusBadge, type StatutDemande } from "@pgd/ui";
 import type { DemandeDetail, EtapeDossier, SessionUtilisateur } from "@pgd/contracts";
-import { ApiError, abandonnerDemande, listerTachesDemande, modifierDemande, obtenirDetailDemande, rappelerDemande } from "@/lib/api";
+import {
+  ApiError,
+  abandonnerDemande,
+  journalAuditDemande,
+  listerTachesDemande,
+  modifierDemande,
+  obtenirDetailDemande,
+  rappelerDemande
+} from "@/lib/api";
 import { ApercuTab } from "./ApercuTab";
 import { CircuitTab } from "./CircuitTab";
 import { PiecesTab } from "./PiecesTab";
@@ -37,6 +45,12 @@ type Onglet = "apercu" | "circuit" | "pieces" | "audit";
 export function DossierDetailScreen({ dossierId, utilisateur, onRetour }: DossierDetailScreenProps) {
   const [detail, setDetail] = useState<DemandeDetail | null>(null);
   const [etapes, setEtapes] = useState<EtapeDossier[] | null>(null);
+  // Écarts DossierDetailScreen (Phase 10.6quinquies, point 3) — pas déjà
+  // chargé ailleurs (AuditTab ne fetch le journal que lorsqu'on ouvre
+  // l'onglet), donc un appel de plus ici, au même titre que les deux déjà
+  // groupés dans ce Promise.all — même famille de coût que pieces.length,
+  // déjà disponible via `detail` sans requête dédiée.
+  const [compteAudit, setCompteAudit] = useState<number | null>(null);
   const [onglet, setOnglet] = useState<Onglet>("apercu");
   const [erreur, setErreur] = useState<string | null>(null);
   const [chargementAction, setChargementAction] = useState(false);
@@ -44,9 +58,14 @@ export function DossierDetailScreen({ dossierId, utilisateur, onRetour }: Dossie
 
   const charger = useCallback(async () => {
     try {
-      const [d, e] = await Promise.all([obtenirDetailDemande(dossierId), listerTachesDemande(dossierId)]);
+      const [d, e, audit] = await Promise.all([
+        obtenirDetailDemande(dossierId),
+        listerTachesDemande(dossierId),
+        journalAuditDemande(dossierId)
+      ]);
       setDetail(d);
       setEtapes(e);
+      setCompteAudit(audit.length);
       setErreur(null);
     } catch (err) {
       setErreur(err instanceof ApiError ? err.message : "Erreur inattendue.");
@@ -180,7 +199,7 @@ export function DossierDetailScreen({ dossierId, utilisateur, onRetour }: Dossie
             ["apercu", "Aperçu"],
             ["circuit", "Circuit de validation"],
             ["pieces", `Pièces (${pieces.length})`],
-            ["audit", "Journal d'audit"]
+            ["audit", compteAudit === null ? "Journal d'audit" : `Journal d'audit (${compteAudit})`]
           ] as const
         ).map(([cle, libelle]) => (
           <button

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Money } from "@pgd/ui";
 import { StatutLigneBadge } from "@pgd/ui";
-import type { Demande, DemandeLigneVue, MotifVue } from "@pgd/contracts";
-import { listerMotifsActifs } from "@/lib/api";
+import type { CircuitVue, Demande, DemandeLigneVue, MotifVue } from "@pgd/contracts";
+import { listerCircuitsReferentiel, listerMotifsActifs } from "@/lib/api";
 
 export interface ApercuTabProps {
   demande: Demande;
@@ -56,11 +56,28 @@ function useMotifLibelle(circuit: Demande["circuit"], motifId: Demande["motifId"
   return motifs.find((m) => m.id === motifId)?.libelle ?? null;
 }
 
+// Écarts DossierDetailScreen (Phase 10.6quinquies, point 4) — Circuit.libelle
+// porte déjà un texte réel en base ("DF — Wholesale / Opérateurs", etc.,
+// vérifié en direct), jamais utilisé ici : la ligne "Circuit" affichait le
+// code brut ("DF"). Le texte réel diverge de la formulation vue sur la
+// maquette ("Direction Wholesale & Opérateurs (DF · Wholesale)") — la
+// donnée réelle fait foi, pas la reformulation du prototype (même principe
+// que le reste de docs/design/DIVERGENCES.md).
+function useCircuitLibelle(circuit: Demande["circuit"]): string | null {
+  const [circuits, setCircuits] = useState<CircuitVue[] | null>(null);
+  useEffect(() => {
+    void listerCircuitsReferentiel().then(setCircuits);
+  }, []);
+  return circuits?.find((c) => c.code === circuit)?.libelle ?? null;
+}
+
 export function ApercuTab({ demande, lignes }: ApercuTabProps) {
   const motifLibelle = useMotifLibelle(demande.circuit, demande.motifId);
-  const lignesCommunes = LIBELLES_COMMUNS.map(([champ, libelle]) => [libelle, formaterValeur(demande[champ])] as const).filter(
-    ([, v]) => v !== null
-  );
+  const circuitLibelle = useCircuitLibelle(demande.circuit);
+  const lignesCommunes = LIBELLES_COMMUNS.map(
+    ([champ, libelle]) =>
+      [libelle, champ === "circuit" && circuitLibelle ? circuitLibelle : formaterValeur(demande[champ])] as const
+  ).filter(([, v]) => v !== null);
   if (motifLibelle) lignesCommunes.splice(2, 0, ["Motif", motifLibelle]);
   const champsCircuit = Object.entries(demande.champsCircuit ?? {}).filter(([, v]) => v != null && v !== "");
 
@@ -142,6 +159,18 @@ export function ApercuTab({ demande, lignes }: ApercuTabProps) {
             <div className="flex justify-between text-13">
               <span className="text-gris600">TSC ({(demande.tauxTsc * 100).toFixed(2)} %)</span>
               <Money valeur={demande.montantTsc} />
+            </div>
+          )}
+          {/* Écarts DossierDetailScreen (Phase 10.6quinquies, point 2) — sous-total
+              réel, pas une estimation : MontantService.calculer() applique
+              toujours la cascade (HT+TSC) puis TVA (CLAUDE.md, vérifié ligne par
+              ligne) ; HT et TSC sont déjà affichés séparément ci-dessus,
+              aucune nouvelle donnée. Distinct du panneau actif de
+              NouvelleDemandeScreen (chantier TVA/TSC séparé, en attente). */}
+          {demande.tscActive && (
+            <div className="flex justify-between border-t border-dashed border-gris200 pt-2 text-13 italic text-gris700">
+              <span>HT + TSC</span>
+              <Money valeur={demande.montantHt + demande.montantTsc} />
             </div>
           )}
           {demande.tvaActive && (
