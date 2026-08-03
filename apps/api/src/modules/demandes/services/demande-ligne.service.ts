@@ -113,12 +113,10 @@ export class DemandeLigneService {
         where: { demandeId },
         _sum: { montantHtLigne: true }
       });
-      const montants = this.montant.calculer(Number(agregat._sum.montantHtLigne ?? 0), {
-        tauxTsc: Number(demande.tauxTsc),
-        tauxTva: Number(demande.tauxTva),
-        tscActive: demande.tscActive,
-        tvaActive: demande.tvaActive
-      });
+      const montants = this.montant.calculer(
+        Number(agregat._sum.montantHtLigne ?? 0),
+        this.montant.tauxDepuisDemande(demande)
+      );
 
       await tx.demande.update({
         where: { id: demandeId },

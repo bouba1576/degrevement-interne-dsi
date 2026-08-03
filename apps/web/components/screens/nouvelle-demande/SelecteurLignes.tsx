@@ -48,6 +48,10 @@ export interface SelecteurLignesProps {
   onEnregistrer: () => void;
   enregistrement: boolean;
   erreur: string | null;
+  // Résolution du mécanisme « Prévisualiser » (feu vert utilisateur) — onBlur
+  // du champ Montant HT (mode "direct"), jamais à chaque frappe. Optionnel :
+  // l'orchestrateur décide seul s'il y a un dossier existant à resauvegarder.
+  onBlurMontantHt?: () => void;
 }
 
 // PGD-021/SF-PGD-311. R15 (ligne RESILIE) n'est vérifié qu'à la soumission
@@ -67,7 +71,8 @@ export function SelecteurLignes({
   onChangeMontant,
   onEnregistrer,
   enregistrement,
-  erreur
+  erreur,
+  onBlurMontantHt
 }: SelecteurLignesProps) {
   const pretesAEnregistrer =
     lignes.length > 0 && lignes.every((l) => l.formule !== null && montantLigneValide(l.montant));
@@ -153,6 +158,7 @@ export function SelecteurLignes({
                       type="number"
                       value={l.montant.montantHtLigne}
                       onChange={(e) => onChangeMontant(l.contexte.ligne.id, { ...l.montant, montantHtLigne: e.target.value })}
+                      onBlur={() => onBlurMontantHt?.()}
                       className="w-40 rounded border border-gris300 px-2 py-1 font-mono text-13"
                     />
                   </label>

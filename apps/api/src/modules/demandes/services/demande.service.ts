@@ -58,10 +58,12 @@ export class DemandeService {
         periodeContesteeJours: this.calculerJoursContestes(dto.debutPeriodeContestee, dto.finPeriodeContestee),
         recurrentMensuel: dto.recurrentMensuel ?? false,
         champsCircuit: (dto.champsCircuit ?? {}) as Prisma.InputJsonValue,
+        dateDemande: dto.dateDemande ? new Date(dto.dateDemande) : undefined,
         tauxTsc: taux.tauxTsc,
         tauxTva: taux.tauxTva,
         tscActive: taux.tscActive,
         tvaActive: taux.tvaActive,
+        assietteTva: taux.assietteTva,
         libelle: dto.libelle,
         motifId: dto.motifId,
         universFmiCode: dto.universFmiCode,
@@ -196,12 +198,7 @@ export class DemandeService {
       throw new NotFoundException({ code: "DEMANDE_INTROUVABLE", message: "Demande introuvable." });
     }
 
-    const montants = this.montant.calculer(Number(demande.montantHt), {
-      tauxTsc: Number(demande.tauxTsc),
-      tauxTva: Number(demande.tauxTva),
-      tscActive: demande.tscActive,
-      tvaActive: demande.tvaActive
-    });
+    const montants = this.montant.calculer(Number(demande.montantHt), this.montant.tauxDepuisDemande(demande));
 
     await this.prisma.$transaction(async (tx) => {
       await tx.demande.update({
@@ -275,6 +272,7 @@ export class DemandeService {
     const demande = await this.prisma.demande.update({
       where: { id },
       data: {
+        dateDemande: dto.dateDemande ? new Date(dto.dateDemande) : undefined,
         sousFlux: dto.sousFlux,
         nomClient: dto.nomClient,
         compteClient: dto.compteClient,
@@ -410,6 +408,11 @@ export class DemandeService {
       tvaActive: d.tvaActive,
       tauxTsc: Number(d.tauxTsc),
       tauxTva: Number(d.tauxTva),
+      assietteTva: d.assietteTva,
+      tscManuelle: d.tscManuelle,
+      montantTscManuel: d.montantTscManuel == null ? null : Number(d.montantTscManuel),
+      tvaManuelle: d.tvaManuelle,
+      montantTvaManuel: d.montantTvaManuel == null ? null : Number(d.montantTvaManuel),
       libelle: d.libelle,
       motifId: d.motifId,
       universFmiCode: d.universFmiCode,
@@ -421,6 +424,7 @@ export class DemandeService {
       etapeCourante: d.etapeCourante,
       initiateurId: d.initiateurId,
       dateDemande: d.dateDemande.toISOString(),
+      creeLe: d.creeLe.toISOString(),
       dateSoumission: d.dateSoumission ? d.dateSoumission.toISOString() : null,
       dateCloture: d.dateCloture ? d.dateCloture.toISOString() : null,
       commentaire: d.commentaire,

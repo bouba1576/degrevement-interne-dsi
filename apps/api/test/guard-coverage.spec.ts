@@ -67,6 +67,7 @@ describe("Couverture structurelle des guards de portée — récidive des huit f
   const TABLE_DEMANDES: Record<string, unknown[]> = {
     creer: [],
     modifier: [InitiateurDemandeGuard],
+    modifierTaxes: [InitiateurDemandeGuard],
     definirLignes: [InitiateurDemandeGuard],
     recalculer: [InitiateurDemandeGuard],
     apercuRoutage: [InitiateurDemandeGuard],

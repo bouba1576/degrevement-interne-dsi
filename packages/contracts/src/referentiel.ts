@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { enumCircuit } from "./enums";
+import { enumAssietteTva, enumCircuit } from "./enums";
 
 // GET /api/referentiels/* (Phase 10.6, décomposition NouvelleDemandeScreen) —
 // lecture ouverte à tout authentifié, jamais de rôle : ces référentiels
@@ -41,17 +41,20 @@ export const listerMotifsQuerySchema = z.object({
 export type ListerMotifsQuery = z.infer<typeof listerMotifsQuerySchema>;
 
 // GET /api/referentiels/parametres-calcul/:circuit (Phase 10.6, carte mémo
-// DF) — projection délibérément étroite de ParametreCalculVue (admin-
-// parametre-calcul.ts, 6 champs : circuit/tauxTsc/tauxTva/tscActiveDefaut/
-// tvaActiveDefaut/devise). Exactement les 4 champs affichables en lecture
-// seule : `circuit` est redondant avec le paramètre d'URL, `devise` n'a
-// aucun usage ici — ne jamais élargir vers le schéma admin complet, la
-// projection explicite (pas un spread) est ce qui empêche une exposition
-// par ricochet si ParametreCalculVue gagne un champ plus tard.
+// DF ; étendu Phase 10.6septies pour le panneau Taxes appliquées interactif)
+// — projection délibérément étroite de ParametreCalculVue (admin-
+// parametre-calcul.ts, 7 champs : circuit/tauxTsc/tauxTva/tscActiveDefaut/
+// tvaActiveDefaut/assietteTvaDefaut/devise). Exactement les 5 champs
+// affichables/utilisables en lecture seule : `circuit` est redondant avec le
+// paramètre d'URL, `devise` n'a aucun usage ici — ne jamais élargir vers le
+// schéma admin complet, la projection explicite (pas un spread) est ce qui
+// empêche une exposition par ricochet si ParametreCalculVue gagne un champ
+// plus tard.
 export const parametresCalculPublicVueSchema = z.object({
   tauxTsc: z.number(),
   tauxTva: z.number(),
   tscActiveDefaut: z.boolean(),
-  tvaActiveDefaut: z.boolean()
+  tvaActiveDefaut: z.boolean(),
+  assietteTvaDefaut: enumAssietteTva
 });
 export type ParametresCalculPublicVue = z.infer<typeof parametresCalculPublicVueSchema>;

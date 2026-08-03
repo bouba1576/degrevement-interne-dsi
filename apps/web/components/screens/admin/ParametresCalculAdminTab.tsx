@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Field, Icon, Modal, Money } from "@pgd/ui";
-import type { ParametreCalculVue } from "@pgd/contracts";
+import type { EnumAssietteTva, ParametreCalculVue } from "@pgd/contracts";
 import { ApiError, compterBrouillons, listerParametresCalcul, modifierParametreCalcul } from "@/lib/api";
 
 interface EditionParametre {
@@ -10,6 +10,7 @@ interface EditionParametre {
   tauxTva: string;
   tscActiveDefaut: boolean;
   tvaActiveDefaut: boolean;
+  assietteTvaDefaut: EnumAssietteTva;
   devise: string;
 }
 
@@ -19,6 +20,7 @@ function versEdition(p: ParametreCalculVue): EditionParametre {
     tauxTva: String(p.tauxTva),
     tscActiveDefaut: p.tscActiveDefaut,
     tvaActiveDefaut: p.tvaActiveDefaut,
+    assietteTvaDefaut: p.assietteTvaDefaut,
     devise: p.devise
   };
 }
@@ -36,16 +38,18 @@ const MONTANT_EXEMPLE = 1_000_000;
 // + bascule visuelle de l'activation par défaut + aperçu de calcul.
 //
 // L'aperçu reproduit la formule EXACTE de MontantService.calculer()
-// (apps/api/src/modules/demandes/services/montant.service.ts) — tva =
-// (ht + tsc) * tauxTva, jamais une assiette alternative devinée : vérifié
+// (apps/api/src/modules/demandes/services/montant.service.ts) — assiette
+// TVA = HT+TSC si assietteTvaDefaut==='HT_TSC', HT seul sinon — vérifié
 // contre le service réel avant d'être ajouté, pas supposé depuis la
-// maquette. Aucune règle métier nouvelle : `ParametreCalculVue` n'expose
-// qu'une seule assiette possible (pas de choix HT vs HT+TSC côté admin,
-// contrairement à ce qu'un lecteur pourrait supposer en voyant ce composant
-// — cette bascule-là, si elle existe un jour, vit dans la fiche de demande,
-// pas ici). Purement illustratif (montant fixe 1 000 000, jamais une
-// vraie demande), avec les taux et bascules actuellement en cours
-// d'édition — recalculé à chaque frappe, sans appel serveur.
+// maquette. assietteTvaDefaut (Phase 10.6septies, confirmation métier
+// docs/10 remarques DOBB #1/#2/#6) est désormais un vrai choix admin par
+// circuit — le défaut HT_TSC préserve le comportement d'avant ce chantier
+// pour tout circuit non retouché. Une saisie manuelle par dossier
+// (Demande.assietteTva/tscManuelle/tvaManuelle) reste possible et prioritaire
+// sur ce défaut, mais vit dans la fiche de demande, pas ici. Purement
+// illustratif (montant fixe 1 000 000, jamais une vraie demande), avec les
+// taux et bascules actuellement en cours d'édition — recalculé à chaque
+// frappe, sans appel serveur.
 //
 // Le panneau « Rejets SLA » de la maquette (RejetsSlaPanel) n'est pas
 // repris : contredit `docs/04_MCD_MLD_PGD_PROD.md` (minuteur_bloquant=FALSE
@@ -98,6 +102,7 @@ export function ParametresCalculAdminTab() {
         tauxTva: Number(e.tauxTva),
         tscActiveDefaut: e.tscActiveDefaut,
         tvaActiveDefaut: e.tvaActiveDefaut,
+        assietteTvaDefaut: e.assietteTvaDefaut,
         devise: e.devise
       });
       setMessage(
@@ -133,7 +138,8 @@ export function ParametresCalculAdminTab() {
         // ×100 aurait été invisible sans cette vérification.
         const ht = MONTANT_EXEMPLE;
         const tsc = e.tscActiveDefaut ? ht * Number(e.tauxTsc) : 0;
-        const tva = e.tvaActiveDefaut ? (ht + tsc) * Number(e.tauxTva) : 0;
+        const assiette = e.assietteTvaDefaut === "HT_TSC" ? ht + tsc : ht;
+        const tva = e.tvaActiveDefaut ? assiette * Number(e.tauxTva) : 0;
         const ttc = ht + tsc + tva;
         const tauxTscPourcent = (Number(e.tauxTsc) * 100).toFixed(2);
         const tauxTvaPourcent = (Number(e.tauxTva) * 100).toFixed(2);
@@ -184,6 +190,29 @@ export function ParametresCalculAdminTab() {
                 >
                   TVA {e.tvaActiveDefaut ? "active" : "inactive"} par défaut
                 </button>
+              </div>
+              <div className="mt-3">
+                <span className="mb-1 block text-12 font-bold text-gris700">Assiette de la TVA par défaut</span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEdition((prev) => ({ ...prev, [p.circuit]: { ...prev[p.circuit]!, assietteTvaDefaut: "HT" } }))}
+                    className={`rounded border px-3 py-1 text-12 font-bold ${
+                      e.assietteTvaDefaut === "HT" ? "border-vert700 bg-vertFond text-vertTexteSurClair" : "border-gris300 text-gris700"
+                    }`}
+                  >
+                    HT seul
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEdition((prev) => ({ ...prev, [p.circuit]: { ...prev[p.circuit]!, assietteTvaDefaut: "HT_TSC" } }))}
+                    className={`rounded border px-3 py-1 text-12 font-bold ${
+                      e.assietteTvaDefaut === "HT_TSC" ? "border-vert700 bg-vertFond text-vertTexteSurClair" : "border-gris300 text-gris700"
+                    }`}
+                  >
+                    HT + TSC (cascade)
+                  </button>
+                </div>
               </div>
               <button
                 type="button"

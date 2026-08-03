@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apercuRoutage as appelerApercuRoutage, ApiError } from "@/lib/api";
 import type { ApercuRoutageReponse } from "@pgd/contracts";
 
@@ -8,6 +8,14 @@ const LIBELLE_TYPE_ACTEUR: Record<string, string> = { V: "Vérification", A: "Va
 
 export interface ApercuRoutageProps {
   demandeId: string;
+  // Décision explicite (feu vert utilisateur, résolution du mécanisme
+  // « Prévisualiser ») — onBlur des champs pertinents au routage (montant HT
+  // d'une ligne, taxes), jamais à chaque frappe. Le bouton manuel reste un
+  // déclencheur supplémentaire, pas le seul. `declencheur` est un jeton
+  // opaque (compteur incrémenté par l'orchestrateur) : tout changement de
+  // valeur relance previsualiser(), le premier rendu (valeur initiale) est
+  // ignoré pour ne pas appeler l'API avant tout blur/clic réel.
+  declencheur?: number;
 }
 
 // PGD-035/SF-PGD-033, 104. Pas de réutilisation de WorkflowStepper (packages/
@@ -16,7 +24,7 @@ export interface ApercuRoutageProps {
 // ferait mentir l'écran, exactement ce que WorkflowStepper refuse déjà de
 // faire pour l'escalade (cf. son propre commentaire). Rendu volontairement
 // plus simple : une liste ordonnée, sans pastille d'état.
-export function ApercuRoutage({ demandeId }: ApercuRoutageProps) {
+export function ApercuRoutage({ demandeId, declencheur }: ApercuRoutageProps) {
   const [reponse, setReponse] = useState<ApercuRoutageReponse | null>(null);
   const [chargement, setChargement] = useState(false);
   const [erreur, setErreur] = useState<{ code: string; message: string } | null>(null);
@@ -35,6 +43,24 @@ export function ApercuRoutage({ demandeId }: ApercuRoutageProps) {
       setChargement(false);
     }
   }
+
+  // Comparaison à la dernière valeur VUE (pas un simple "ignorer le premier
+  // appel") — nécessaire car React StrictMode (next.config.js,
+  // reactStrictMode: true) double-invoque les effets au montage en dev :
+  // un booléen "premier rendu" se ferait piéger par ce double appel et
+  // laisserait passer le second, déclenchant previsualiser() dès le premier
+  // montage réel — trouvé en vérification live (Phase 10.6septies), pas
+  // supposé. `useRef(declencheur)` capture la valeur initiale une seule fois
+  // (React ne réinitialise pas un ref déjà créé, y compris entre les deux
+  // passes de StrictMode), donc le premier effet — quel que soit le nombre
+  // de fois où StrictMode le rejoue — voit toujours `declencheur ===
+  // dernierVu.current` et ne déclenche rien.
+  const dernierVu = useRef(declencheur);
+  useEffect(() => {
+    if (declencheur === undefined || declencheur === dernierVu.current) return;
+    dernierVu.current = declencheur;
+    void previsualiser();
+  }, [declencheur]);
 
   return (
     <div className="rounded-6 border border-gris200 bg-blanc p-5">

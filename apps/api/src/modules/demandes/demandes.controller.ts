@@ -23,6 +23,7 @@ import {
   demandeDetailSchema,
   listerDemandesQuerySchema,
   modifierDemandeRequeteSchema,
+  modifierTaxesRequeteSchema,
   pieceJointeSchema,
   siVueSchema,
   soumissionReponseSchema,
@@ -151,6 +152,24 @@ export class DemandesController {
   ): Promise<DemandeDetail> {
     const dto = modifierDemandeRequeteSchema.parse(body);
     return this.workflow.modifierAvecReRoutage(id, dto, { id: utilisateur.id, identifiantAd: utilisateur.identifiantAd });
+  }
+
+  // PATCH /api/demandes/{id}/taxes (Phase 10.6septies, confirmation métier
+  // docs/10 DOBB #1/#2/#6) — route dédiée, jamais mélangée à modifier() :
+  // DemandeWorkflowService.modifierTaxes trace R25 (HISTORIQUE_MONTANT) et
+  // redéclenche le re-routage R6 si le dossier est déjà engagé.
+  @Authenticated()
+  @UseGuards(InitiateurDemandeGuard)
+  @Patch(":id/taxes")
+  @ApiZodBody(modifierTaxesRequeteSchema)
+  @ApiZodResponse(200, demandeDetailSchema)
+  async modifierTaxes(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @CurrentUser() utilisateur: UtilisateurRequete
+  ): Promise<DemandeDetail> {
+    const dto = modifierTaxesRequeteSchema.parse(body);
+    return this.workflow.modifierTaxes(id, dto, { id: utilisateur.id, identifiantAd: utilisateur.identifiantAd });
   }
 
   @Authenticated()

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  enumAssietteTva,
   enumCircuit,
   enumEtatSi,
   enumLocalisation,
@@ -15,6 +16,12 @@ import {
 // serveur depuis les deux dates, jamais soumis par le client.
 export const creerDemandeRequeteSchema = z.object({
   circuit: enumCircuit,
+  // Inventaire champ par champ (Phase 10.6sexies) — "Date de demande" de la
+  // maquette est éditable, requise ; défaut serveur now() si absente
+  // (schema.prisma, @default(now())). Distincte de creeLe (immuable, jamais
+  // acceptée en entrée) qui répond à "Date de saisie de la demande dans la
+  // plateforme".
+  dateDemande: z.string().optional(),
   sousFlux: z.string().optional(),
   nomClient: z.string().min(1, "Le nom du client est requis"),
   compteClient: z.string().optional(),
@@ -50,6 +57,24 @@ export type CreerDemandeRequete = z.infer<typeof creerDemandeRequeteSchema>;
 // dépendent structurellement) ; le reste reprend les mêmes champs.
 export const modifierDemandeRequeteSchema = creerDemandeRequeteSchema.omit({ circuit: true }).partial();
 export type ModifierDemandeRequete = z.infer<typeof modifierDemandeRequeteSchema>;
+
+// PATCH /api/demandes/{id}/taxes (Phase 10.6septies, confirmation métier
+// docs/10 DOBB #1/#2/#6) — route dédiée, jamais mélangée à modifierDemande :
+// toute écriture ici passe par HistoriqueMontantService (R25, extension de
+// R23) et redéclenche le même mécanisme de re-routage que R6
+// (DemandeWorkflowService.modifierAvecReRoutage) si le dossier est déjà
+// engagé, jamais un simple recalcul silencieux sur une chaîne déjà
+// instanciée. Portée dossier entier (HT agrégé), jamais par ligne.
+export const modifierTaxesRequeteSchema = z.object({
+  tscActive: z.boolean().optional(),
+  tvaActive: z.boolean().optional(),
+  assietteTva: enumAssietteTva.optional(),
+  tscManuelle: z.boolean().optional(),
+  montantTscManuel: z.number().nonnegative().nullable().optional(),
+  tvaManuelle: z.boolean().optional(),
+  montantTvaManuel: z.number().nonnegative().nullable().optional()
+});
+export type ModifierTaxesRequete = z.infer<typeof modifierTaxesRequeteSchema>;
 
 export const demandeLigneSchema = z.object({
   id: z.string().uuid(),
@@ -107,6 +132,12 @@ export const demandeSchema = z.object({
   tvaActive: z.boolean(),
   tauxTsc: z.number(),
   tauxTva: z.number(),
+  // Confirmation métier (docs/10, remarques DOBB #1/#2/#6, Phase 10.6septies).
+  assietteTva: enumAssietteTva,
+  tscManuelle: z.boolean(),
+  montantTscManuel: z.number().nullable(),
+  tvaManuelle: z.boolean(),
+  montantTvaManuel: z.number().nullable(),
   libelle: z.string().nullable(),
   motifId: z.string().uuid().nullable(),
   universFmiCode: z.string().nullable(),
@@ -118,6 +149,7 @@ export const demandeSchema = z.object({
   etapeCourante: z.number(),
   initiateurId: z.string().uuid(),
   dateDemande: z.string(),
+  creeLe: z.string(),
   dateSoumission: z.string().nullable(),
   dateCloture: z.string().nullable(),
   commentaire: z.string().nullable(),

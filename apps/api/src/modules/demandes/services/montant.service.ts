@@ -1,12 +1,24 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import type { Montants } from "@pgd/contracts";
+import type { EnumAssietteTva, Montants } from "@pgd/contracts";
 import { PrismaService } from "../../../infra/prisma/prisma.service";
 
+// Confirmation métier (docs/10, remarques DOBB #1/#2/#6, Phase 10.6septies) —
+// assietteTva/*Manuelle/montant*Manuel viennent de Demande (portée dossier
+// entier, jamais par ligne) et doivent traverser TOUT recalcul, pas
+// seulement la saisie manuelle elle-même : si une ligne change après une
+// saisie manuelle de TSC, "Remplace le calcul automatique pour ce dossier"
+// (aide de l'écran) veut dire que le montant manuel reste tel quel, jamais
+// recalculé silencieusement depuis le nouveau HT.
 export interface TauxCalcul {
   tauxTsc: number;
   tauxTva: number;
   tscActive: boolean;
   tvaActive: boolean;
+  assietteTva: EnumAssietteTva;
+  tscManuelle: boolean;
+  montantTscManuel: number | null;
+  tvaManuelle: boolean;
+  montantTvaManuel: number | null;
 }
 
 // PGD-031 (SF-PGD-041, 042, R8, R18) — taux lus depuis PARAMETRE_CALCUL,
@@ -29,18 +41,63 @@ export class MontantService {
       tauxTsc: Number(parametre.tauxTsc),
       tauxTva: Number(parametre.tauxTva),
       tscActive: parametre.tscActiveDefaut,
-      tvaActive: parametre.tvaActiveDefaut
+      tvaActive: parametre.tvaActiveDefaut,
+      assietteTva: parametre.assietteTvaDefaut,
+      tscManuelle: false,
+      montantTscManuel: null,
+      tvaManuelle: false,
+      montantTvaManuel: null
     };
   }
 
-  // montant_ht = Σ DEMANDE_LIGNE.montant_ht_ligne ; TSC = HT × taux_tsc ;
-  // TVA = (HT + TSC) × taux_tva ; TTC = HT + TSC + TVA.
+  // montant_ht = Σ DEMANDE_LIGNE.montant_ht_ligne. TSC = saisie manuelle si
+  // tscManuelle, sinon HT × taux_tsc (si actif). Assiette TVA = HT seul
+  // (nouvelle règle) ou HT+TSC (ancienne règle, cascade) selon assietteTva.
+  // TVA = saisie manuelle si tvaManuelle, sinon assiette × taux_tva (si
+  // actif). TTC = HT + TSC + TVA.
   calculer(montantHt: number, taux: TauxCalcul): Montants {
     const ht = this.plancher(montantHt);
-    const tsc = taux.tscActive ? this.plancher(this.arrondir(ht * taux.tauxTsc)) : 0;
-    const tva = taux.tvaActive ? this.plancher(this.arrondir((ht + tsc) * taux.tauxTva)) : 0;
+    const tsc = taux.tscManuelle
+      ? this.plancher(taux.montantTscManuel ?? 0)
+      : taux.tscActive
+        ? this.plancher(this.arrondir(ht * taux.tauxTsc))
+        : 0;
+    const assiette = taux.assietteTva === "HT_TSC" ? ht + tsc : ht;
+    const tva = taux.tvaManuelle
+      ? this.plancher(taux.montantTvaManuel ?? 0)
+      : taux.tvaActive
+        ? this.plancher(this.arrondir(assiette * taux.tauxTva))
+        : 0;
     const ttc = this.plancher(ht + tsc + tva);
     return { montantHt: ht, montantTsc: tsc, montantTva: tva, montantTtc: ttc };
+  }
+
+  // Extrait le TauxCalcul courant d'une ligne Demande déjà chargée — évite de
+  // recopier ce mapping à chaque site d'appel (definirLignes, recalculer,
+  // recalculerBrouillons) : les 5 champs taxes du dossier (assietteTva,
+  // *Manuelle, montant*Manuel) doivent traverser identiquement tout recalcul.
+  tauxDepuisDemande(demande: {
+    tauxTsc: unknown;
+    tauxTva: unknown;
+    tscActive: boolean;
+    tvaActive: boolean;
+    assietteTva: EnumAssietteTva;
+    tscManuelle: boolean;
+    montantTscManuel: unknown;
+    tvaManuelle: boolean;
+    montantTvaManuel: unknown;
+  }): TauxCalcul {
+    return {
+      tauxTsc: Number(demande.tauxTsc),
+      tauxTva: Number(demande.tauxTva),
+      tscActive: demande.tscActive,
+      tvaActive: demande.tvaActive,
+      assietteTva: demande.assietteTva,
+      tscManuelle: demande.tscManuelle,
+      montantTscManuel: demande.montantTscManuel == null ? null : Number(demande.montantTscManuel),
+      tvaManuelle: demande.tvaManuelle,
+      montantTvaManuel: demande.montantTvaManuel == null ? null : Number(demande.montantTvaManuel)
+    };
   }
 
   // PGD-038 (SF-PGD-062) — restitué HT = récurrent ÷ 30 × jours contestés.

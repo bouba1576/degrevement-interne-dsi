@@ -1,9 +1,11 @@
 import { Injectable, NotFoundException, UnprocessableEntityException } from "@nestjs/common";
-import type { ModifierDemandeRequete, SoumissionReponse } from "@pgd/contracts";
+import type { DemandeDetail, ModifierDemandeRequete, ModifierTaxesRequete, SoumissionReponse } from "@pgd/contracts";
 import { PrismaService } from "../../../infra/prisma/prisma.service";
 import { DemandeService } from "./demande.service";
 import { PieceService } from "./piece.service";
 import { RuleEngineService } from "./rule-engine.service";
+import { MontantService } from "./montant.service";
+import { HistoriqueMontantService } from "./historique-montant.service";
 
 export interface ActeurAudit {
   id: string;
@@ -26,7 +28,9 @@ export class DemandeWorkflowService {
     private readonly prisma: PrismaService,
     private readonly demandeService: DemandeService,
     private readonly pieceService: PieceService,
-    private readonly ruleEngine: RuleEngineService
+    private readonly ruleEngine: RuleEngineService,
+    private readonly montantService: MontantService,
+    private readonly historiqueMontant: HistoriqueMontantService
   ) {}
 
   // POST /api/demandes/{id}/soumettre (SF-PGD-060) — transaction unique :
@@ -169,9 +173,25 @@ export class DemandeWorkflowService {
     }
 
     await this.verifierAucuneDecision(demandeId);
-
     await this.demandeService.modifier(demandeId, dto, acteur.id);
+    await this.reRouterSiEngage(demandeId, acteur, "modification");
 
+    return this.demandeService.obtenirDetail(demandeId);
+  }
+
+  // Extrait de modifierAvecReRoutage (R6) — réutilisé tel quel par
+  // modifierTaxes (Phase 10.6septies, confirmation métier docs/10) : une
+  // saisie manuelle de TSC/TVA qui change le TTC d'un dossier déjà engagé
+  // doit redéclencher exactement le même mécanisme de re-routage que
+  // n'importe quelle autre modification, jamais un simple recalcul de
+  // montants sur une chaîne déjà instanciée — sinon un dossier pourrait
+  // rester routé sur un palier qui ne correspond plus à son TTC réel (le
+  // même risque de contournement de seuil que la traçabilité R25 couvre
+  // pour l'aspect financier, ceci couvre l'aspect routage). `motif`
+  // distingue l'origine dans JournalAudit.detail, jamais l'action elle-même
+  // ("re-routage" reste l'action unique — cf. CircuitTab.tsx,
+  // extraireLabelPalier, qui filtre déjà sur cette action).
+  private async reRouterSiEngage(demandeId: string, acteur: ActeurAudit, motif: string): Promise<void> {
     const demandeMaj = await this.prisma.demande.findUniqueOrThrow({ where: { id: demandeId } });
 
     await this.prisma.$transaction(async (tx) => {
@@ -204,10 +224,76 @@ export class DemandeWorkflowService {
           demandeId,
           acteur: acteur.identifiantAd,
           action: "re-routage",
-          detail: { motif: "modification", labelPalier: configuration.labelPalier }
+          detail: { motif, labelPalier: configuration.labelPalier }
         }
       });
     });
+  }
+
+  // PATCH /api/demandes/{id}/taxes (Phase 10.6septies, confirmation métier
+  // docs/10 DOBB #1/#2/#6) — route dédiée, jamais mélangée à
+  // modifierAvecReRoutage : toute écriture ici passe par
+  // HistoriqueMontantService (R25, extension de R23, acteur réel de la
+  // session) puis, si le dossier est déjà engagé (pas BROUILLON), par le
+  // même mécanisme de re-routage que R6. Portée dossier entier (HT
+  // agrégé), jamais par ligne — demandeLigneId omis de l'écriture
+  // HISTORIQUE_MONTANT.
+  async modifierTaxes(demandeId: string, dto: ModifierTaxesRequete, acteur: ActeurAudit): Promise<DemandeDetail> {
+    const demande = await this.prisma.demande.findUnique({ where: { id: demandeId } });
+    if (!demande) {
+      throw new NotFoundException({ code: "DEMANDE_INTROUVABLE", message: "Demande introuvable." });
+    }
+
+    if (demande.statut !== "BROUILLON") {
+      await this.verifierAucuneDecision(demandeId);
+    }
+
+    const tauxAvant = this.montantService.tauxDepuisDemande(demande);
+    const taux = {
+      ...tauxAvant,
+      tscActive: dto.tscActive ?? tauxAvant.tscActive,
+      tvaActive: dto.tvaActive ?? tauxAvant.tvaActive,
+      assietteTva: dto.assietteTva ?? tauxAvant.assietteTva,
+      tscManuelle: dto.tscManuelle ?? tauxAvant.tscManuelle,
+      montantTscManuel: dto.montantTscManuel !== undefined ? dto.montantTscManuel : tauxAvant.montantTscManuel,
+      tvaManuelle: dto.tvaManuelle ?? tauxAvant.tvaManuelle,
+      montantTvaManuel: dto.montantTvaManuel !== undefined ? dto.montantTvaManuel : tauxAvant.montantTvaManuel
+    };
+    const montants = this.montantService.calculer(Number(demande.montantHt), taux);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.demande.update({
+        where: { id: demandeId },
+        data: {
+          tscActive: taux.tscActive,
+          tvaActive: taux.tvaActive,
+          assietteTva: taux.assietteTva,
+          tscManuelle: taux.tscManuelle,
+          montantTscManuel: taux.montantTscManuel,
+          tvaManuelle: taux.tvaManuelle,
+          montantTvaManuel: taux.montantTvaManuel,
+          montantTsc: montants.montantTsc,
+          montantTva: montants.montantTva,
+          montantTtc: montants.montantTtc
+        }
+      });
+
+      await this.historiqueMontant.enregistrer(
+        {
+          demandeId,
+          montants,
+          tauxTsc: taux.tauxTsc,
+          tauxTva: taux.tauxTva,
+          origine: "MODIFICATION",
+          acteurId: acteur.id
+        },
+        tx
+      );
+    });
+
+    if (demande.statut !== "BROUILLON") {
+      await this.reRouterSiEngage(demandeId, acteur, "modification-taxes");
+    }
 
     return this.demandeService.obtenirDetail(demandeId);
   }

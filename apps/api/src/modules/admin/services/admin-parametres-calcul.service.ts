@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import type {
+  EnumAssietteTva,
   ModifierParametreCalculReponse,
   ModifierParametreCalculRequete,
   ParametreCalculVue
@@ -50,7 +51,10 @@ export class AdminParametresCalculService {
       });
     }
 
-    const tauxChange = dto.tauxTsc !== undefined || dto.tauxTva !== undefined;
+    // Confirmation métier (docs/10, Phase 10.6septies) — assietteTvaDefaut
+    // suit la même règle que tauxTsc/tauxTva : un BROUILLON suit le nouveau
+    // défaut admin, un dossier déjà SOUMIS garde son assiette figée.
+    const tauxChange = dto.tauxTsc !== undefined || dto.tauxTva !== undefined || dto.assietteTvaDefaut !== undefined;
 
     const parametre = await this.prisma.parametreCalcul.update({
       where: { circuit: circuit as never },
@@ -59,13 +63,19 @@ export class AdminParametresCalculService {
         tauxTva: dto.tauxTva,
         tscActiveDefaut: dto.tscActiveDefaut,
         tvaActiveDefaut: dto.tvaActiveDefaut,
+        assietteTvaDefaut: dto.assietteTvaDefaut,
         devise: dto.devise
       }
     });
 
     let demandesBrouillonRecalculees = 0;
     if (tauxChange) {
-      demandesBrouillonRecalculees = await this.recalculerBrouillons(circuit, Number(parametre.tauxTsc), Number(parametre.tauxTva));
+      demandesBrouillonRecalculees = await this.recalculerBrouillons(
+        circuit,
+        Number(parametre.tauxTsc),
+        Number(parametre.tauxTva),
+        parametre.assietteTvaDefaut
+      );
     }
 
     return { parametre: this.versVue(parametre), demandesBrouillonRecalculees };
@@ -77,19 +87,20 @@ export class AdminParametresCalculService {
   // condition statut=BROUILLON répétée évite le "record not found" d'un
   // update() par id seul : une demande qui a bougé entre-temps est
   // silencieusement exclue du lot plutôt que de faire échouer tout le recalcul.
-  private async recalculerBrouillons(circuit: string, tauxTsc: number, tauxTva: number): Promise<number> {
+  private async recalculerBrouillons(
+    circuit: string,
+    tauxTsc: number,
+    tauxTva: number,
+    assietteTvaDefaut: EnumAssietteTva
+  ): Promise<number> {
     const brouillons = await this.prisma.demande.findMany({
       where: { circuit: circuit as never, statut: "BROUILLON" }
     });
 
     let recalculees = 0;
     for (const demande of brouillons) {
-      const montants = this.montantService.calculer(Number(demande.montantHt), {
-        tauxTsc,
-        tauxTva,
-        tscActive: demande.tscActive,
-        tvaActive: demande.tvaActive
-      });
+      const taux = { ...this.montantService.tauxDepuisDemande(demande), tauxTsc, tauxTva, assietteTva: assietteTvaDefaut };
+      const montants = this.montantService.calculer(Number(demande.montantHt), taux);
 
       const aRecalcule = await this.prisma.$transaction(async (tx) => {
         const { count } = await tx.demande.updateMany({
@@ -97,6 +108,7 @@ export class AdminParametresCalculService {
           data: {
             tauxTsc,
             tauxTva,
+            assietteTva: assietteTvaDefaut,
             montantHt: montants.montantHt,
             montantTsc: montants.montantTsc,
             montantTva: montants.montantTva,
@@ -132,6 +144,7 @@ export class AdminParametresCalculService {
     tauxTva: { toString(): string };
     tscActiveDefaut: boolean;
     tvaActiveDefaut: boolean;
+    assietteTvaDefaut: EnumAssietteTva;
     devise: string;
   }): ParametreCalculVue {
     return {
@@ -140,6 +153,7 @@ export class AdminParametresCalculService {
       tauxTva: Number(parametre.tauxTva),
       tscActiveDefaut: parametre.tscActiveDefaut,
       tvaActiveDefaut: parametre.tvaActiveDefaut,
+      assietteTvaDefaut: parametre.assietteTvaDefaut,
       devise: parametre.devise
     };
   }

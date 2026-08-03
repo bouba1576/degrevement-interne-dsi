@@ -14,7 +14,17 @@ describe("MontantService.calculer — R18, cascade TSC → TVA", () => {
   const service = new MontantService(null as never);
 
   it("applique la TVA sur (HT + TSC), jamais sur HT seul", () => {
-    const resultat = service.calculer(380_000, { tauxTsc: 0.03, tauxTva: 0.18, tscActive: true, tvaActive: true });
+    const resultat = service.calculer(380_000, {
+      tauxTsc: 0.03,
+      tauxTva: 0.18,
+      tscActive: true,
+      tvaActive: true,
+      assietteTva: "HT_TSC",
+      tscManuelle: false,
+      montantTscManuel: null,
+      tvaManuelle: false,
+      montantTvaManuel: null
+    });
 
     expect(resultat.montantTsc).toBe(11_400); // 380000 × 0.03
     expect(resultat.montantTva).toBe(70_452); // (380000 + 11400) × 0.18 — PAS 380000 × 0.18 = 68400
@@ -23,7 +33,17 @@ describe("MontantService.calculer — R18, cascade TSC → TVA", () => {
   });
 
   it("TSC désactivé : la TVA porte alors sur HT seul (aucun TSC à cascader)", () => {
-    const resultat = service.calculer(380_000, { tauxTsc: 0.03, tauxTva: 0.18, tscActive: false, tvaActive: true });
+    const resultat = service.calculer(380_000, {
+      tauxTsc: 0.03,
+      tauxTva: 0.18,
+      tscActive: false,
+      tvaActive: true,
+      assietteTva: "HT_TSC",
+      tscManuelle: false,
+      montantTscManuel: null,
+      tvaManuelle: false,
+      montantTvaManuel: null
+    });
 
     expect(resultat.montantTsc).toBe(0);
     expect(resultat.montantTva).toBe(68_400); // (380000 + 0) × 0.18
@@ -31,7 +51,17 @@ describe("MontantService.calculer — R18, cascade TSC → TVA", () => {
   });
 
   it("plancher à 0 (R8) sur un HT négatif", () => {
-    const resultat = service.calculer(-100, { tauxTsc: 0.03, tauxTva: 0.18, tscActive: true, tvaActive: true });
+    const resultat = service.calculer(-100, {
+      tauxTsc: 0.03,
+      tauxTva: 0.18,
+      tscActive: true,
+      tvaActive: true,
+      assietteTva: "HT_TSC",
+      tscManuelle: false,
+      montantTscManuel: null,
+      tvaManuelle: false,
+      montantTvaManuel: null
+    });
     expect(resultat.montantHt).toBe(0);
     expect(resultat.montantTsc).toBe(0);
     expect(resultat.montantTva).toBe(0);

@@ -72,6 +72,18 @@ enum EnumLocalisation {
   @@map("enum_localisation")
 }
 
+// Confirmation métier (docs/10, remarques DOBB #1/#2/#6) — assiette de calcul
+// de la TVA, configurable (ParametreCalcul.assietteTvaDefaut) et modifiable
+// par dossier (Demande.assietteTva). HT = nouvelle règle (TVA sur le HT
+// seul) ; HT_TSC = ancienne règle (TVA en cascade sur HT+TSC, déjà la seule
+// formule implémentée avant ce chantier).
+enum EnumAssietteTva {
+  HT
+  HT_TSC
+
+  @@map("enum_assiette_tva")
+}
+
 enum EnumNiveauControle {
   FRA
   N1
@@ -397,6 +409,7 @@ model ParametreCalcul {
   tauxTva         Decimal     @default(0.18) @map("taux_tva") @db.Decimal(5, 4)
   tscActiveDefaut Boolean     @default(true) @map("tsc_active_defaut")
   tvaActiveDefaut Boolean     @default(true) @map("tva_active_defaut")
+  assietteTvaDefaut EnumAssietteTva @default(HT_TSC) @map("assiette_tva_defaut")
   devise          String      @default("XOF")
 
   circuitRef Circuit @relation(fields: [circuit], references: [code])
@@ -624,6 +637,15 @@ model Demande {
   tvaActive              Boolean           @default(true) @map("tva_active")
   tauxTsc                Decimal           @default(0.03) @map("taux_tsc") @db.Decimal(5, 4)
   tauxTva                Decimal           @default(0.18) @map("taux_tva") @db.Decimal(5, 4)
+  // Confirmation métier (docs/10, remarques DOBB #1/#2/#6, Phase 10.6septies) —
+  // panneau "Taxes appliquées" devenu interactif. Portée dossier entier (HT
+  // agrégé), pas ligne par ligne. Toute saisie manuelle écrit une entrée
+  // HISTORIQUE_MONTANT (origine=MODIFICATION, acteur réel) — R25.
+  assietteTva            EnumAssietteTva   @default(HT_TSC) @map("assiette_tva")
+  tscManuelle            Boolean           @default(false) @map("tsc_manuelle")
+  montantTscManuel       Decimal?          @map("montant_tsc_manuel") @db.Decimal(15, 2)
+  tvaManuelle            Boolean           @default(false) @map("tva_manuelle")
+  montantTvaManuel       Decimal?          @map("montant_tva_manuel") @db.Decimal(15, 2)
   libelle                String?
   motifId                String?           @map("motif_id") @db.Uuid
   universFmiCode         String?           @map("univers_fmi_code")
@@ -636,7 +658,16 @@ model Demande {
   initiateurId             String           @map("initiateur_id") @db.Uuid
   // Utilisateur PGD réellement connecté à la création — distinct d'agentInitiateur (texte libre).
   crmRef                   String?          @map("crm_ref")
+  // Inventaire champ par champ (Phase 10.6sexies, points "Date de demande" /
+  // "Date de saisie") — dateDemande devient la date métier éditable par
+  // l'initiateur (défaut serveur now(), pré-rempli mais modifiable, jamais
+  // recalculé après création). creeLe est le seul horodatage réellement
+  // immuable de la ligne, jamais dans creerDemandeRequeteSchema : c'est LUI
+  // qui répond à "Date de saisie de la demande dans la plateforme" (aide de
+  // la maquette) — aucun horodatage équivalent n'existait avant ce chantier
+  // (vérifié : la création n'écrivait aucune entrée JournalAudit non plus).
   dateDemande              DateTime         @default(now()) @map("date_demande") @db.Timestamptz
+  creeLe                   DateTime         @default(now()) @map("cree_le") @db.Timestamptz
   dateSoumission           DateTime?        @map("date_soumission") @db.Timestamptz
   dateCloture              DateTime?        @map("date_cloture") @db.Timestamptz
 

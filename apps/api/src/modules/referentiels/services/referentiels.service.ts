@@ -45,18 +45,20 @@ export class ReferentielsService {
     }));
   }
 
-  // Projection délibérément étroite (4 des 6 champs de ParametreCalculVue) —
+  // Projection délibérément étroite (5 des 7 champs de ParametreCalculVue) —
   // jamais un spread de la vue admin. `circuit` est redondant avec le
   // paramètre d'URL, `devise` n'a aucun usage ici : les ajouter par
   // "simplicité" exposerait par ricochet un champ jamais examiné pour cette
-  // route (cf. DIVERGENCES.md, Phase 10.6).
+  // route (cf. DIVERGENCES.md, Phase 10.6). assietteTvaDefaut ajouté en
+  // Phase 10.6septies pour le panneau Taxes appliquées interactif.
   async parametresCalcul(circuit: string): Promise<ParametresCalculPublicVue> {
     const p = await this.adminParametresCalcul.trouver(circuit);
     return {
       tauxTsc: p.tauxTsc,
       tauxTva: p.tauxTva,
       tscActiveDefaut: p.tscActiveDefaut,
-      tvaActiveDefaut: p.tvaActiveDefaut
+      tvaActiveDefaut: p.tvaActiveDefaut,
+      assietteTvaDefaut: p.assietteTvaDefaut
     };
   }
 }

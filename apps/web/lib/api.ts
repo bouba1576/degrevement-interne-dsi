@@ -78,6 +78,7 @@ import {
   type ModifierParametreCalculRequete,
   type ModifierParametreGlobalRequete,
   type ModifierRoleRequete,
+  type ModifierTaxesRequete,
   type ModuleVue,
   type MotifVue,
   type NotificationVue,
@@ -360,6 +361,14 @@ export function rappelerDemande(demandeId: string): Promise<{ rappele: true }> {
 
 export function modifierDemande(demandeId: string, donnees: ModifierDemandeRequete): Promise<DemandeDetail> {
   return requete(`/api/demandes/${demandeId}`, demandeDetailSchema, {
+    method: "PATCH",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(donnees)
+  });
+}
+
+export function modifierTaxes(demandeId: string, donnees: ModifierTaxesRequete): Promise<DemandeDetail> {
+  return requete(`/api/demandes/${demandeId}/taxes`, demandeDetailSchema, {
     method: "PATCH",
     headers: JSON_HEADERS,
     body: JSON.stringify(donnees)

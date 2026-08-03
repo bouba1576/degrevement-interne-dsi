@@ -8,6 +8,7 @@ import type {
   CompteClient,
   DemandeDetail,
   DirectionResponsabiliteVue,
+  EnumAssietteTva,
   EnumCircuit,
   EnumLocalisation,
   FacteurDegrevementVue,
@@ -29,13 +30,14 @@ import {
   listerLibellesAjustementActifs,
   listerMotifsActifs,
   listerUniversFmi,
+  modifierTaxes,
   obtenirParametresCalculReferentiel,
   soumettreDemande,
   type ErreurRegleMetier
 } from "@/lib/api";
 import { RechercheCompte } from "./RechercheCompte";
 import { RechercheNd } from "./RechercheNd";
-import { SelecteurLignes, montantLigneParDefaut, type LigneLocale } from "./SelecteurLignes";
+import { SelecteurLignes, montantLigneParDefaut, montantLigneValide, type LigneLocale } from "./SelecteurLignes";
 import { ApercuRoutage } from "./ApercuRoutage";
 
 const CIRCUITS: EnumCircuit[] = ["DOBB", "DXC", "DF"];
@@ -119,10 +121,36 @@ export interface NouvelleDemandeScreenProps {
 // brouillons orphelins : fermer l'onglet avant d'avoir défini une seule
 // ligne ne laisse plus aucune trace. La suppression réelle d'un brouillon
 // reste une question ouverte (CLAUDE.md), pas résolue ici.
+// Date du jour au format YYYY-MM-DD (fuseau local, pas UTC) — valeur par
+// défaut d'un <input type="date">, jamais toISOString().slice(0,10) qui
+// bascule sur UTC et peut afficher la veille selon l'heure/le fuseau.
+function dateDuJourLocale(): string {
+  const d = new Date();
+  const mois = String(d.getMonth() + 1).padStart(2, "0");
+  const jour = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mois}-${jour}`;
+}
+
+interface TaxesEdition {
+  tscActive: boolean;
+  tvaActive: boolean;
+  assietteTva: EnumAssietteTva;
+  tscManuelle: boolean;
+  montantTscManuel: string;
+  tvaManuelle: boolean;
+  montantTvaManuel: string;
+}
+
 export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProps) {
   const [circuit, setCircuit] = useState<EnumCircuit>(() => circuitParDefaut(utilisateur.roles));
   const [nomClient, setNomClient] = useState("");
   const [commentaire, setCommentaire] = useState("");
+  // Inventaire champ par champ (Phase 10.6sexies) — "Date de demande" éditable
+  // de la maquette, requise ; pré-remplie à aujourd'hui, modifiable avant la
+  // création du dossier (creerDemandeRequeteSchema.dateDemande, optionnel côté
+  // serveur — défaut now() si absent). "Date de saisie" (creeLe) est distincte,
+  // immuable, affichée en lecture seule une fois le dossier créé.
+  const [dateDemande, setDateDemande] = useState(dateDuJourLocale);
   // PGD-032/SF-PGD-330 — jusqu'à l'étape C/D (Phase 10.6), aucun endpoint ne
   // listait les services référentiels réels : seul le chemin "Autre" (texte
   // libre) était actionnable. `GET /api/referentiels/directions` (Phase A)
@@ -271,10 +299,108 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
   const [enregistrement, setEnregistrement] = useState(false);
   const [erreurEnregistrement, setErreurEnregistrement] = useState<string | null>(null);
 
+  // Décision explicite (feu vert utilisateur, résolution du mécanisme
+  // « Prévisualiser ») — l'aperçu de routage se relance automatiquement à
+  // chaque sauvegarde réussie qui touche un champ pertinent au routage
+  // (lignes, taxes), jamais à chaque frappe. Compteur opaque passé à
+  // ApercuRoutage : tout incrément relance previsualiser() côté enfant, sauf
+  // au tout premier montage du panneau (cf. ApercuRoutage.tsx, premierRendu)
+  // — le bouton manuel "Prévisualiser" reste nécessaire pour ce premier
+  // affichage, et disponible ensuite comme déclencheur supplémentaire.
+  const [apercuDeclencheur, setApercuDeclencheur] = useState(0);
+
   const [soumissionEnCours, setSoumissionEnCours] = useState(false);
   const [soumissionReussie, setSoumissionReussie] = useState<SoumissionReponse | null>(null);
   const [erreursSoumission, setErreursSoumission] = useState<ErreurRegleMetier[] | null>(null);
   const [erreurSoumissionUnique, setErreurSoumissionUnique] = useState<string | null>(null);
+
+  // Panneau « Taxes appliquées » (Phase 10.6septies, confirmation métier
+  // docs/10 DOBB #1/#2/#6) — interactif dès qu'un dossier existe, câblé sur
+  // PATCH /api/demandes/{id}/taxes (DemandeWorkflowService.modifierTaxes, R25).
+  // Resynchronisé depuis le serveur à chaque changement d'objet `demande`
+  // (création initiale, ré-enregistrement de lignes, sauvegarde des taxes
+  // elle-même) — jamais pendant la frappe, `demande` ne change que sur ces
+  // trois événements explicites, aucun risque d'écraser une saisie en cours.
+  const [taxesEdition, setTaxesEdition] = useState<TaxesEdition | null>(null);
+  const [enregistrementTaxes, setEnregistrementTaxes] = useState(false);
+  const [erreurTaxes, setErreurTaxes] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!demande) {
+      setTaxesEdition(null);
+      return;
+    }
+    setTaxesEdition({
+      tscActive: demande.demande.tscActive,
+      tvaActive: demande.demande.tvaActive,
+      assietteTva: demande.demande.assietteTva,
+      tscManuelle: demande.demande.tscManuelle,
+      montantTscManuel: demande.demande.montantTscManuel != null ? String(demande.demande.montantTscManuel) : "",
+      tvaManuelle: demande.demande.tvaManuelle,
+      montantTvaManuel: demande.demande.montantTvaManuel != null ? String(demande.demande.montantTvaManuel) : ""
+    });
+  }, [demande]);
+
+  // Aperçu client — reproduit la formule EXACTE de MontantService.calculer()
+  // (apps/api/src/modules/demandes/services/montant.service.ts), vérifiée
+  // avant d'être ajoutée ici plutôt que supposée. tauxTsc/tauxTva viennent du
+  // DOSSIER (demande.demande, figés à sa création/dernier recalcul), jamais
+  // de ParametresCalculPublicVue (le défaut COURANT du circuit, potentiellement
+  // différent). Purement illustratif tant que "Enregistrer" n'a pas été
+  // cliqué — les montants réellement appliqués restent demande.demande.montantTsc/Tva/Ttc.
+  function previsualiserTaxes(e: TaxesEdition) {
+    if (!demande) return { tsc: 0, tva: 0, ttc: 0 };
+    const ht = demande.demande.montantHt;
+    const tauxTsc = demande.demande.tauxTsc;
+    const tauxTva = demande.demande.tauxTva;
+    const tsc = e.tscManuelle
+      ? Math.max(0, Number(e.montantTscManuel) || 0)
+      : e.tscActive
+        ? Math.max(0, Math.round(ht * tauxTsc * 100) / 100)
+        : 0;
+    const assiette = e.assietteTva === "HT_TSC" ? ht + tsc : ht;
+    const tva = e.tvaManuelle
+      ? Math.max(0, Number(e.montantTvaManuel) || 0)
+      : e.tvaActive
+        ? Math.max(0, Math.round(assiette * tauxTva * 100) / 100)
+        : 0;
+    return { tsc, tva, ttc: Math.max(0, ht + tsc + tva) };
+  }
+
+  async function handleEnregistrerTaxes() {
+    if (!demande || !taxesEdition) return;
+    setEnregistrementTaxes(true);
+    setErreurTaxes(null);
+    try {
+      const misAJour = await modifierTaxes(demande.demande.id, {
+        tscActive: taxesEdition.tscActive,
+        tvaActive: taxesEdition.tvaActive,
+        assietteTva: taxesEdition.assietteTva,
+        tscManuelle: taxesEdition.tscManuelle,
+        montantTscManuel: taxesEdition.tscManuelle ? Math.max(0, Number(taxesEdition.montantTscManuel) || 0) : null,
+        tvaManuelle: taxesEdition.tvaManuelle,
+        montantTvaManuel: taxesEdition.tvaManuelle ? Math.max(0, Number(taxesEdition.montantTvaManuel) || 0) : null
+      });
+      setDemande(misAJour);
+      setApercuDeclencheur((n) => n + 1);
+    } catch (e) {
+      setErreurTaxes(e instanceof ApiError ? e.message : "Erreur inattendue.");
+    } finally {
+      setEnregistrementTaxes(false);
+    }
+  }
+
+  // onBlur du champ « Montant HT » d'une ligne (résolution du mécanisme
+  // Prévisualiser, feu vert utilisateur) — ne sauvegarde QUE si le dossier
+  // existe déjà : avant la première sauvegarde explicite, créer le dossier
+  // silencieusement au blur reproduirait exactement le risque de brouillons
+  // orphelins déjà écarté par la décision de repousser la création au premier
+  // "Enregistrer les lignes" (cf. commentaire au-dessus du composant).
+  async function handleBlurMontantHt() {
+    if (!demande) return;
+    if (lignesLocales.length === 0 || !lignesLocales.every((l) => l.formule !== null && montantLigneValide(l.montant))) return;
+    await handleEnregistrerLignes();
+  }
 
   function toggleServiceAutre(actif: boolean) {
     setServiceAutreActif(actif);
@@ -327,6 +453,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
       if (!demandeActuelle) {
         demandeActuelle = await creerDemande({
           circuit,
+          dateDemande: dateDemande || undefined,
           nomClient: nomClient.trim(),
           commentaire: commentaire.trim(),
           responsabiliteServiceAutre:
@@ -369,6 +496,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
         }))
       });
       setDemande(misAJour);
+      setApercuDeclencheur((n) => n + 1);
     } catch (e) {
       setErreurEnregistrement(e instanceof ApiError ? e.message : "Erreur inattendue.");
     } finally {
@@ -455,6 +583,30 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
           onChange={(e) => setNomClient(e.target.value)}
           disabled={!!demande}
         />
+
+        <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-13 font-bold text-gris800">Date de demande</label>
+            <input
+              className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
+              type="date"
+              value={dateDemande}
+              onChange={(e) => setDateDemande(e.target.value)}
+              disabled={!!demande}
+            />
+          </div>
+          {/* Date de saisie (creeLe) — immuable, jamais acceptée en entrée
+              (creerDemandeRequeteSchema ne la porte pas). Visible seulement
+              une fois le dossier créé, puisqu'elle n'existe qu'à ce moment. */}
+          {demande && (
+            <div>
+              <label className="mb-1 block text-13 font-bold text-gris800">Date de saisie</label>
+              <p className="rounded border border-gris200 bg-gris50 px-3 py-2 text-13 text-gris700">
+                {new Date(demande.demande.creeLe).toLocaleDateString("fr-FR")}
+              </p>
+            </div>
+          )}
+        </div>
 
         <label className="mb-1 block text-13 font-bold text-gris800">
           Commentaire <span className="text-rouge">*</span>
@@ -883,6 +1035,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
         onEnregistrer={handleEnregistrerLignes}
         enregistrement={enregistrement}
         erreur={erreurEnregistrement}
+        onBlurMontantHt={handleBlurMontantHt}
       />
       </div>
 
@@ -901,15 +1054,12 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
           utilisé par `<main className="... p-26">` (AppShell.tsx) pour un
           alignement cohérent sous la Topbar. */}
       <div className="flex flex-col gap-4 lg:sticky lg:top-26">
-        {/* « Taxes appliquées » — lecture seule, jamais un override (point 2
-            de la décomposition). tscActiveDefaut/tvaActiveDefaut/tauxTsc/
-            tauxTva sont réels (ParametreCalcul), mais aucune route ne permet
-            de les faire varier par dossier (DemandeService.creer lit
-            tauxDuCircuit(dto.circuit), jamais depuis le client) — des
-            switches cliquables mentiraient sur une capacité qui n'existe
-            pas. Indépendant de `demande` : une donnée de circuit, pas de
-            dossier, visible dès la sélection du circuit. */}
-        {parametresCalcul && (
+        {/* « Taxes appliquées » — lecture seule tant qu'aucun dossier n'existe
+            (rien à quoi rattacher un PATCH /taxes) : affiche alors les
+            défauts du circuit (ParametreCalcul). Devient interactif dès que
+            `demande` existe, câblé sur PATCH /api/demandes/{id}/taxes
+            (Phase 10.6septies, confirmation métier docs/10 DOBB #1/#2/#6). */}
+        {!demande && parametresCalcul && (
           <div className="rounded-6 border border-gris200 bg-blanc p-5">
             <div className="mb-3 flex items-center gap-2">
               <Icon nom="calc" taille={17} />
@@ -924,7 +1074,146 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                 TVA {parametresCalcul.tvaActiveDefaut ? "appliquée" : "non appliquée"} (
                 {(parametresCalcul.tauxTva * 100).toFixed(2)} %)
               </span>
+              <span>Assiette TVA par défaut : {parametresCalcul.assietteTvaDefaut === "HT_TSC" ? "HT + TSC" : "HT seul"}</span>
             </div>
+            <p className="mt-2 text-12 text-gris600">Modifiable une fois le dossier créé (premier enregistrement de lignes).</p>
+          </div>
+        )}
+
+        {demande && taxesEdition && (
+          <div className="rounded-6 border border-gris200 bg-blanc p-5">
+            <div className="mb-3 flex items-center gap-2">
+              <Icon nom="calc" taille={17} />
+              <h3 className="text-14 font-bold">Taxes appliquées</h3>
+            </div>
+
+            <div className="mb-3 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setTaxesEdition((s) => (s ? { ...s, tscActive: !s.tscActive } : s))}
+                className={`rounded border px-3 py-1 text-12 font-bold ${
+                  taxesEdition.tscActive ? "border-vert700 bg-vertFond text-vertTexteSurClair" : "border-gris300 text-gris700"
+                }`}
+              >
+                TSC {taxesEdition.tscActive ? "active" : "inactive"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setTaxesEdition((s) => (s ? { ...s, tvaActive: !s.tvaActive } : s))}
+                className={`rounded border px-3 py-1 text-12 font-bold ${
+                  taxesEdition.tvaActive ? "border-vert700 bg-vertFond text-vertTexteSurClair" : "border-gris300 text-gris700"
+                }`}
+              >
+                TVA {taxesEdition.tvaActive ? "active" : "inactive"}
+              </button>
+            </div>
+
+            {/* Assiette TVA — visible seulement quand TSC ET TVA sont actives
+                (décision explicite, feu vert utilisateur) : sans TSC active,
+                l'assiette HT+TSC coïnciderait avec HT seul, un choix qui
+                n'aurait aucun effet réel. */}
+            {taxesEdition.tscActive && taxesEdition.tvaActive && (
+              <div className="mb-3">
+                <span className="mb-1 block text-12 font-bold text-gris700">Assiette de la TVA</span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTaxesEdition((s) => (s ? { ...s, assietteTva: "HT" } : s))}
+                    className={`rounded border px-3 py-1 text-12 font-bold ${
+                      taxesEdition.assietteTva === "HT" ? "border-vert700 bg-vertFond text-vertTexteSurClair" : "border-gris300 text-gris700"
+                    }`}
+                  >
+                    HT seul
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTaxesEdition((s) => (s ? { ...s, assietteTva: "HT_TSC" } : s))}
+                    className={`rounded border px-3 py-1 text-12 font-bold ${
+                      taxesEdition.assietteTva === "HT_TSC" ? "border-vert700 bg-vertFond text-vertTexteSurClair" : "border-gris300 text-gris700"
+                    }`}
+                  >
+                    HT + TSC
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="mb-3">
+              <label className="flex items-center gap-2 text-13">
+                <input
+                  type="checkbox"
+                  checked={taxesEdition.tscManuelle}
+                  onChange={(e) => setTaxesEdition((s) => (s ? { ...s, tscManuelle: e.target.checked } : s))}
+                />
+                Saisir le montant TSC manuellement
+              </label>
+              {taxesEdition.tscManuelle && (
+                <>
+                  <input
+                    className="mt-1 w-full rounded border border-gris300 px-3 py-2 text-13"
+                    type="number"
+                    min="0"
+                    value={taxesEdition.montantTscManuel}
+                    onChange={(e) => setTaxesEdition((s) => (s ? { ...s, montantTscManuel: e.target.value } : s))}
+                  />
+                  <p className="mt-1 text-12 text-gris600">Remplace le calcul automatique pour ce dossier (TSC active ou non).</p>
+                </>
+              )}
+            </div>
+
+            <div className="mb-3">
+              <label className="flex items-center gap-2 text-13">
+                <input
+                  type="checkbox"
+                  checked={taxesEdition.tvaManuelle}
+                  onChange={(e) => setTaxesEdition((s) => (s ? { ...s, tvaManuelle: e.target.checked } : s))}
+                />
+                Saisir le montant TVA manuellement
+              </label>
+              {taxesEdition.tvaManuelle && (
+                <>
+                  <input
+                    className="mt-1 w-full rounded border border-gris300 px-3 py-2 text-13"
+                    type="number"
+                    min="0"
+                    value={taxesEdition.montantTvaManuel}
+                    onChange={(e) => setTaxesEdition((s) => (s ? { ...s, montantTvaManuel: e.target.value } : s))}
+                  />
+                  <p className="mt-1 text-12 text-gris600">Remplace le calcul automatique pour ce dossier (TVA active ou non).</p>
+                </>
+              )}
+            </div>
+
+            {(() => {
+              const preview = previsualiserTaxes(taxesEdition);
+              return (
+                <div className="mb-3 flex flex-col gap-1 border-t border-gris200 pt-2 text-13">
+                  <div className="flex justify-between text-gris600">
+                    <span>TSC</span>
+                    <Money valeur={preview.tsc} />
+                  </div>
+                  <div className="flex justify-between text-gris600">
+                    <span>TVA</span>
+                    <Money valeur={preview.tva} />
+                  </div>
+                  <div className="flex justify-between font-bold">
+                    <span>Total TTC (aperçu)</span>
+                    <Money valeur={preview.ttc} fort className="text-orange600" />
+                  </div>
+                </div>
+              );
+            })()}
+
+            {erreurTaxes && <p className="mb-2 text-13 font-semibold text-rouge700">{erreurTaxes}</p>}
+
+            <button
+              type="button"
+              onClick={handleEnregistrerTaxes}
+              disabled={enregistrementTaxes}
+              className="w-full rounded bg-encre px-3 py-1.5 text-13 font-bold text-blanc disabled:opacity-50"
+            >
+              {enregistrementTaxes ? "Enregistrement…" : "Enregistrer les taxes"}
+            </button>
           </div>
         )}
 
@@ -949,7 +1238,9 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
           </div>
         )}
 
-        {demande && demande.lignes.length > 0 && <ApercuRoutage demandeId={demande.demande.id} />}
+        {demande && demande.lignes.length > 0 && (
+          <ApercuRoutage demandeId={demande.demande.id} declencheur={apercuDeclencheur} />
+        )}
 
         {/* Toujours rendu, désactivé tant qu'aucune ligne n'est enregistrée —
             même pattern que la maquette (`disabled={!tranche}`,

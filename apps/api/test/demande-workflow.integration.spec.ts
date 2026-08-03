@@ -32,7 +32,7 @@ describe("DemandeWorkflowService.soumettre — R13/R14/R15/R17 + instanciation",
   const piece = new PieceService(prisma, new GedStubAdapter());
   const calendrierSla = new CalendrierSlaService(prisma);
   const ruleEngine = new RuleEngineService(prisma, calendrierSla, cache);
-  const workflow = new DemandeWorkflowService(prisma, demandeService, piece, ruleEngine);
+  const workflow = new DemandeWorkflowService(prisma, demandeService, piece, ruleEngine, montant, historique);
 
   const acteur = { id: "33333333-3333-3333-3333-333333333333", identifiantAd: "test.workflow@orange.ci" };
 
