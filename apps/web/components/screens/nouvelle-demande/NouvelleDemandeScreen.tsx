@@ -743,38 +743,6 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
               </select>
             )}
           </div>
-          <div>
-            <label className="mb-1 block text-13 font-bold text-gris800">Univers FMI</label>
-            <select
-              className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-              value={universFmiCode}
-              onChange={(e) => setUniversFmiCode(e.target.value)}
-              disabled={!!demande || !univers}
-            >
-              <option value="">— Choisir —</option>
-              {univers?.map((u) => (
-                <option key={u.code} value={u.code}>
-                  {u.libelle}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-13 font-bold text-gris800">Facteur de dégrèvement</label>
-            <select
-              className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-              value={facteurCode}
-              onChange={(e) => setFacteurCode(e.target.value)}
-              disabled={!!demande || !facteurs}
-            >
-              <option value="">— Choisir —</option>
-              {facteurs?.map((f) => (
-                <option key={f.code} value={f.code}>
-                  {f.libelle}
-                </option>
-              ))}
-            </select>
-          </div>
         </div>
       </div>
 
@@ -1022,6 +990,56 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
           </div>
         </div>
       )}
+
+      {/* Univers FMI / Facteur de dégrèvement — inventaire ordonné trois
+          circuits (Phase 10.6septies, clôture) : déplacés depuis la carte
+          Identification vers cet emplacement pour matcher le regroupement
+          de la maquette (screens1.jsx:463-469, carte "Montant & commentaire"
+          juste avant les pièces jointes) — la maquette les place à côté du
+          montant, jamais à côté de l'agent/motif/libellé. Montant HT
+          lui-même reste dans RechercheNd/SelecteurLignes (décision actée,
+          pas remise en cause) : ce sont les deux seuls champs de ce
+          regroupement encore à porter. */}
+      <div className="rounded-6 border border-gris200 bg-blanc p-5">
+        <div className="mb-3 flex items-center gap-2">
+          <Icon nom="filter" taille={17} />
+          <h3 className="text-14 font-bold">Classification</h3>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-13 font-bold text-gris800">Univers FMI</label>
+            <select
+              className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
+              value={universFmiCode}
+              onChange={(e) => setUniversFmiCode(e.target.value)}
+              disabled={!!demande || !univers}
+            >
+              <option value="">— Choisir —</option>
+              {univers?.map((u) => (
+                <option key={u.code} value={u.code}>
+                  {u.libelle}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-13 font-bold text-gris800">Facteur de dégrèvement</label>
+            <select
+              className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
+              value={facteurCode}
+              onChange={(e) => setFacteurCode(e.target.value)}
+              disabled={!!demande || !facteurs}
+            >
+              <option value="">— Choisir —</option>
+              {facteurs?.map((f) => (
+                <option key={f.code} value={f.code}>
+                  {f.libelle}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
 
       <RechercheNd
         onLigneTrouvee={(contexte) =>
