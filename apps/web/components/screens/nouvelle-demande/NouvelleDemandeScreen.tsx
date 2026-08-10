@@ -39,6 +39,7 @@ import { RechercheCompte } from "./RechercheCompte";
 import { RechercheNd } from "./RechercheNd";
 import { SelecteurLignes, montantLigneParDefaut, montantLigneValide, type LigneLocale } from "./SelecteurLignes";
 import { ApercuRoutage } from "./ApercuRoutage";
+import { PiecesTab } from "../dossier-detail/PiecesTab";
 
 const CIRCUITS: EnumCircuit[] = ["DOBB", "DXC", "DF"];
 
@@ -1069,6 +1070,27 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
         erreur={erreurEnregistrement}
         onBlurMontantHt={handleBlurMontantHt}
       />
+
+      {/* Pièces justificatives — inventaire ordonné trois circuits (Phase
+          10.6septies) : la maquette (screens1.jsx:479, PiecesJointes) les
+          affiche dès l'écran de création, pour les trois circuits
+          identiquement, en local (blob URLs jamais uploadées, tout part en
+          un seul envoi à la soumission — modèle sans équivalent réel, cf.
+          DIVERGENCES.md). Le serveur exige un demandeId (POST /api/demandes/
+          {id}/pieces) qui n'existe qu'après le premier "Enregistrer les
+          lignes" — même contrainte, même gate que le panneau Taxes et
+          ApercuRoutage. PiecesTab (DossierDetailScreen) réutilisé tel quel,
+          aucun second mécanisme d'upload : ajout/suppression réels déjà
+          câblés (ajouterPiece/supprimerPiece), demandeId/pieces/onChange
+          sont les trois seules props, aucune dépendance à l'état interne de
+          DossierDetailScreen. */}
+      {demande && (
+        <PiecesTab
+          demandeId={demande.demande.id}
+          pieces={demande.pieces}
+          onChange={(nouvelles) => setDemande((d) => (d ? { ...d, pieces: nouvelles } : d))}
+        />
+      )}
       </div>
 
       {/* Panneau latéral — équivalent du bloc « Calcul automatique / Routage
