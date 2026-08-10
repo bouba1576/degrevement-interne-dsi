@@ -51,23 +51,33 @@ export class MontantService {
   }
 
   // montant_ht = Σ DEMANDE_LIGNE.montant_ht_ligne. TSC = saisie manuelle si
-  // tscManuelle, sinon HT × taux_tsc (si actif). Assiette TVA = HT seul
-  // (nouvelle règle) ou HT+TSC (ancienne règle, cascade) selon assietteTva.
-  // TVA = saisie manuelle si tvaManuelle, sinon assiette × taux_tva (si
-  // actif). TTC = HT + TSC + TVA.
+  // tscActive ET tscManuelle, sinon HT × taux_tsc (si actif), sinon 0.
+  // Assiette TVA = HT seul (nouvelle règle) ou HT+TSC (ancienne règle,
+  // cascade) selon assietteTva. TVA = saisie manuelle si tvaActive ET
+  // tvaManuelle, sinon assiette × taux_tva (si actif), sinon 0. TTC = HT +
+  // TSC + TVA.
+  //
+  // La saisie manuelle est TOUJOURS subordonnée à l'interrupteur "actif" —
+  // jamais un bypass. Vérifié contre docs/design/screens1.jsx:158-159 (le
+  // formulaire d'ajustement réel, tscManu = f.applyTsc && f.tscManuelle) :
+  // désactiver une taxe doit la ramener à 0 même si une saisie manuelle est
+  // encore renseignée dans le champ, jamais laisser une valeur manuelle
+  // fantôme continuer à peser sur le TTC. Bug trouvé en inventaire champ par
+  // champ (Phase 10.6septies, clôture) — l'implémentation antérieure
+  // vérifiait `tscManuelle` avant `tscActive`, contournant l'interrupteur.
   calculer(montantHt: number, taux: TauxCalcul): Montants {
     const ht = this.plancher(montantHt);
-    const tsc = taux.tscManuelle
-      ? this.plancher(taux.montantTscManuel ?? 0)
-      : taux.tscActive
-        ? this.plancher(this.arrondir(ht * taux.tauxTsc))
-        : 0;
+    const tsc = !taux.tscActive
+      ? 0
+      : taux.tscManuelle
+        ? this.plancher(taux.montantTscManuel ?? 0)
+        : this.plancher(this.arrondir(ht * taux.tauxTsc));
     const assiette = taux.assietteTva === "HT_TSC" ? ht + tsc : ht;
-    const tva = taux.tvaManuelle
-      ? this.plancher(taux.montantTvaManuel ?? 0)
-      : taux.tvaActive
-        ? this.plancher(this.arrondir(assiette * taux.tauxTva))
-        : 0;
+    const tva = !taux.tvaActive
+      ? 0
+      : taux.tvaManuelle
+        ? this.plancher(taux.montantTvaManuel ?? 0)
+        : this.plancher(this.arrondir(assiette * taux.tauxTva));
     const ttc = this.plancher(ht + tsc + tva);
     return { montantHt: ht, montantTsc: tsc, montantTva: tva, montantTtc: ttc };
   }
