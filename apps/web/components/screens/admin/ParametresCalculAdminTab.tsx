@@ -193,25 +193,41 @@ export function ParametresCalculAdminTab() {
               </div>
               <div className="mt-3">
                 <span className="mb-1 block text-12 font-bold text-gris700">Assiette de la TVA par défaut</span>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setEdition((prev) => ({ ...prev, [p.circuit]: { ...prev[p.circuit]!, assietteTvaDefaut: "HT" } }))}
-                    className={`rounded border px-3 py-1 text-12 font-bold ${
-                      e.assietteTvaDefaut === "HT" ? "border-vert700 bg-vertFond text-vertTexteSurClair" : "border-gris300 text-gris700"
-                    }`}
-                  >
-                    HT seul
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEdition((prev) => ({ ...prev, [p.circuit]: { ...prev[p.circuit]!, assietteTvaDefaut: "HT_TSC" } }))}
-                    className={`rounded border px-3 py-1 text-12 font-bold ${
-                      e.assietteTvaDefaut === "HT_TSC" ? "border-vert700 bg-vertFond text-vertTexteSurClair" : "border-gris300 text-gris700"
-                    }`}
-                  >
-                    HT + TSC (cascade)
-                  </button>
+                {/* Libellés alignés sur le radio du formulaire d'ajustement
+                    (docs/design/screens1.jsx:503/507) pour rester cohérents
+                    d'un écran à l'autre — CalcConfigView (screens3.jsx),
+                    seule source maquette pour CET écran précis, n'a qu'une
+                    bascule d'affichage ("Afficher la ligne HT+TSC"), pas un
+                    choix d'assiette : ParametreCalcul.assietteTvaDefaut est
+                    une capacité réelle construite au-delà de ce que montre
+                    ce screen précis, donc pas de libellé maquette à reprendre
+                    ici mot pour mot — réutilisation du vocabulaire déjà
+                    établi ailleurs plutôt qu'une invention. */}
+                <div className="flex flex-col gap-2">
+                  <label className="flex items-start gap-2 text-12">
+                    <input
+                      type="radio"
+                      name={`assietteTvaDefaut-${p.circuit}`}
+                      className="mt-0.5"
+                      checked={e.assietteTvaDefaut === "HT"}
+                      onChange={() => setEdition((prev) => ({ ...prev, [p.circuit]: { ...prev[p.circuit]!, assietteTvaDefaut: "HT" } }))}
+                    />
+                    <span>
+                      <strong>Nouvelle règle</strong> — TVA sur le <strong>montant HT</strong>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 text-12">
+                    <input
+                      type="radio"
+                      name={`assietteTvaDefaut-${p.circuit}`}
+                      className="mt-0.5"
+                      checked={e.assietteTvaDefaut === "HT_TSC"}
+                      onChange={() => setEdition((prev) => ({ ...prev, [p.circuit]: { ...prev[p.circuit]!, assietteTvaDefaut: "HT_TSC" } }))}
+                    />
+                    <span>
+                      <strong>Ancienne règle</strong> — TVA sur <strong>HT + TSC</strong>
+                    </span>
+                  </label>
                 </div>
               </div>
               <button
@@ -243,9 +259,21 @@ export function ParametresCalculAdminTab() {
                     <Money valeur={tsc} />
                   </div>
                 )}
+                {/* Ligne "HT + TSC" — visible seulement quand l'ancienne
+                    règle est réellement en jeu (screens1.jsx:529 : applyTsc
+                    && applyTva && tvaBase === "htTsc"), même condition que
+                    dans le panneau Taxes du formulaire d'ajustement. */}
+                {e.tscActiveDefaut && e.tvaActiveDefaut && e.assietteTvaDefaut === "HT_TSC" && (
+                  <div className="flex justify-between text-12 text-gris500">
+                    <span>HT + TSC</span>
+                    <Money valeur={assiette} />
+                  </div>
+                )}
                 {e.tvaActiveDefaut && (
                   <div className="flex justify-between">
-                    <span className="text-gris600">TVA ({tauxTvaPourcent} %)</span>
+                    <span className="text-gris600">
+                      TVA ({tauxTvaPourcent} %) · {e.assietteTvaDefaut === "HT_TSC" ? "sur HT+TSC" : "sur HT"}
+                    </span>
                     <Money valeur={tva} />
                   </div>
                 )}

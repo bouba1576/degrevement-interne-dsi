@@ -348,23 +348,33 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
   // de ParametresCalculPublicVue (le défaut COURANT du circuit, potentiellement
   // différent). Purement illustratif tant que "Enregistrer" n'a pas été
   // cliqué — les montants réellement appliqués restent demande.demande.montantTsc/Tva/Ttc.
+  //
+  // La saisie manuelle reste subordonnée à l'interrupteur "actif" — jamais un
+  // bypass (inventaire champ par champ, Phase 10.6septies clôture, vérifié
+  // contre docs/design/screens1.jsx:158-159) : taxe inactive → 0, même si un
+  // montant manuel est encore renseigné dans le champ.
   function previsualiserTaxes(e: TaxesEdition) {
-    if (!demande) return { tsc: 0, tva: 0, ttc: 0 };
+    if (!demande) return { tsc: 0, tva: 0, ttc: 0, assietteAffichable: false };
     const ht = demande.demande.montantHt;
     const tauxTsc = demande.demande.tauxTsc;
     const tauxTva = demande.demande.tauxTva;
-    const tsc = e.tscManuelle
-      ? Math.max(0, Number(e.montantTscManuel) || 0)
-      : e.tscActive
-        ? Math.max(0, Math.round(ht * tauxTsc * 100) / 100)
-        : 0;
+    const tsc = !e.tscActive
+      ? 0
+      : e.tscManuelle
+        ? Math.max(0, Number(e.montantTscManuel) || 0)
+        : Math.max(0, Math.round(ht * tauxTsc * 100) / 100);
     const assiette = e.assietteTva === "HT_TSC" ? ht + tsc : ht;
-    const tva = e.tvaManuelle
-      ? Math.max(0, Number(e.montantTvaManuel) || 0)
-      : e.tvaActive
-        ? Math.max(0, Math.round(assiette * tauxTva * 100) / 100)
-        : 0;
-    return { tsc, tva, ttc: Math.max(0, ht + tsc + tva) };
+    const tva = !e.tvaActive
+      ? 0
+      : e.tvaManuelle
+        ? Math.max(0, Number(e.montantTvaManuel) || 0)
+        : Math.max(0, Math.round(assiette * tauxTva * 100) / 100);
+    // Ligne "HT + TSC" affichée seulement quand l'ancienne règle est
+    // réellement en jeu (screens1.jsx:529 : f.applyTsc && f.applyTva &&
+    // f.tvaBase === "htTsc") — jamais en saisie manuelle de la TVA, où
+    // l'assiette n'entre plus dans le calcul affiché.
+    const assietteAffichable = e.tscActive && e.tvaActive && e.assietteTva === "HT_TSC" && !e.tvaManuelle;
+    return { tsc, tva, ttc: Math.max(0, ht + tsc + tva), assiette, assietteAffichable };
   }
 
   async function handleEnregistrerTaxes() {
@@ -1111,29 +1121,38 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
             {/* Assiette TVA — visible seulement quand TSC ET TVA sont actives
                 (décision explicite, feu vert utilisateur) : sans TSC active,
                 l'assiette HT+TSC coïnciderait avec HT seul, un choix qui
-                n'aurait aucun effet réel. */}
+                n'aurait aucun effet réel. Libellés repris mot pour mot de la
+                capture (docs/design/screens1.jsx:503/507, inventaire champ
+                par champ Phase 10.6septies clôture) — "HT seul"/"HT + TSC
+                (cascade)" ne correspondait pas exactement. */}
             {taxesEdition.tscActive && taxesEdition.tvaActive && (
               <div className="mb-3">
                 <span className="mb-1 block text-12 font-bold text-gris700">Assiette de la TVA</span>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setTaxesEdition((s) => (s ? { ...s, assietteTva: "HT" } : s))}
-                    className={`rounded border px-3 py-1 text-12 font-bold ${
-                      taxesEdition.assietteTva === "HT" ? "border-vert700 bg-vertFond text-vertTexteSurClair" : "border-gris300 text-gris700"
-                    }`}
-                  >
-                    HT seul
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTaxesEdition((s) => (s ? { ...s, assietteTva: "HT_TSC" } : s))}
-                    className={`rounded border px-3 py-1 text-12 font-bold ${
-                      taxesEdition.assietteTva === "HT_TSC" ? "border-vert700 bg-vertFond text-vertTexteSurClair" : "border-gris300 text-gris700"
-                    }`}
-                  >
-                    HT + TSC
-                  </button>
+                <div className="flex flex-col gap-2">
+                  <label className="flex items-start gap-2 text-12">
+                    <input
+                      type="radio"
+                      name="assietteTva"
+                      className="mt-0.5"
+                      checked={taxesEdition.assietteTva === "HT"}
+                      onChange={() => setTaxesEdition((s) => (s ? { ...s, assietteTva: "HT" } : s))}
+                    />
+                    <span>
+                      <strong>Nouvelle règle</strong> — TVA sur le <strong>montant HT</strong>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 text-12">
+                    <input
+                      type="radio"
+                      name="assietteTva"
+                      className="mt-0.5"
+                      checked={taxesEdition.assietteTva === "HT_TSC"}
+                      onChange={() => setTaxesEdition((s) => (s ? { ...s, assietteTva: "HT_TSC" } : s))}
+                    />
+                    <span>
+                      <strong>Ancienne règle</strong> — TVA sur <strong>HT + TSC</strong>
+                    </span>
+                  </label>
                 </div>
               </div>
             )}
@@ -1145,7 +1164,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                   checked={taxesEdition.tscManuelle}
                   onChange={(e) => setTaxesEdition((s) => (s ? { ...s, tscManuelle: e.target.checked } : s))}
                 />
-                Saisir le montant TSC manuellement
+                Saisir la TSC manuellement
               </label>
               {taxesEdition.tscManuelle && (
                 <>
@@ -1156,8 +1175,11 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                     value={taxesEdition.montantTscManuel}
                     onChange={(e) => setTaxesEdition((s) => (s ? { ...s, montantTscManuel: e.target.value } : s))}
                   />
-                  <p className="mt-1 text-12 text-gris600">Remplace le calcul automatique pour ce dossier (TSC active ou non).</p>
+                  <p className="mt-1 text-12 text-gris600">Remplace le calcul automatique pour ce dossier.</p>
                 </>
+              )}
+              {!taxesEdition.tscActive && (
+                <p className="mt-1 text-12 text-gris600">TSC inactive — une saisie manuelle resterait sans effet (TSC à 0).</p>
               )}
             </div>
 
@@ -1168,7 +1190,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                   checked={taxesEdition.tvaManuelle}
                   onChange={(e) => setTaxesEdition((s) => (s ? { ...s, tvaManuelle: e.target.checked } : s))}
                 />
-                Saisir le montant TVA manuellement
+                Saisir la TVA manuellement
               </label>
               {taxesEdition.tvaManuelle && (
                 <>
@@ -1179,21 +1201,36 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                     value={taxesEdition.montantTvaManuel}
                     onChange={(e) => setTaxesEdition((s) => (s ? { ...s, montantTvaManuel: e.target.value } : s))}
                   />
-                  <p className="mt-1 text-12 text-gris600">Remplace le calcul automatique pour ce dossier (TVA active ou non).</p>
+                  <p className="mt-1 text-12 text-gris600">Remplace le calcul automatique pour ce dossier.</p>
                 </>
+              )}
+              {!taxesEdition.tvaActive && (
+                <p className="mt-1 text-12 text-gris600">TVA inactive — une saisie manuelle resterait sans effet (TVA à 0).</p>
               )}
             </div>
 
             {(() => {
               const preview = previsualiserTaxes(taxesEdition);
+              const tauxTvaPourcent = demande ? (Number(demande.demande.tauxTva) * 100).toFixed(2) : "0";
+              const suffixeTva = taxesEdition.tvaManuelle
+                ? "saisie manuelle"
+                : taxesEdition.assietteTva === "HT_TSC"
+                  ? "sur HT+TSC"
+                  : "sur HT";
               return (
                 <div className="mb-3 flex flex-col gap-1 border-t border-gris200 pt-2 text-13">
+                  {preview.assietteAffichable && (
+                    <div className="flex justify-between text-12 text-gris500">
+                      <span>HT + TSC</span>
+                      <Money valeur={preview.assiette ?? 0} />
+                    </div>
+                  )}
                   <div className="flex justify-between text-gris600">
                     <span>TSC</span>
                     <Money valeur={preview.tsc} />
                   </div>
                   <div className="flex justify-between text-gris600">
-                    <span>TVA</span>
+                    <span>TVA ({tauxTvaPourcent} %) · {suffixeTva}</span>
                     <Money valeur={preview.tva} />
                   </div>
                   <div className="flex justify-between font-bold">
