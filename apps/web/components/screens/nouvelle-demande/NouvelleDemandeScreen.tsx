@@ -929,19 +929,6 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                 disabled={!!demande}
               />
             </div>
-            <div>
-              <label className="mb-1 block text-13 font-bold text-gris800">Montant en FCFA (optionnel)</label>
-              <input
-                className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-                type="number"
-                min="0"
-                value={montantXof}
-                onChange={(e) => setMontantXof(e.target.value)}
-                disabled={!!demande}
-              />
-              <p className="mt-1 text-12 text-gris600">Référence, indicative — sans effet sur le montant TTC réel.</p>
-            </div>
-
             <div style={{ gridColumn: "1 / -1" }}>
               <label className="mb-1 block text-13 font-bold text-gris800">Objectif</label>
               <input
@@ -972,6 +959,23 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                 onChange={(e) => setMemoObservation(e.target.value)}
                 disabled={!!demande}
               />
+            </div>
+            {/* Ordre exact de la maquette (screens1.jsx:419) — avant-dernier
+                champ, juste avant Responsabilité direction/service. Pur
+                détail d'ordre (inventaire ordonné trois circuits, Phase
+                10.6septies clôture) : le champ lui-même et son renommage
+                €→FCFA sont déjà tranchés (catégorie 4, DIVERGENCES.md). */}
+            <div>
+              <label className="mb-1 block text-13 font-bold text-gris800">Montant en FCFA (optionnel)</label>
+              <input
+                className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
+                type="number"
+                min="0"
+                value={montantXof}
+                onChange={(e) => setMontantXof(e.target.value)}
+                disabled={!!demande}
+              />
+              <p className="mt-1 text-12 text-gris600">Référence, indicative — sans effet sur le montant TTC réel.</p>
             </div>
 
             <ResponsabiliteFields
