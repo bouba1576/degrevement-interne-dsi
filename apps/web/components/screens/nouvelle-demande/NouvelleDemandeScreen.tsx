@@ -1351,11 +1351,19 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
           </div>
         )}
 
+        {/* "Total TTC" retiré d'ici : doublon visuel confirmé avec "Total TTC
+            (aperçu)" du panneau Taxes appliquées ci-dessus (même montant,
+            deux endroits) — décision explicite, reprise après la présentation
+            reportée. Le détail par ligne, lui, reste la SEULE vue du montant
+            HT réel d'une ligne en mode "période contestée" (prorata calculé
+            serveur, jamais affiché côté client avant "Enregistrer les
+            lignes" — cf. SelecteurLignes.tsx) : pas de doublon sur ce
+            point, rien à retirer. */}
         {demande && demande.lignes.length > 0 && (
           <div className="rounded-6 border border-gris200 bg-blanc p-5">
             <div className="mb-3 flex items-center gap-2">
               <Icon nom="calc" taille={17} />
-              <h3 className="text-14 font-bold">Montants</h3>
+              <h3 className="text-14 font-bold">Détail des lignes</h3>
             </div>
             <div className="flex flex-col gap-2">
               {demande.lignes.map((l) => (
@@ -1364,10 +1372,6 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                   <Money valeur={l.montantHtLigne} />
                 </div>
               ))}
-              <div className="mt-2 flex justify-between border-t border-gris200 pt-2">
-                <span className="font-bold">Total TTC</span>
-                <Money valeur={demande.demande.montantTtc} fort className="text-orange600" />
-              </div>
             </div>
           </div>
         )}
