@@ -8,13 +8,15 @@ const LIBELLE_TYPE_ACTEUR: Record<string, string> = { V: "Vérification", A: "Va
 
 export interface ApercuRoutageProps {
   demandeId: string;
-  // Décision explicite (feu vert utilisateur, résolution du mécanisme
-  // « Prévisualiser ») — onBlur des champs pertinents au routage (montant HT
-  // d'une ligne, taxes), jamais à chaque frappe. Le bouton manuel reste un
-  // déclencheur supplémentaire, pas le seul. `declencheur` est un jeton
-  // opaque (compteur incrémenté par l'orchestrateur) : tout changement de
-  // valeur relance previsualiser(), le premier rendu (valeur initiale) est
-  // ignoré pour ne pas appeler l'API avant tout blur/clic réel.
+  // Mécanisme entièrement automatique, aucun bouton manuel (règle
+  // permanente CLAUDE.md « mécanismes d'interaction contraignants » —
+  // Phase 10.6septies, poursuite) : `declencheur` est un jeton opaque
+  // (compteur incrémenté par l'orchestrateur) — tout changement de valeur,
+  // y compris la toute première (montage du panneau), relance
+  // previsualiser(). Le panneau n'est monté qu'une fois `demande.lignes`
+  // non vide, donc `declencheur` porte déjà au moins un incrément réel à ce
+  // moment — jamais une valeur "juste initialisée sans rien de nouveau à
+  // afficher".
   declencheur?: number;
 }
 
@@ -44,18 +46,22 @@ export function ApercuRoutage({ demandeId, declencheur }: ApercuRoutageProps) {
     }
   }
 
-  // Comparaison à la dernière valeur VUE (pas un simple "ignorer le premier
-  // appel") — nécessaire car React StrictMode (next.config.js,
-  // reactStrictMode: true) double-invoque les effets au montage en dev :
-  // un booléen "premier rendu" se ferait piéger par ce double appel et
-  // laisserait passer le second, déclenchant previsualiser() dès le premier
-  // montage réel — trouvé en vérification live (Phase 10.6septies), pas
-  // supposé. `useRef(declencheur)` capture la valeur initiale une seule fois
-  // (React ne réinitialise pas un ref déjà créé, y compris entre les deux
-  // passes de StrictMode), donc le premier effet — quel que soit le nombre
-  // de fois où StrictMode le rejoue — voit toujours `declencheur ===
-  // dernierVu.current` et ne déclenche rien.
-  const dernierVu = useRef(declencheur);
+  // Comparaison à la dernière valeur VUE, initialisée à `undefined` (pas à
+  // `declencheur`) — plus aucun bouton manuel pour le premier affichage
+  // (retiré, Phase 10.6septies poursuite), donc le tout premier montage doit
+  // lui-même déclencher previsualiser(), pas seulement les changements
+  // ultérieurs. `dernierVu.current` démarre à `undefined`, qui ne peut
+  // jamais être strictement égal à `declencheur` (toujours un nombre à ce
+  // stade, cf. commentaire de la prop) — le premier effet passe donc
+  // toujours la condition et déclenche l'appel.
+  //
+  // Robuste à React StrictMode (next.config.js, reactStrictMode: true), qui
+  // double-invoque les effets au montage en dev — trouvé en vérification
+  // live (Phase 10.6septies clôture), pas supposé : la première invocation
+  // met `dernierVu.current` à jour et déclenche l'appel ; la seconde (même
+  // montage réel, StrictMode) voit `declencheur === dernierVu.current` et
+  // ne déclenche rien de plus — un seul appel réel par montage, pas deux.
+  const dernierVu = useRef<number | undefined>(undefined);
   useEffect(() => {
     if (declencheur === undefined || declencheur === dernierVu.current) return;
     dernierVu.current = declencheur;
@@ -66,14 +72,7 @@ export function ApercuRoutage({ demandeId, declencheur }: ApercuRoutageProps) {
     <div className="rounded-6 border border-gris200 bg-blanc p-5">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-14 font-bold">Aperçu de routage</h3>
-        <button
-          type="button"
-          onClick={previsualiser}
-          disabled={chargement}
-          className="rounded bg-encre px-3 py-1.5 text-13 font-bold text-blanc disabled:opacity-50"
-        >
-          {chargement ? "Calcul…" : "Prévisualiser"}
-        </button>
+        {chargement && <span className="text-12 font-semibold text-gris600">Calcul…</span>}
       </div>
 
       {erreur && (
