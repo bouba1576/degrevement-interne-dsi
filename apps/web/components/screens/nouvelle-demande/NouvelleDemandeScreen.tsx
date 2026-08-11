@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { Badge, Icon, Money } from "@pgd/ui";
 import type {
@@ -300,14 +300,13 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
   const [enregistrement, setEnregistrement] = useState(false);
   const [erreurEnregistrement, setErreurEnregistrement] = useState<string | null>(null);
 
-  // Décision explicite (feu vert utilisateur, résolution du mécanisme
-  // « Prévisualiser ») — l'aperçu de routage se relance automatiquement à
-  // chaque sauvegarde réussie qui touche un champ pertinent au routage
-  // (lignes, taxes), jamais à chaque frappe. Compteur opaque passé à
-  // ApercuRoutage : tout incrément relance previsualiser() côté enfant, sauf
-  // au tout premier montage du panneau (cf. ApercuRoutage.tsx, premierRendu)
-  // — le bouton manuel "Prévisualiser" reste nécessaire pour ce premier
-  // affichage, et disponible ensuite comme déclencheur supplémentaire.
+  // Mécanisme entièrement automatique (règle permanente CLAUDE.md
+  // « mécanismes d'interaction contraignants », plus aucun bouton manuel
+  // nulle part sur ce panneau) — l'aperçu de routage se relance à chaque
+  // sauvegarde réussie qui touche un champ pertinent au routage (lignes,
+  // taxes), y compris la toute première fois que le panneau apparaît (cf.
+  // ApercuRoutage.tsx). Compteur opaque : tout incrément relance
+  // previsualiser() côté enfant.
   const [apercuDeclencheur, setApercuDeclencheur] = useState(0);
 
   const [soumissionEnCours, setSoumissionEnCours] = useState(false);
@@ -326,12 +325,35 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
   const [enregistrementTaxes, setEnregistrementTaxes] = useState(false);
   const [erreurTaxes, setErreurTaxes] = useState<string | null>(null);
 
+  // Refs toujours à jour au moment où le debounce se déclenche (règle
+  // permanente CLAUDE.md « mécanismes d'interaction contraignants » — plus
+  // de bouton manuel, cf. plus bas) : un `setTimeout` planifié depuis un
+  // gestionnaire d'événement capture les fermetures (closures) de CE
+  // rendu-là, qui deviennent périmées dès le rendu suivant. Lire depuis un
+  // ref au moment où le timeout se déclenche, plutôt que depuis l'état React
+  // fermé à la planification, garantit que la sauvegarde porte toujours sur
+  // la dernière valeur réellement saisie, pas sur un instantané obsolète.
+  const taxesEditionRef = useRef<TaxesEdition | null>(null);
+  const demandeRef = useRef<DemandeDetail | null>(null);
+  useEffect(() => {
+    demandeRef.current = demande;
+  }, [demande]);
+
+  const debounceTaxesRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (debounceTaxesRef.current) clearTimeout(debounceTaxesRef.current);
+    },
+    []
+  );
+
   useEffect(() => {
     if (!demande) {
       setTaxesEdition(null);
+      taxesEditionRef.current = null;
       return;
     }
-    setTaxesEdition({
+    const synchronise: TaxesEdition = {
       tscActive: demande.demande.tscActive,
       tvaActive: demande.demande.tvaActive,
       assietteTva: demande.demande.assietteTva,
@@ -339,7 +361,9 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
       montantTscManuel: demande.demande.montantTscManuel != null ? String(demande.demande.montantTscManuel) : "",
       tvaManuelle: demande.demande.tvaManuelle,
       montantTvaManuel: demande.demande.montantTvaManuel != null ? String(demande.demande.montantTvaManuel) : ""
-    });
+    };
+    setTaxesEdition(synchronise);
+    taxesEditionRef.current = synchronise;
   }, [demande]);
 
   // Aperçu client — reproduit la formule EXACTE de MontantService.calculer()
@@ -379,18 +403,20 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
   }
 
   async function handleEnregistrerTaxes() {
-    if (!demande || !taxesEdition) return;
+    const demandeActuelle = demandeRef.current;
+    const edition = taxesEditionRef.current;
+    if (!demandeActuelle || !edition) return;
     setEnregistrementTaxes(true);
     setErreurTaxes(null);
     try {
-      const misAJour = await modifierTaxes(demande.demande.id, {
-        tscActive: taxesEdition.tscActive,
-        tvaActive: taxesEdition.tvaActive,
-        assietteTva: taxesEdition.assietteTva,
-        tscManuelle: taxesEdition.tscManuelle,
-        montantTscManuel: taxesEdition.tscManuelle ? Math.max(0, Number(taxesEdition.montantTscManuel) || 0) : null,
-        tvaManuelle: taxesEdition.tvaManuelle,
-        montantTvaManuel: taxesEdition.tvaManuelle ? Math.max(0, Number(taxesEdition.montantTvaManuel) || 0) : null
+      const misAJour = await modifierTaxes(demandeActuelle.demande.id, {
+        tscActive: edition.tscActive,
+        tvaActive: edition.tvaActive,
+        assietteTva: edition.assietteTva,
+        tscManuelle: edition.tscManuelle,
+        montantTscManuel: edition.tscManuelle ? Math.max(0, Number(edition.montantTscManuel) || 0) : null,
+        tvaManuelle: edition.tvaManuelle,
+        montantTvaManuel: edition.tvaManuelle ? Math.max(0, Number(edition.montantTvaManuel) || 0) : null
       });
       setDemande(misAJour);
       setApercuDeclencheur((n) => n + 1);
@@ -399,6 +425,41 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
     } finally {
       setEnregistrementTaxes(false);
     }
+  }
+
+  // Debounce (règle permanente CLAUDE.md « mécanismes d'interaction
+  // contraignants ») — l'écriture serveur (PATCH .../taxes, HISTORIQUE_MONTANT
+  // R25) reste réelle mais devient différée et regroupée : plusieurs
+  // bascules rapprochées (interrupteurs, assiette, saisie manuelle)
+  // produisent UNE SEULE requête — donc une seule entrée d'audit — portant
+  // sur l'état final après la dernière modification, jamais une par
+  // clic/frappe intermédiaire. L'aperçu client (`previsualiserTaxes`) reste
+  // instantané et purement local, aucun appel réseau : seule la
+  // persistance est différée, jamais l'affichage.
+  function planifierSauvegardeTaxes() {
+    if (debounceTaxesRef.current) clearTimeout(debounceTaxesRef.current);
+    debounceTaxesRef.current = setTimeout(() => {
+      debounceTaxesRef.current = null;
+      void handleEnregistrerTaxes();
+    }, 500);
+  }
+
+  // Point de passage unique pour toute modification du panneau Taxes issue
+  // d'une interaction utilisateur — met à jour l'état ET le ref synchrone
+  // (jamais périmé au moment où le debounce se déclenche), puis planifie la
+  // sauvegarde. Ne jamais appeler `setTaxesEdition` directement depuis un
+  // gestionnaire d'interaction : seul l'effet de resynchronisation
+  // serveur ci-dessus a le droit de le faire — lui ne doit jamais planifier
+  // de sauvegarde, sous peine de boucle (sauvegarde → nouvelle `demande` →
+  // resynchronisation → nouvelle sauvegarde → …).
+  function mettreAJourTaxes(updater: (s: TaxesEdition) => TaxesEdition) {
+    setTaxesEdition((s) => {
+      if (!s) return s;
+      const suivant = updater(s);
+      taxesEditionRef.current = suivant;
+      return suivant;
+    });
+    planifierSauvegardeTaxes();
   }
 
   // onBlur du champ « Montant HT » d'une ligne (résolution du mécanisme
@@ -1139,12 +1200,13 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
             <div className="mb-3 flex items-center gap-2">
               <Icon nom="calc" taille={17} />
               <h3 className="text-14 font-bold">Taxes appliquées</h3>
+              {enregistrementTaxes && <span className="text-12 font-semibold text-gris600">Enregistrement…</span>}
             </div>
 
             <div className="mb-3 flex gap-2">
               <button
                 type="button"
-                onClick={() => setTaxesEdition((s) => (s ? { ...s, tscActive: !s.tscActive } : s))}
+                onClick={() => mettreAJourTaxes((s) => ({ ...s, tscActive: !s.tscActive }))}
                 className={`rounded border px-3 py-1 text-12 font-bold ${
                   taxesEdition.tscActive ? "border-vert700 bg-vertFond text-vertTexteSurClair" : "border-gris300 text-gris700"
                 }`}
@@ -1153,7 +1215,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
               </button>
               <button
                 type="button"
-                onClick={() => setTaxesEdition((s) => (s ? { ...s, tvaActive: !s.tvaActive } : s))}
+                onClick={() => mettreAJourTaxes((s) => ({ ...s, tvaActive: !s.tvaActive }))}
                 className={`rounded border px-3 py-1 text-12 font-bold ${
                   taxesEdition.tvaActive ? "border-vert700 bg-vertFond text-vertTexteSurClair" : "border-gris300 text-gris700"
                 }`}
@@ -1179,7 +1241,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                       name="assietteTva"
                       className="mt-0.5"
                       checked={taxesEdition.assietteTva === "HT"}
-                      onChange={() => setTaxesEdition((s) => (s ? { ...s, assietteTva: "HT" } : s))}
+                      onChange={() => mettreAJourTaxes((s) => ({ ...s, assietteTva: "HT" }))}
                     />
                     <span>
                       <strong>Nouvelle règle</strong> — TVA sur le <strong>montant HT</strong>
@@ -1191,7 +1253,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                       name="assietteTva"
                       className="mt-0.5"
                       checked={taxesEdition.assietteTva === "HT_TSC"}
-                      onChange={() => setTaxesEdition((s) => (s ? { ...s, assietteTva: "HT_TSC" } : s))}
+                      onChange={() => mettreAJourTaxes((s) => ({ ...s, assietteTva: "HT_TSC" }))}
                     />
                     <span>
                       <strong>Ancienne règle</strong> — TVA sur <strong>HT + TSC</strong>
@@ -1206,7 +1268,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                 <input
                   type="checkbox"
                   checked={taxesEdition.tscManuelle}
-                  onChange={(e) => setTaxesEdition((s) => (s ? { ...s, tscManuelle: e.target.checked } : s))}
+                  onChange={(e) => mettreAJourTaxes((s) => ({ ...s, tscManuelle: e.target.checked }))}
                 />
                 Saisir la TSC manuellement
               </label>
@@ -1217,7 +1279,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                     type="number"
                     min="0"
                     value={taxesEdition.montantTscManuel}
-                    onChange={(e) => setTaxesEdition((s) => (s ? { ...s, montantTscManuel: e.target.value } : s))}
+                    onChange={(e) => mettreAJourTaxes((s) => ({ ...s, montantTscManuel: e.target.value }))}
                   />
                   <p className="mt-1 text-12 text-gris600">Remplace le calcul automatique pour ce dossier.</p>
                 </>
@@ -1232,7 +1294,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                 <input
                   type="checkbox"
                   checked={taxesEdition.tvaManuelle}
-                  onChange={(e) => setTaxesEdition((s) => (s ? { ...s, tvaManuelle: e.target.checked } : s))}
+                  onChange={(e) => mettreAJourTaxes((s) => ({ ...s, tvaManuelle: e.target.checked }))}
                 />
                 Saisir la TVA manuellement
               </label>
@@ -1243,7 +1305,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                     type="number"
                     min="0"
                     value={taxesEdition.montantTvaManuel}
-                    onChange={(e) => setTaxesEdition((s) => (s ? { ...s, montantTvaManuel: e.target.value } : s))}
+                    onChange={(e) => mettreAJourTaxes((s) => ({ ...s, montantTvaManuel: e.target.value }))}
                   />
                   <p className="mt-1 text-12 text-gris600">Remplace le calcul automatique pour ce dossier.</p>
                 </>
@@ -1286,15 +1348,6 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
             })()}
 
             {erreurTaxes && <p className="mb-2 text-13 font-semibold text-rouge700">{erreurTaxes}</p>}
-
-            <button
-              type="button"
-              onClick={handleEnregistrerTaxes}
-              disabled={enregistrementTaxes}
-              className="w-full rounded bg-encre px-3 py-1.5 text-13 font-bold text-blanc disabled:opacity-50"
-            >
-              {enregistrementTaxes ? "Enregistrement…" : "Enregistrer les taxes"}
-            </button>
           </div>
         )}
 
