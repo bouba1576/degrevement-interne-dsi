@@ -15,6 +15,7 @@ describe("AdminParametresCalculService.modifier — recalcul brouillon / gel sou
 
   const acteur = { id: "44444444-4444-4444-4444-444444444444", identifiantAd: "test.parametres@orange.ci" };
   let tauxOriginal: { tauxTsc: string; tauxTva: string };
+  let assietteTvaDefautOriginal: "HT" | "HT_TSC";
   let demandeBrouillonId: string;
   let demandeSoumiseId: string;
 
@@ -26,14 +27,16 @@ describe("AdminParametresCalculService.modifier — recalcul brouillon / gel sou
     });
     const parametre = await prisma.parametreCalcul.findUniqueOrThrow({ where: { circuit: "DOBB" } });
     tauxOriginal = { tauxTsc: parametre.tauxTsc.toString(), tauxTva: parametre.tauxTva.toString() };
+    assietteTvaDefautOriginal = parametre.assietteTvaDefaut;
   });
 
   afterEach(async () => {
-    // Restaure le taux DOBB — partagé avec d'autres fichiers de test contre
-    // le même Postgres, ne doit pas fuiter d'un test à l'autre.
+    // Restaure le taux ET l'assiette TVA de DOBB — partagés avec d'autres
+    // fichiers de test contre le même Postgres, ne doivent pas fuiter d'un
+    // test à l'autre (convention « clé fermée » du projet).
     await prisma.parametreCalcul.update({
       where: { circuit: "DOBB" },
-      data: { tauxTsc: tauxOriginal.tauxTsc, tauxTva: tauxOriginal.tauxTva }
+      data: { tauxTsc: tauxOriginal.tauxTsc, tauxTva: tauxOriginal.tauxTva, assietteTvaDefaut: assietteTvaDefautOriginal }
     });
     await prisma.historiqueMontant.deleteMany({
       where: { demandeId: { in: [demandeBrouillonId, demandeSoumiseId].filter(Boolean) } }
@@ -45,7 +48,11 @@ describe("AdminParametresCalculService.modifier — recalcul brouillon / gel sou
     await prisma.$disconnect();
   });
 
-  async function creerDemande(statut: "BROUILLON" | "SOUMIS", suffixe: string): Promise<string> {
+  async function creerDemande(
+    statut: "BROUILLON" | "SOUMIS",
+    suffixe: string,
+    assietteTva: "HT" | "HT_TSC" = "HT_TSC"
+  ): Promise<string> {
     const demande = await prisma.demande.create({
       data: {
         reference: `TEST-PARAM-${suffixe}`,
@@ -56,6 +63,8 @@ describe("AdminParametresCalculService.modifier — recalcul brouillon / gel sou
         montantHt: 1_000_000,
         tauxTsc: tauxOriginal.tauxTsc,
         tauxTva: tauxOriginal.tauxTva,
+        assietteTva,
+        // HT=1_000_000, TSC=30_000 : cascade HT_TSC -> TVA=(1_030_000)*0.18=185_400
         montantTsc: 30_000,
         montantTva: 185_400,
         montantTtc: 1_215_400,
@@ -136,5 +145,43 @@ describe("AdminParametresCalculService.modifier — recalcul brouillon / gel sou
 
     const historique = await prisma.historiqueMontant.findFirst({ where: { demandeId: demandeBrouillonId } });
     expect(historique).toBeNull();
+  });
+
+  // Confirmation métier du 2026-08-11 (défaut HT_TSC -> HT, cf. CLAUDE.md) —
+  // assietteTvaDefaut seul (sans changement de tauxTsc/tauxTva) doit suivre
+  // exactement le même mécanisme que les taux : recalcul des BROUILLON,
+  // gel des SOUMIS. Jamais explicitement isolé avant ce tour — les tests
+  // ci-dessus ne changent que tauxTsc/tauxTva, jamais assietteTvaDefaut seul.
+  it("recalcule les brouillons quand seul assietteTvaDefaut change (HT_TSC -> HT), gèle les soumises", async () => {
+    demandeBrouillonId = await creerDemande("BROUILLON", `ASSIETTE-B-${Date.now()}`, "HT_TSC");
+    demandeSoumiseId = await creerDemande("SOUMIS", `ASSIETTE-S-${Date.now()}`, "HT_TSC");
+
+    const reponse = await service.modifier("DOBB", { assietteTvaDefaut: "HT" });
+    expect(reponse.parametre.assietteTvaDefaut).toBe("HT");
+    expect(reponse.demandesBrouillonRecalculees).toBeGreaterThanOrEqual(1);
+
+    const brouillonApres = await prisma.demande.findUniqueOrThrow({ where: { id: demandeBrouillonId } });
+    expect(brouillonApres.assietteTva).toBe("HT");
+    // HT=1_000_000, taux inchangés : TSC=30_000 (assiette n'affecte que la TVA),
+    // TVA=1_000_000*0.18=180_000 (HT seul, plus de +TSC dans l'assiette), TTC=1_210_000.
+    expect(Number(brouillonApres.montantTsc)).toBe(30_000);
+    expect(Number(brouillonApres.montantTva)).toBe(180_000);
+    expect(Number(brouillonApres.montantTtc)).toBe(1_210_000);
+
+    const historiqueBrouillon = await prisma.historiqueMontant.findFirst({
+      where: { demandeId: demandeBrouillonId, origine: "RECALCUL" },
+      orderBy: { horodatage: "desc" }
+    });
+    expect(historiqueBrouillon).not.toBeNull();
+    expect(historiqueBrouillon?.acteurId).toBeNull(); // R23 : cas système
+
+    // Gel — assiette ET montants de la demande déjà soumise ne bougent pas.
+    const soumiseApres = await prisma.demande.findUniqueOrThrow({ where: { id: demandeSoumiseId } });
+    expect(soumiseApres.assietteTva).toBe("HT_TSC");
+    expect(Number(soumiseApres.montantTva)).toBe(185_400);
+    expect(Number(soumiseApres.montantTtc)).toBe(1_215_400);
+
+    const historiqueSoumise = await prisma.historiqueMontant.findFirst({ where: { demandeId: demandeSoumiseId } });
+    expect(historiqueSoumise).toBeNull();
   });
 });

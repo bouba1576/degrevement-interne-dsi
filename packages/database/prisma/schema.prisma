@@ -76,7 +76,9 @@ enum EnumLocalisation {
 // de la TVA, configurable (ParametreCalcul.assietteTvaDefaut) et modifiable
 // par dossier (Demande.assietteTva). HT = nouvelle règle (TVA sur le HT
 // seul) ; HT_TSC = ancienne règle (TVA en cascade sur HT+TSC, déjà la seule
-// formule implémentée avant ce chantier).
+// formule implémentée avant ce chantier). Défaut basculé vers HT le
+// 2026-08-11 (confirmation métier explicite, cf. CLAUDE.md) — les deux
+// valeurs restent sélectionnables, HT_TSC reste demandé par DOBB.
 enum EnumAssietteTva {
   HT
   HT_TSC
@@ -409,7 +411,7 @@ model ParametreCalcul {
   tauxTva         Decimal     @default(0.18) @map("taux_tva") @db.Decimal(5, 4)
   tscActiveDefaut Boolean     @default(true) @map("tsc_active_defaut")
   tvaActiveDefaut Boolean     @default(true) @map("tva_active_defaut")
-  assietteTvaDefaut EnumAssietteTva @default(HT_TSC) @map("assiette_tva_defaut")
+  assietteTvaDefaut EnumAssietteTva @default(HT) @map("assiette_tva_defaut")
   devise          String      @default("XOF")
 
   circuitRef Circuit @relation(fields: [circuit], references: [code])
@@ -641,7 +643,7 @@ model Demande {
   // panneau "Taxes appliquées" devenu interactif. Portée dossier entier (HT
   // agrégé), pas ligne par ligne. Toute saisie manuelle écrit une entrée
   // HISTORIQUE_MONTANT (origine=MODIFICATION, acteur réel) — R25.
-  assietteTva            EnumAssietteTva   @default(HT_TSC) @map("assiette_tva")
+  assietteTva            EnumAssietteTva   @default(HT) @map("assiette_tva")
   tscManuelle            Boolean           @default(false) @map("tsc_manuelle")
   montantTscManuel       Decimal?          @map("montant_tsc_manuel") @db.Decimal(15, 2)
   tvaManuelle            Boolean           @default(false) @map("tva_manuelle")
