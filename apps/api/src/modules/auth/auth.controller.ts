@@ -78,7 +78,24 @@ export class AuthController {
     }
     await this.rateLimit.reinitialiser("login", identifiantAd);
 
-    const { utilisateur, roles } = await this.rbacResolution.resoudre(utilisateurAd);
+    const resolution = await this.rbacResolution.resoudre(utilisateurAd);
+    if (resolution.statut === "NON_PROVISIONNE") {
+      // Pré-enregistrement des utilisateurs AD, Temps 2 (12/08/2026) — un
+      // identifiant/mot de passe AD valides ne suffisent plus : distinct d'un
+      // échec d'authentification (évènement/message dédiés), jamais une
+      // session dégradée à zéro rôle (comportement JIT retiré, cf. CLAUDE.md).
+      await this.journal.consigner({
+        utilisateurId: resolution.utilisateurId ?? undefined,
+        evenement: "ACCES_NON_PROVISIONNE",
+        facteur: "AD",
+        succes: false
+      });
+      throw new UnauthorizedException({
+        code: "COMPTE_NON_PROVISIONNE",
+        message: "Ce compte n'a pas été pré-enregistré. Contactez votre administrateur."
+      });
+    }
+    const { utilisateur, roles } = resolution;
     await this.journal.consigner({ utilisateurId: utilisateur.id, evenement: "LOGIN", facteur: "AD", succes: true });
 
     const rolesExigentMfa = await this.prisma.role.count({

@@ -173,6 +173,12 @@ export function UtilisateurModal({
               </label>
             ))}
           </div>
+          {utilisateur && (
+            <p className="mt-2 text-12 text-gris600">
+              Un changement de rôle n&apos;affecte pas une session déjà ouverte — il devient effectif à la
+              prochaine connexion de cette personne.
+            </p>
+          )}
         </div>
       </div>
     </Modal>

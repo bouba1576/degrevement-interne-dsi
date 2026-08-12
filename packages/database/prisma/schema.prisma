@@ -134,6 +134,11 @@ enum EnumEvenementSecurite {
   MFA_CHALLENGE
   RBAC_REFUS
   SOD_REFUS
+  // Pré-enregistrement des utilisateurs AD, Temps 2 (12/08/2026) — LDAP
+  // valide mais aucun MembreRole : distinct de LOGIN+succes=false (mot de
+  // passe invalide), pour ne jamais confondre les deux dans le journal de
+  // sécurité.
+  ACCES_NON_PROVISIONNE
 
   @@map("enum_evenement_securite")
 }

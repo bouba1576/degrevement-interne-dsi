@@ -19,8 +19,18 @@ export interface AppE2e {
 // qui pourrait diverger silencieusement (même principe que le bug d'ordre de
 // routes trouvé en Phase 8 : invisible tant qu'aucun test ne passe par une
 // vraie requête HTTP, cf. CLAUDE.md).
-export async function demarrerAppE2e(): Promise<AppE2e> {
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+//
+// `overrides` (optionnel, jamais utilisé par les e2e existants) : permet à un
+// test HTTP réel de remplacer un provider concret (ex. LdapProvider) sans
+// dépendre d'un LDAP réel — nécessaire pour exercer un chemin de refus
+// (identifiants AD valides mais jamais atteignables via le seed LDAP de dev)
+// sans construire une identité LDAP jetable à chaque run.
+export async function demarrerAppE2e(overrides?: Array<{ provider: unknown; useValue: unknown }>): Promise<AppE2e> {
+  let builder = Test.createTestingModule({ imports: [AppModule] });
+  for (const { provider, useValue } of overrides ?? []) {
+    builder = builder.overrideProvider(provider).useValue(useValue);
+  }
+  const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication();
   app.use(cookieParser());
   app.setGlobalPrefix("api");

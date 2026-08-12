@@ -1,54 +1,51 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import type { Utilisateur } from "@pgd/database";
 import { PrismaService } from "../../../infra/prisma/prisma.service";
 import type { UtilisateurAd } from "../ports/ldap.port";
 
-// SF-PGD-007 : résolution des groupes AD → rôles PGD à CHAQUE ouverture de
-// session. Provisionnement JIT de UTILISATEUR (pas de flux d'inscription
-// séparé dans les sources) et synchronisation de MEMBRE_ROLE sur l'état AD du
-// moment — un rôle dont le groupe AD n'est plus porté par l'utilisateur est
-// retiré, pas seulement complété. Interprétation raisonnable de « résolution à
-// chaque ouverture de session », non littéralement détaillée dans les sources
-// au-delà de cette phrase.
+export type ResolutionRbac =
+  | { statut: "AUTORISE"; utilisateur: Utilisateur; roles: string[] }
+  | { statut: "NON_PROVISIONNE"; utilisateurId: string | null };
+
+// Pré-enregistrement des utilisateurs AD, Temps 2 (12/08/2026, CLAUDE.md) —
+// remplace l'ancien provisionnement JIT (upsert Utilisateur + resynchronisation
+// continue de MembreRole depuis les groupes AD à chaque connexion). resoudre()
+// devient une simple LECTURE : l'authentification AD est déjà passée (appelant
+// unique, AuthController.login(), après LdapPort.authentifier() réussi) — ce
+// service ne décide plus « quels rôles cette personne a-t-elle selon l'AD »,
+// il vérifie « cette personne a-t-elle été pré-enregistrée par un admin ».
+//
+// Aucune écriture sur Utilisateur ni MembreRole ici, jamais — l'un et l'autre
+// sont désormais possédés exclusivement par AdminUtilisateursService (écran
+// « Utilisateurs », CLAUDE.md Temps 1) : le nom affiché, notamment, reste celui
+// choisi à l'écran d'administration, jamais réécrasé silencieusement par une
+// valeur AD à la connexion suivante. utilisateurAd.groupes n'est plus lu du
+// tout : Role.groupeAd redevient purement informatif (affiché à l'écran de
+// recherche annuaire), jamais déclencheur automatique — décision actée lors de
+// la conception (option a), vérifiée avant ce changement : resoudre() n'a
+// qu'un seul appelant dans tout le dépôt (AuthController.login()).
 @Injectable()
 export class RbacResolutionService {
-  private readonly logger = new Logger(RbacResolutionService.name);
-
   constructor(private readonly prisma: PrismaService) {}
 
-  async resoudre(utilisateurAd: UtilisateurAd): Promise<{ utilisateur: Utilisateur; roles: string[] }> {
-    const utilisateur = await this.prisma.utilisateur.upsert({
-      where: { identifiantAd: utilisateurAd.identifiantAd },
-      update: { nom: utilisateurAd.nom },
-      create: { identifiantAd: utilisateurAd.identifiantAd, nom: utilisateurAd.nom }
+  async resoudre(utilisateurAd: UtilisateurAd): Promise<ResolutionRbac> {
+    const utilisateur = await this.prisma.utilisateur.findUnique({
+      where: { identifiantAd: utilisateurAd.identifiantAd }
     });
 
-    const rolesCorrespondants = await this.prisma.role.findMany({
-      where: { groupeAd: { in: utilisateurAd.groupes } },
-      select: { code: true }
-    });
-    const codesRoles = rolesCorrespondants.map((r) => r.code);
-
-    if (utilisateurAd.groupes.length > 0 && codesRoles.length === 0) {
-      this.logger.warn(
-        `${utilisateurAd.identifiantAd} porte des groupes AD (${utilisateurAd.groupes.join(", ")}) ` +
-          `ne correspondant à aucun ROLE.groupe_ad connu — catalogue de rôles incomplet (cf. roles.seed.ts)`
-      );
+    if (!utilisateur) {
+      return { statut: "NON_PROVISIONNE", utilisateurId: null };
     }
 
-    await this.prisma.$transaction([
-      this.prisma.membreRole.deleteMany({
-        where: { utilisateurId: utilisateur.id, roleCode: { notIn: codesRoles } }
-      }),
-      ...codesRoles.map((roleCode) =>
-        this.prisma.membreRole.upsert({
-          where: { utilisateurId_roleCode: { utilisateurId: utilisateur.id, roleCode } },
-          update: {},
-          create: { utilisateurId: utilisateur.id, roleCode }
-        })
-      )
-    ]);
+    const membresRole = await this.prisma.membreRole.findMany({
+      where: { utilisateurId: utilisateur.id },
+      select: { roleCode: true }
+    });
 
-    return { utilisateur, roles: codesRoles };
+    if (membresRole.length === 0) {
+      return { statut: "NON_PROVISIONNE", utilisateurId: utilisateur.id };
+    }
+
+    return { statut: "AUTORISE", utilisateur, roles: membresRole.map((m) => m.roleCode) };
   }
 }
