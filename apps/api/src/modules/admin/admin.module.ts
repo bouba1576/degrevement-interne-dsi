@@ -19,12 +19,15 @@ import { AdminCalendrierSlaService } from "./services/admin-calendrier-sla.servi
 import { AdminModulesController } from "./admin-modules.controller";
 import { AdminModulesService } from "./services/admin-modules.service";
 import { EscaladeManuelleService } from "./services/escalade-manuelle.service";
+import { AdminUtilisateursController } from "./admin-utilisateurs.controller";
+import { AdminUtilisateursService } from "./services/admin-utilisateurs.service";
 import { LignesModule } from "../lignes/lignes.module";
 import { DemandesModule } from "../demandes/demandes.module";
 import { TachesModule } from "../taches/taches.module";
+import { AuthModule } from "../auth/auth.module";
 
 @Module({
-  imports: [LignesModule, DemandesModule, TachesModule],
+  imports: [LignesModule, DemandesModule, TachesModule, AuthModule],
   controllers: [
     AdminController,
     AdminPaliersController,
@@ -35,7 +38,8 @@ import { TachesModule } from "../taches/taches.module";
     AdminLibellesAjustementController,
     AdminParametresGlobauxController,
     AdminCalendrierSlaController,
-    AdminModulesController
+    AdminModulesController,
+    AdminUtilisateursController
   ],
   providers: [
     AdminPaliersService,
@@ -47,7 +51,8 @@ import { TachesModule } from "../taches/taches.module";
     AdminParametresGlobauxService,
     AdminCalendrierSlaService,
     AdminModulesService,
-    EscaladeManuelleService
+    EscaladeManuelleService,
+    AdminUtilisateursService
   ],
   // AdminMotifsService.listerActifs() est réutilisé par ReferentielsModule
   // (GET /api/referentiels/motifs, lecture ouverte à tout authentifié) —

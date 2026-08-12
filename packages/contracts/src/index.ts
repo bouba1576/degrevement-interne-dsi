@@ -10,6 +10,7 @@ export * from "./demande";
 export * from "./admin-palier";
 export * from "./admin-parametre-calcul";
 export * from "./admin-referentiels";
+export * from "./admin-utilisateur";
 export * from "./referentiel";
 export * from "./tache";
 export * from "./delegation";

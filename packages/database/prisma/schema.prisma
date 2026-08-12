@@ -185,7 +185,17 @@ model Utilisateur {
   mfaMethode    EnumMethodeMfa @default(DUO) @map("mfa_methode")
   totpSecret    String?   @map("totp_secret")
   totpActiveLe  DateTime? @map("totp_active_le") @db.Timestamptz
+  // Pré-enregistrement (analyse du 12/08/2026, CLAUDE.md « Pré-enregistrement
+  // des utilisateurs AD ») — même référentiel que Demande.directionRespId/
+  // serviceRespId (DirectionResponsabilite/ServiceResponsabilite), pas une
+  // nouvelle table : ici, le rattachement de l'AGENT lui-même (pas la
+  // direction jugée responsable d'un dossier). Nullable : un utilisateur peut
+  // être pré-enregistré (rôle posé) sans direction/service renseignés.
+  directionId   String?   @map("direction_id") @db.Uuid
+  serviceId     String?   @map("service_id") @db.Uuid
 
+  direction                       DirectionResponsabilite? @relation(fields: [directionId], references: [id])
+  service                         ServiceResponsabilite?   @relation(fields: [serviceId], references: [id])
   membresRole                     MembreRole[]
   demandesInitiees                Demande[]           @relation("DemandeInitiateur")
   tachesReclamees                 Tache[]             @relation("TacheAgentClaim")
@@ -195,6 +205,8 @@ model Utilisateur {
   historiqueMontants              HistoriqueMontant[]
   controles                       Controle[]
   notifications                   Notification[]
+
+  @@index([directionId, serviceId])
 
   @@map("utilisateur")
 }
@@ -502,8 +514,9 @@ model DirectionResponsabilite {
   libelle String  @unique
   actif   Boolean @default(true)
 
-  services ServiceResponsabilite[]
-  demandes Demande[]
+  services     ServiceResponsabilite[]
+  demandes     Demande[]
+  utilisateurs Utilisateur[]
 
   @@map("direction_responsabilite")
 }
@@ -514,8 +527,9 @@ model ServiceResponsabilite {
   libelle     String
   actif       Boolean @default(true)
 
-  direction DirectionResponsabilite @relation(fields: [directionId], references: [id])
-  demandes  Demande[]
+  direction    DirectionResponsabilite @relation(fields: [directionId], references: [id])
+  utilisateurs Utilisateur[]
+  demandes     Demande[]
 
   @@unique([directionId, libelle])
   @@map("service_responsabilite")

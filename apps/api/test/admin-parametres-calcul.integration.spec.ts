@@ -79,7 +79,13 @@ describe("AdminParametresCalculService.modifier — recalcul brouillon / gel sou
     demandeBrouillonId = await creerDemande("BROUILLON", `B-${Date.now()}`);
     demandeSoumiseId = await creerDemande("SOUMIS", `S-${Date.now()}`);
 
-    const reponse = await service.modifier("DOBB", { tauxTsc: 0.05, tauxTva: 0.2 });
+    // assietteTvaDefaut fixé explicitement (HT_TSC) : ce test porte sur le
+    // recalcul de tauxTsc/tauxTva, pas sur l'assiette (couverte par le test
+    // dédié plus bas) — sans ce pin, le calcul dépend du défaut AMBIANT du
+    // circuit DOBB, qui a basculé vers HT le 2026-08-11 (confirmation
+    // métier, CLAUDE.md) : ce test l'aurait silencieusement cassé sans ce
+    // fix, trouvé en sweep complet plutôt que supposé toujours vert.
+    const reponse = await service.modifier("DOBB", { tauxTsc: 0.05, tauxTva: 0.2, assietteTvaDefaut: "HT_TSC" });
     expect(reponse.parametre.tauxTsc).toBe(0.05);
     expect(reponse.parametre.tauxTva).toBe(0.2);
     expect(reponse.demandesBrouillonRecalculees).toBeGreaterThanOrEqual(1);
@@ -87,7 +93,7 @@ describe("AdminParametresCalculService.modifier — recalcul brouillon / gel sou
     const brouillonApres = await prisma.demande.findUniqueOrThrow({ where: { id: demandeBrouillonId } });
     expect(Number(brouillonApres.tauxTsc)).toBe(0.05);
     expect(Number(brouillonApres.tauxTva)).toBe(0.2);
-    // HT=1_000_000 : TSC=50_000, TVA=(1_050_000)*0.20=210_000, TTC=1_260_000
+    // HT=1_000_000, assiette HT_TSC : TSC=50_000, TVA=(1_050_000)*0.20=210_000, TTC=1_260_000
     expect(Number(brouillonApres.montantTsc)).toBe(50_000);
     expect(Number(brouillonApres.montantTva)).toBe(210_000);
     expect(Number(brouillonApres.montantTtc)).toBe(1_260_000);

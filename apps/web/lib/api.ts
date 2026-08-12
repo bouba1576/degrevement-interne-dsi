@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  annuaireResultatSchema,
   apercuRoutageReponseSchema,
   calendrierSlaVueSchema,
   circuitVueSchema,
@@ -36,6 +37,8 @@ import {
   soumissionReponseSchema,
   tacheVueSchema,
   tachesListeReponseSchema,
+  utilisateurAdminVueSchema,
+  type AnnuaireResultat,
   type ApercuRoutageReponse,
   type ApprouverRequete,
   type CalendrierSlaVue,
@@ -79,6 +82,7 @@ import {
   type ModifierParametreGlobalRequete,
   type ModifierRoleRequete,
   type ModifierTaxesRequete,
+  type ModifierUtilisateurAdminRequete,
   type ModuleVue,
   type MotifVue,
   type NotificationVue,
@@ -88,6 +92,7 @@ import {
   type ParametresCalculPublicVue,
   type ParametreGlobalVue,
   type PieceJointeVue,
+  type PreEnregistrerUtilisateurRequete,
   type RejeterRequete,
   type RoleVue,
   type SessionUtilisateur,
@@ -96,7 +101,8 @@ import {
   type SoumissionReponse,
   type TacheVue,
   type TachesListeReponse,
-  type UniversFmiVue
+  type UniversFmiVue,
+  type UtilisateurAdminVue
 } from "@pgd/contracts";
 
 // Session par cookie httpOnly (SessionService, apps/api) : `credentials:
@@ -499,6 +505,33 @@ export function modifierRole(code: string, donnees: ModifierRoleRequete): Promis
 
 export function supprimerRole(code: string): Promise<{ supprime: true }> {
   return requete(`/api/admin/roles/${code}`, z.object({ supprime: z.literal(true) }), { method: "DELETE" });
+}
+
+// Utilisateurs — pré-enregistrement (CLAUDE.md « Pré-enregistrement des
+// utilisateurs AD », Temps 1) -------------------------------------------
+
+export function rechercherAnnuaireAd(motCle: string): Promise<AnnuaireResultat[]> {
+  return requete(`/api/admin/utilisateurs/annuaire?q=${encodeURIComponent(motCle)}`, z.array(annuaireResultatSchema));
+}
+
+export function listerUtilisateursAdmin(): Promise<UtilisateurAdminVue[]> {
+  return requete("/api/admin/utilisateurs", z.array(utilisateurAdminVueSchema));
+}
+
+export function preEnregistrerUtilisateur(donnees: PreEnregistrerUtilisateurRequete): Promise<UtilisateurAdminVue> {
+  return requete("/api/admin/utilisateurs", utilisateurAdminVueSchema, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(donnees)
+  });
+}
+
+export function modifierUtilisateurAdmin(id: string, donnees: ModifierUtilisateurAdminRequete): Promise<UtilisateurAdminVue> {
+  return requete(`/api/admin/utilisateurs/${id}`, utilisateurAdminVueSchema, {
+    method: "PATCH",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(donnees)
+  });
 }
 
 // Motifs (PGD-043) ------------------------------------------------------

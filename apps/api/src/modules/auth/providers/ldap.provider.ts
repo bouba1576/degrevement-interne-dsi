@@ -43,6 +43,35 @@ export class LdapProvider implements LdapPort {
     }
   }
 
+  // Pré-enregistrement (analyse du 12/08/2026) — recherche par filtre partiel
+  // sur cn/mail, les seuls attributs réellement présents dans l'annuaire
+  // (uid/cn/sn/givenName/mail — vérifié contre docker/openldap/seed.ldif,
+  // aucun displayName). `sizeLimit` borne un joker large (`cn=*a*`) qui
+  // matcherait autrement tout l'annuaire. Groupes résolus pour affichage
+  // informatif — jamais utilisés pour dériver un rôle (décision actée,
+  // CLAUDE.md « Pré-enregistrement des utilisateurs AD »).
+  async rechercher(motCle: string): Promise<UtilisateurAd[]> {
+    const env = loadEnv();
+    const client = this.creerClient(env.LDAP_URL);
+    try {
+      await this.bind(client, env.LDAP_BIND_DN, env.LDAP_BIND_PASSWORD);
+      const entrees = await this.rechercherEntrees(client, env.LDAP_BASE_DN, motCle);
+      const resultats: UtilisateurAd[] = [];
+      for (const entree of entrees) {
+        const mail = this.attribut(entree, "mail");
+        if (!mail) continue;
+        const groupes = await this.rechercherGroupes(client, env.LDAP_BASE_DN, entree.dn.toString());
+        resultats.push({ identifiantAd: mail, nom: this.attribut(entree, "cn") ?? mail, groupes });
+      }
+      return resultats;
+    } catch (erreur) {
+      this.logger.warn(`Échec de la recherche annuaire pour « ${motCle} » : ${(erreur as Error).message}`);
+      return [];
+    } finally {
+      client.unbind();
+    }
+  }
+
   async estDisponible(): Promise<boolean> {
     const env = loadEnv();
     const client = this.creerClient(env.LDAP_URL);
@@ -83,6 +112,27 @@ export class LdapProvider implements LdapPort {
           });
           res.on("error", (err) => reject(err));
           res.on("end", () => resolve(trouve));
+        }
+      );
+    });
+  }
+
+  // Distinct de rechercherUtilisateur() : plusieurs résultats possibles
+  // (joker), jamais un seul DN attendu pour un bind ultérieur.
+  private rechercherEntrees(client: Client, baseDn: string, motCle: string): Promise<SearchEntry[]> {
+    return new Promise((resolve, reject) => {
+      const trouvees: SearchEntry[] = [];
+      const motCleEchappe = this.echapper(motCle);
+      client.search(
+        `ou=users,${baseDn}`,
+        { scope: "sub", filter: `(|(cn=*${motCleEchappe}*)(mail=*${motCleEchappe}*))`, sizeLimit: 20 },
+        (erreur, res) => {
+          if (erreur) return reject(erreur);
+          res.on("searchEntry", (entree) => {
+            trouvees.push(entree);
+          });
+          res.on("error", (err) => reject(err));
+          res.on("end", () => resolve(trouvees));
         }
       );
     });

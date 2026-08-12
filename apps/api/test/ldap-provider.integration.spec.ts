@@ -106,4 +106,26 @@ member: uid=jean.kouassi,ou=users,${BASE_DN}
     const resultat = await provider.authentifier("personne.inconnue@orange.ci", "peu-importe");
     expect(resultat).toBeNull();
   });
+
+  // Pré-enregistrement (analyse du 12/08/2026) — recherche annuaire, jamais
+  // un bind : aucun mot de passe en jeu, plusieurs résultats possibles.
+  describe("rechercher()", () => {
+    it("trouve un utilisateur par fragment de nom (cn)", async () => {
+      const resultats = await provider.rechercher("Kouassi");
+      expect(resultats).toEqual([
+        { identifiantAd: "jean.kouassi@orange.ci", nom: "Jean Kouassi", groupes: ["GG-DGR-INITIATEUR-DOBB"] }
+      ]);
+    });
+
+    it("trouve un utilisateur par fragment d'identifiant (mail)", async () => {
+      const resultats = await provider.rechercher("jean.kou");
+      expect(resultats).toHaveLength(1);
+      expect(resultats[0]?.identifiantAd).toBe("jean.kouassi@orange.ci");
+    });
+
+    it("renvoie un tableau vide sans erreur quand rien ne correspond", async () => {
+      const resultats = await provider.rechercher("aucune-correspondance-xyz");
+      expect(resultats).toEqual([]);
+    });
+  });
 });

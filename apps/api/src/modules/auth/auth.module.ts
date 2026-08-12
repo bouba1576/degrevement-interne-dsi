@@ -23,6 +23,10 @@ import { RbacResolutionService } from "./services/rbac-resolution.service";
     JournalSecuriteService,
     RbacResolutionService
   ],
-  exports: [SessionService, JournalSecuriteService]
+  // LdapProvider exporté pour AdminUtilisateursService (recherche annuaire,
+  // pré-enregistrement) — même principe déjà appliqué à AdminMotifsService/
+  // AdminCircuitsService (méthode de lecture réutilisée hors du module
+  // propriétaire, cf. AdminModule).
+  exports: [SessionService, JournalSecuriteService, LdapProvider]
 })
 export class AuthModule {}

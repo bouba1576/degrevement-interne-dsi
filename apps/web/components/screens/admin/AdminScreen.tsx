@@ -9,8 +9,17 @@ import { CircuitsAdminTab } from "./CircuitsAdminTab";
 import { ParametresCalculAdminTab } from "./ParametresCalculAdminTab";
 import { CalendrierSlaAdminTab } from "./CalendrierSlaAdminTab";
 import { ParametresSystemeAdminTab } from "./ParametresSystemeAdminTab";
+import { UtilisateursAdminTab } from "./UtilisateursAdminTab";
 
-type Onglet = "processus" | "roles" | "motifs" | "circuits" | "parametres-calcul" | "calendrier-sla" | "parametres-systeme";
+type Onglet =
+  | "processus"
+  | "roles"
+  | "motifs"
+  | "circuits"
+  | "parametres-calcul"
+  | "calendrier-sla"
+  | "parametres-systeme"
+  | "utilisateurs";
 
 const ONGLETS: Array<{ cle: Onglet; libelle: string }> = [
   { cle: "processus", libelle: "Processus" },
@@ -19,10 +28,11 @@ const ONGLETS: Array<{ cle: Onglet; libelle: string }> = [
   { cle: "circuits", libelle: "Circuits" },
   { cle: "parametres-calcul", libelle: "Paramètres de calcul" },
   { cle: "calendrier-sla", libelle: "Calendrier SLA" },
-  { cle: "parametres-systeme", libelle: "Paramètres système" }
+  { cle: "parametres-systeme", libelle: "Paramètres système" },
+  { cle: "utilisateurs", libelle: "Utilisateurs" }
 ];
 
-// 7 onglets, décomposés par SENS (ce que chaque référentiel représente),
+// 8 onglets, décomposés par SENS (ce que chaque référentiel représente),
 // pas par mécanique de modification — cf. échange de revue : regrouper
 // Calendrier SLA / Paramètres globaux / Modules parce qu'ils se modifient
 // « de la même manière » aurait classé par facilité d'implémentation plutôt
@@ -30,11 +40,11 @@ const ONGLETS: Array<{ cle: Onglet; libelle: string }> = [
 // regroupés (« Paramètres système ») : deux bascules/clé-valeur simples,
 // trop petites individuellement pour justifier chacune leur onglet.
 //
-// « Utilisateurs » et « Moniteur » (maquette docs/design/screens3.jsx)
-// n'apparaissent pas : aucune route ne les sert aujourd'hui (cf. CLAUDE.md,
-// Questions ouvertes — regroupé avec la recherche d'agent pour délégation et
-// la résolution agentClaimId, trois besoins qui appellent la même route
-// manquante). Exclus plutôt que remplacés par un onglet vide.
+// « Utilisateurs » — trou comblé (analyse + conception du 12/08/2026,
+// CLAUDE.md « Pré-enregistrement des utilisateurs AD », Temps 1) : recherche
+// AD, pré-enregistrement rôle+direction+service+MFA, édition. « Moniteur »
+// (maquette docs/design/screens3.jsx) reste exclu — aucune route ne le sert,
+// question distincte non traitée ici.
 export function AdminScreen() {
   const [onglet, setOnglet] = useState<Onglet>("processus");
 
@@ -67,6 +77,7 @@ export function AdminScreen() {
       {onglet === "parametres-calcul" && <ParametresCalculAdminTab />}
       {onglet === "calendrier-sla" && <CalendrierSlaAdminTab />}
       {onglet === "parametres-systeme" && <ParametresSystemeAdminTab />}
+      {onglet === "utilisateurs" && <UtilisateursAdminTab />}
     </div>
   );
 }
