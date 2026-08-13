@@ -1,5 +1,6 @@
 import { ConflictException } from "@nestjs/common";
 import Redis from "ioredis";
+import { rejeterRequeteSchema } from "@pgd/contracts";
 import { amqpUrl, loadEnv } from "@pgd/config";
 import { ConnexionRabbitMQ } from "@pgd/messaging";
 import { PrismaService } from "../src/infra/prisma/prisma.service";
@@ -145,13 +146,55 @@ describe("TacheWorkflowService.approuver / .rejeter (SF-PGD-080, 081, 082)", () 
     await prisma.utilisateur.deleteMany({ where: { id: autreAgent.id } });
   });
 
-  it("rejeter journalise le motif, clôture la demande en REJETE — n'avance jamais la chaîne", async () => {
+  // Décision métier du 12/08/2026 (docs/12 diapositive 17, options i+iv,
+  // CLAUDE.md « PRIORITÉ ») : le rejet renvoie PAR DÉFAUT le dossier en
+  // BROUILLON pour correction — la clôture (ancien comportement, seul
+  // chemin avant ce chantier) devient l'exception explicite (dto.clore).
+  it("rejeter SANS clore (par défaut) : renvoie le dossier en BROUILLON, purge toute la chaîne, journalise le renvoi", async () => {
     await creerDemandeAvecChaine(2);
 
     const resultat = await workflow.rejeter(
       tacheOrdre1Id,
       { id: agentId, identifiantAd: "test.workflow" },
-      { motif: "Pièce justificative non conforme" }
+      { motif: "Pièce justificative non conforme", clore: false }
+    );
+
+    // Snapshot renvoyé malgré la suppression de la ligne tache elle-même.
+    expect(resultat.etat).toBe("REJETEE");
+
+    const demandeApres = await prisma.demande.findUniqueOrThrow({ where: { id: demandeId } });
+    expect(demandeApres.statut).toBe("BROUILLON");
+    expect(demandeApres.etapeCourante).toBe(0);
+    expect(demandeApres.dateCloture).toBeNull();
+
+    // Purge totale — y compris l'étape 2 jamais décidée et la tâche rejetée
+    // elle-même : plus aucune Tache pour ce dossier, contrairement à
+    // reRouterSiEngage (R6) qui ne purge que EN_ATTENTE/EN_CORBEILLE.
+    const tachesRestantes = await prisma.tache.count({ where: { demandeId } });
+    expect(tachesRestantes).toBe(0);
+
+    // tacheId retombe à NULL sur cette entrée : la ligne Tache référencée a
+    // été supprimée dans LA MÊME transaction (purge ci-dessus), et
+    // journal_audit_tache_id_fkey est ON DELETE SET NULL — même famille
+    // d'orphelinage déjà documentée pour JournalAudit ailleurs dans ce
+    // projet, jamais un test cassé. Filtrer sur tacheId échouerait ici.
+    const auditRejet = await prisma.journalAudit.findFirstOrThrow({
+      where: { demandeId, action: "rejet" }
+    });
+    expect(auditRejet.commentaire).toBe("Pièce justificative non conforme");
+    expect(auditRejet.tacheId).toBeNull();
+
+    const auditRenvoi = await prisma.journalAudit.findFirstOrThrow({ where: { demandeId, action: "renvoi-correction" } });
+    expect(auditRenvoi.acteur).toBe("test.workflow");
+  });
+
+  it("rejeter AVEC clore=true : comportement terminal (REJETE), motif de clôture journalisé distinctement du motif de rejet", async () => {
+    await creerDemandeAvecChaine(2);
+
+    const resultat = await workflow.rejeter(
+      tacheOrdre1Id,
+      { id: agentId, identifiantAd: "test.workflow" },
+      { motif: "Pièce justificative non conforme", clore: true, motifCloture: "Dossier non recevable, aucune correction possible" }
     );
 
     expect(resultat.etat).toBe("REJETEE");
@@ -160,12 +203,21 @@ describe("TacheWorkflowService.approuver / .rejeter (SF-PGD-080, 081, 082)", () 
     expect(demandeApres.statut).toBe("REJETE");
     expect(demandeApres.dateCloture).not.toBeNull();
 
-    // La chaîne ne progresse jamais sur un rejet — l'étape 2 reste EN_ATTENTE.
+    // La chaîne ne progresse jamais sur un rejet clôturé — l'étape 2 reste EN_ATTENTE.
     const tacheSuivante = await prisma.tache.findFirstOrThrow({ where: { demandeId, ordre: 2 } });
     expect(tacheSuivante.etat).toBe("EN_ATTENTE");
 
-    const audit = await prisma.journalAudit.findFirstOrThrow({ where: { tacheId: tacheOrdre1Id, action: "rejet" } });
-    expect(audit.commentaire).toBe("Pièce justificative non conforme");
+    const auditRejet = await prisma.journalAudit.findFirstOrThrow({
+      where: { demandeId, tacheId: tacheOrdre1Id, action: "rejet" }
+    });
+    expect(auditRejet.commentaire).toBe("Pièce justificative non conforme");
+
+    // Motif de clôture — entrée distincte, jamais fusionnée avec le motif de rejet.
+    const auditCloture = await prisma.journalAudit.findFirstOrThrow({
+      where: { demandeId, tacheId: tacheOrdre1Id, action: "cloture" }
+    });
+    expect(auditCloture.commentaire).toBe("Dossier non recevable, aucune correction possible");
+    expect(auditCloture.id).not.toBe(auditRejet.id);
   });
 
   it("rejeter une tâche non réclamée par l'acteur → 409 TACHE_NON_RECLAMEE_PAR_VOUS", async () => {
@@ -175,7 +227,7 @@ describe("TacheWorkflowService.approuver / .rejeter (SF-PGD-080, 081, 082)", () 
     });
 
     await expect(
-      workflow.rejeter(tacheOrdre1Id, { id: autreAgent.id, identifiantAd: "x" }, { motif: "peu importe" })
+      workflow.rejeter(tacheOrdre1Id, { id: autreAgent.id, identifiantAd: "x" }, { motif: "peu importe", clore: false })
     ).rejects.toMatchObject({ response: { code: "TACHE_NON_RECLAMEE_PAR_VOUS" } });
 
     await prisma.utilisateur.deleteMany({ where: { id: autreAgent.id } });
@@ -196,5 +248,37 @@ describe("TacheWorkflowService.approuver / .rejeter (SF-PGD-080, 081, 082)", () 
       delegationId: "00000000-0000-0000-0000-000000000000",
       delegantIdentifiantAd: "test.workflow-delegant"
     });
+  });
+});
+
+// Validation pure du schéma (sans Postgres) — décision du 12/08/2026 :
+// motifCloture obligatoire uniquement quand clore=true, jamais l'inverse.
+describe("rejeterRequeteSchema — motif de clôture conditionnel", () => {
+  it("rejette clore=true sans motifCloture", () => {
+    const resultat = rejeterRequeteSchema.safeParse({ motif: "x", clore: true });
+    expect(resultat.success).toBe(false);
+  });
+
+  it("rejette clore=true avec motifCloture vide/espaces seuls", () => {
+    const resultat = rejeterRequeteSchema.safeParse({ motif: "x", clore: true, motifCloture: "   " });
+    expect(resultat.success).toBe(false);
+  });
+
+  it("accepte clore=true avec motifCloture renseigné", () => {
+    const resultat = rejeterRequeteSchema.safeParse({ motif: "x", clore: true, motifCloture: "Non recevable" });
+    expect(resultat.success).toBe(true);
+  });
+
+  it("accepte clore absent (défaut false) sans motifCloture — renvoi implicite", () => {
+    const resultat = rejeterRequeteSchema.safeParse({ motif: "x" });
+    expect(resultat.success).toBe(true);
+    if (resultat.success) {
+      expect(resultat.data.clore).toBe(false);
+    }
+  });
+
+  it("accepte clore=false même si motifCloture est fourni par erreur — non exigé, pas interdit", () => {
+    const resultat = rejeterRequeteSchema.safeParse({ motif: "x", clore: false, motifCloture: "ignoré" });
+    expect(resultat.success).toBe(true);
   });
 });

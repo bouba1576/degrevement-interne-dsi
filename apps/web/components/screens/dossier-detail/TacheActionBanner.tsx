@@ -27,6 +27,13 @@ export function TacheActionBanner({ etapes, utilisateur, onActionEffectuee }: Ta
   const [erreur, setErreur] = useState<string | null>(null);
   const [modalRejet, setModalRejet] = useState(false);
   const [motifRejet, setMotifRejet] = useState("");
+  // Décision métier du 12/08/2026 (docs/12, CLAUDE.md « PRIORITÉ ») : par
+  // défaut un rejet renvoie le dossier à l'initiateur pour correction ;
+  // « clore » bascule vers l'ancien comportement terminal, choisi
+  // explicitement ici, au moment même du rejet — jamais une règle
+  // automatique.
+  const [clore, setClore] = useState(false);
+  const [motifCloture, setMotifCloture] = useState("");
 
   useEffect(() => {
     if (!etapeActionnable) {
@@ -145,30 +152,65 @@ export function TacheActionBanner({ etapes, utilisateur, onActionEffectuee }: Ta
               </button>
               <button
                 type="button"
-                disabled={motifRejet.trim().length === 0 || chargement}
+                disabled={
+                  motifRejet.trim().length === 0 ||
+                  (clore && motifCloture.trim().length === 0) ||
+                  chargement
+                }
                 onClick={() =>
                   executer(async () => {
-                    await rejeterTache(tache.id, { motif: motifRejet.trim() });
+                    await rejeterTache(tache.id, {
+                      motif: motifRejet.trim(),
+                      clore,
+                      motifCloture: clore ? motifCloture.trim() : undefined
+                    });
                     setModalRejet(false);
                     setMotifRejet("");
+                    setClore(false);
+                    setMotifCloture("");
                   })
                 }
                 className="rounded bg-rouge700 px-3 py-1.5 text-13 font-bold text-blanc disabled:opacity-50"
               >
-                Confirmer le rejet
+                {clore ? "Confirmer le rejet et la clôture" : "Confirmer le rejet et le renvoi"}
               </button>
             </>
           }
         >
-          <label className="flex flex-col gap-1 text-13">
-            Motif de rejet
-            <textarea
-              value={motifRejet}
-              onChange={(e) => setMotifRejet(e.target.value)}
-              rows={3}
-              className="rounded border border-gris200 p-2 text-13"
-            />
-          </label>
+          <div className="flex flex-col gap-3">
+            <label className="flex flex-col gap-1 text-13">
+              Motif de rejet
+              <textarea
+                value={motifRejet}
+                onChange={(e) => setMotifRejet(e.target.value)}
+                rows={3}
+                className="rounded border border-gris200 p-2 text-13"
+              />
+            </label>
+
+            <label className="flex items-start gap-2 text-13">
+              <input type="checkbox" className="mt-0.5" checked={clore} onChange={(e) => setClore(e.target.checked)} />
+              <span>
+                Et clôturer le dossier, au lieu de le renvoyer à l&apos;initiateur pour correction
+                <span className="block text-12 text-gris600">
+                  Par défaut, un rejet renvoie le dossier à l&apos;initiateur (statut Brouillon) pour qu&apos;il corrige et
+                  resoumette. Cochez cette case pour clôturer définitivement le dossier à la place.
+                </span>
+              </span>
+            </label>
+
+            {clore && (
+              <label className="flex flex-col gap-1 text-13">
+                Motif de clôture
+                <textarea
+                  value={motifCloture}
+                  onChange={(e) => setMotifCloture(e.target.value)}
+                  rows={3}
+                  className="rounded border border-gris200 p-2 text-13"
+                />
+              </label>
+            )}
+          </div>
         </Modal>
       )}
     </div>

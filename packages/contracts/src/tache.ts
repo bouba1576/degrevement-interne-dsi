@@ -57,9 +57,24 @@ export const approuverRequeteSchema = z.object({
 export type ApprouverRequete = z.infer<typeof approuverRequeteSchema>;
 
 // POST /api/taches/{id}/rejeter (SF-PGD-082) — motif obligatoire.
-export const rejeterRequeteSchema = z.object({
-  motif: z.string().min(1, "Le motif de rejet est obligatoire")
-});
+// Décision métier du 12/08/2026 (docs/12 diapositive 17, options i+iv
+// combinées) : par défaut, un rejet renvoie systématiquement le dossier à
+// l'initiateur pour correction (statut -> BROUILLON, cf.
+// TacheWorkflowService.rejeter) ; `clore` bascule explicitement vers
+// l'ancien comportement (statut -> REJETE, terminal) et exige alors un
+// motif de clôture DISTINCT du motif de rejet — jamais réutilisé l'un pour
+// l'autre, ce sont deux faits différents (pourquoi rejeté / pourquoi
+// clôturé plutôt que renvoyé).
+export const rejeterRequeteSchema = z
+  .object({
+    motif: z.string().min(1, "Le motif de rejet est obligatoire"),
+    clore: z.boolean().default(false),
+    motifCloture: z.string().min(1).optional()
+  })
+  .refine((v) => !v.clore || (v.motifCloture && v.motifCloture.trim().length > 0), {
+    message: "Le motif de clôture est obligatoire lorsque « clore » est demandé.",
+    path: ["motifCloture"]
+  });
 export type RejeterRequete = z.infer<typeof rejeterRequeteSchema>;
 
 // GET /api/demandes/{id}/taches (Phase 9.2) — chaîne réelle des tâches d'un
