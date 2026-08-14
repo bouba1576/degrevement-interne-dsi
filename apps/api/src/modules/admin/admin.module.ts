@@ -12,6 +12,8 @@ import { AdminMotifsController } from "./admin-motifs.controller";
 import { AdminMotifsService } from "./services/admin-motifs.service";
 import { AdminLibellesAjustementController } from "./admin-libelles-ajustement.controller";
 import { AdminLibellesAjustementService } from "./services/admin-libelles-ajustement.service";
+import { AdminSousFluxController } from "./admin-sous-flux.controller";
+import { AdminSousFluxService } from "./services/admin-sous-flux.service";
 import { AdminParametresGlobauxController } from "./admin-parametres-globaux.controller";
 import { AdminParametresGlobauxService } from "./services/admin-parametres-globaux.service";
 import { AdminCalendrierSlaController } from "./admin-calendrier-sla.controller";
@@ -36,6 +38,7 @@ import { AuthModule } from "../auth/auth.module";
     AdminRolesController,
     AdminMotifsController,
     AdminLibellesAjustementController,
+    AdminSousFluxController,
     AdminParametresGlobauxController,
     AdminCalendrierSlaController,
     AdminModulesController,
@@ -48,6 +51,7 @@ import { AuthModule } from "../auth/auth.module";
     AdminRolesService,
     AdminMotifsService,
     AdminLibellesAjustementService,
+    AdminSousFluxService,
     AdminParametresGlobauxService,
     AdminCalendrierSlaService,
     AdminModulesService,

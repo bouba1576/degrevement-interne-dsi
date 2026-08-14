@@ -10,13 +10,13 @@ import { MotifModal, type MotifModalValeur } from "./MotifModal";
 // par circuit, plutôt que la liste plate d'avant (tous circuits mélangés).
 //
 // La section « Sous-flux » de la maquette (chips au-dessus des motifs, une
-// par circuit) n'est PAS reprise : `sousFlux` (`creerDemandeRequeteSchema`,
-// packages/contracts/src/demande.ts) est un champ texte libre sur `Demande`,
-// pas un référentiel administrable — aucun des 7 onglets d'AdminScreen n'en
-// gère un catalogue, et la maquette elle-même le tire d'un tableau statique
-// de démonstration (`D3.CIRCUITS[c].sousFlux`), pas d'une donnée gérée.
-// Reproduire ces chips inventerait un référentiel qui n'existe nulle part
-// côté serveur — catégorie 3, pas une omission.
+// par circuit) n'est plus hors périmètre — SF-PGD-109 (docs/09 §13.3) l'a
+// fait construire séparément : voir `SousFluxAdminTab`, rendu juste après ce
+// composant dans le même onglet « Motifs & libellés ». `Demande.sousFlux`
+// reste un champ texte libre (pas une FK vers `SousFlux`) — cet écran gère
+// les valeurs cibles du référentiel, pas encore leur sélection contrainte à
+// la saisie (mécanisme de dérivation pour DOBB toujours en conception,
+// cf. CLAUDE.md).
 export function MotifsAdminTab() {
   const [circuits, setCircuits] = useState<CircuitVue[] | null>(null);
   const [motifs, setMotifs] = useState<MotifVue[] | null>(null);

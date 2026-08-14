@@ -116,6 +116,30 @@ export const libelleAjustementVueSchema = z.object({
 export type LibelleAjustementVue = z.infer<typeof libelleAjustementVueSchema>;
 
 // ---------------------------------------------------------------------------
+// SousFlux — SF-PGD-109 (« Motifs & circuits : référentiel des sous-flux et
+// motifs par circuit »). Pas de champ actif (absent du modèle Prisma,
+// contrairement à Motif/LibelleAjustement) ; pas de FK entrante
+// (Demande.sousFlux / ConfigurationCircuit.sousFlux restent des chaînes
+// libres, jamais une relation vers cette table) — mêmes conséquences que
+// LibelleAjustement : pas de garde P2003 à la suppression.
+// ---------------------------------------------------------------------------
+export const creerSousFluxRequeteSchema = z.object({
+  circuit: enumCircuit,
+  libelle: z.string().min(1)
+});
+export type CreerSousFluxRequete = z.infer<typeof creerSousFluxRequeteSchema>;
+
+export const modifierSousFluxRequeteSchema = creerSousFluxRequeteSchema.partial();
+export type ModifierSousFluxRequete = z.infer<typeof modifierSousFluxRequeteSchema>;
+
+export const sousFluxVueSchema = z.object({
+  id: z.string().uuid(),
+  circuit: enumCircuit,
+  libelle: z.string()
+});
+export type SousFluxVue = z.infer<typeof sousFluxVueSchema>;
+
+// ---------------------------------------------------------------------------
 // ParametreGlobal — GET/PATCH seulement (clé libre déjà seedée, pas de création
 // ad hoc de nouvelles clés via l'API : le code qui les lit doit les connaître).
 // ---------------------------------------------------------------------------

@@ -4,6 +4,7 @@ import { seedRoles } from "./referentiels/roles.seed";
 import { seedPaliers } from "./referentiels/paliers.seed";
 import { seedMotifs } from "./referentiels/motifs.seed";
 import { seedLibellesAjustement } from "./referentiels/libelles-ajustement.seed";
+import { seedSousFlux } from "./referentiels/sous-flux.seed";
 import { seedUniversEtFacteurs } from "./referentiels/univers-facteurs.seed";
 import { seedResponsabilites } from "./referentiels/responsabilites.seed";
 import { seedKpiDefinitions } from "./referentiels/kpi.seed";
@@ -21,6 +22,7 @@ async function main() {
   await seedPaliers(prisma);
   await seedMotifs(prisma);
   await seedLibellesAjustement(prisma);
+  await seedSousFlux(prisma);
   await seedUniversEtFacteurs(prisma);
   await seedResponsabilites(prisma);
   await seedKpiDefinitions(prisma);

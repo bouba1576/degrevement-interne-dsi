@@ -5,6 +5,7 @@ import { PaliersAdminTab } from "./PaliersAdminTab";
 import { RolesAdminTab } from "./RolesAdminTab";
 import { MotifsAdminTab } from "./MotifsAdminTab";
 import { LibellesAjustementAdminTab } from "./LibellesAjustementAdminTab";
+import { SousFluxAdminTab } from "./SousFluxAdminTab";
 import { CircuitsAdminTab } from "./CircuitsAdminTab";
 import { ParametresCalculAdminTab } from "./ParametresCalculAdminTab";
 import { CalendrierSlaAdminTab } from "./CalendrierSlaAdminTab";
@@ -71,6 +72,7 @@ export function AdminScreen() {
         <>
           <MotifsAdminTab />
           <LibellesAjustementAdminTab />
+          <SousFluxAdminTab />
         </>
       )}
       {onglet === "circuits" && <CircuitsAdminTab />}

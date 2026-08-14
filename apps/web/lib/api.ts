@@ -35,6 +35,7 @@ import {
   sessionUtilisateurSchema,
   siVueSchema,
   soumissionReponseSchema,
+  sousFluxVueSchema,
   tacheVueSchema,
   tachesListeReponseSchema,
   utilisateurAdminVueSchema,
@@ -53,6 +54,7 @@ import {
   type CreerMotifRequete,
   type CreerPalierRequete,
   type CreerRoleRequete,
+  type CreerSousFluxRequete,
   type DefinirLignesRequete,
   type DelegationVue,
   type Demande,
@@ -81,6 +83,7 @@ import {
   type ModifierParametreCalculRequete,
   type ModifierParametreGlobalRequete,
   type ModifierRoleRequete,
+  type ModifierSousFluxRequete,
   type ModifierTaxesRequete,
   type ModifierUtilisateurAdminRequete,
   type ModuleVue,
@@ -99,6 +102,7 @@ import {
   type SiVue,
   type SoumettreControleRequete,
   type SoumissionReponse,
+  type SousFluxVue,
   type TacheVue,
   type TachesListeReponse,
   type UniversFmiVue,
@@ -578,6 +582,33 @@ export function modifierLibelleAjustement(id: string, donnees: ModifierLibelleAj
 
 export function supprimerLibelleAjustement(id: string): Promise<{ supprime: true }> {
   return requete(`/api/admin/libelles-ajustement/${id}`, z.object({ supprime: z.literal(true) }), { method: "DELETE" });
+}
+
+// Sous-flux (SF-PGD-109, docs/09 §13.3) --
+
+export function listerSousFlux(circuit?: string): Promise<SousFluxVue[]> {
+  const query = circuit ? `?circuit=${circuit}` : "";
+  return requete(`/api/admin/sous-flux${query}`, z.array(sousFluxVueSchema));
+}
+
+export function creerSousFlux(donnees: CreerSousFluxRequete): Promise<SousFluxVue> {
+  return requete("/api/admin/sous-flux", sousFluxVueSchema, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(donnees)
+  });
+}
+
+export function modifierSousFlux(id: string, donnees: ModifierSousFluxRequete): Promise<SousFluxVue> {
+  return requete(`/api/admin/sous-flux/${id}`, sousFluxVueSchema, {
+    method: "PATCH",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(donnees)
+  });
+}
+
+export function supprimerSousFlux(id: string): Promise<{ supprime: true }> {
+  return requete(`/api/admin/sous-flux/${id}`, z.object({ supprime: z.literal(true) }), { method: "DELETE" });
 }
 
 // Circuits (PGD-043) — GET/PATCH seulement, segment immuable -------------
