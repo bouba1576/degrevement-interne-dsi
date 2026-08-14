@@ -10,8 +10,15 @@ import { PrismaService } from "../../../infra/prisma/prisma.service";
 import { LdapProvider } from "../../auth/providers/ldap.provider";
 
 type UtilisateurAvecRelations = Prisma.UtilisateurGetPayload<{
-  include: { membresRole: { include: { role: true } }; direction: true; service: true };
+  include: { membresRole: { include: { role: true } }; direction: true; service: true; sousFlux: true };
 }>;
+
+const INCLUSION_COMPLETE = {
+  membresRole: { include: { role: true } },
+  direction: true,
+  service: true,
+  sousFlux: true
+} as const;
 
 // Pré-enregistrement des utilisateurs AD (analyse + conception du
 // 12/08/2026, CLAUDE.md « Pré-enregistrement des utilisateurs AD ») —
@@ -47,7 +54,7 @@ export class AdminUtilisateursService {
   async lister(): Promise<UtilisateurAdminVue[]> {
     const utilisateurs = await this.prisma.utilisateur.findMany({
       where: { membresRole: { some: {} } },
-      include: { membresRole: { include: { role: true } }, direction: true, service: true },
+      include: INCLUSION_COMPLETE,
       orderBy: { nom: "asc" }
     });
     return utilisateurs.map((u) => this.versVue(u));
@@ -56,7 +63,7 @@ export class AdminUtilisateursService {
   async trouver(id: string): Promise<UtilisateurAdminVue> {
     const utilisateur = await this.prisma.utilisateur.findUnique({
       where: { id },
-      include: { membresRole: { include: { role: true } }, direction: true, service: true }
+      include: INCLUSION_COMPLETE
     });
     if (!utilisateur) {
       throw new NotFoundException({ code: "UTILISATEUR_INTROUVABLE", message: "Utilisateur introuvable." });
@@ -82,6 +89,7 @@ export class AdminUtilisateursService {
           nom: dto.nom,
           directionId: dto.directionId,
           serviceId: dto.serviceId,
+          sousFluxId: dto.sousFluxId,
           mfaMethode: dto.mfaMethode
         }
       });
@@ -90,7 +98,7 @@ export class AdminUtilisateursService {
       });
       return tx.utilisateur.findUniqueOrThrow({
         where: { id: utilisateur.id },
-        include: { membresRole: { include: { role: true } }, direction: true, service: true }
+        include: INCLUSION_COMPLETE
       });
     });
     return this.versVue(cree);
@@ -110,6 +118,7 @@ export class AdminUtilisateursService {
           nom: dto.nom,
           directionId: dto.directionId,
           serviceId: dto.serviceId,
+          sousFluxId: dto.sousFluxId,
           mfaMethode: dto.mfaMethode,
           actif: dto.actif
         }
@@ -120,7 +129,7 @@ export class AdminUtilisateursService {
       }
       return tx.utilisateur.findUniqueOrThrow({
         where: { id },
-        include: { membresRole: { include: { role: true } }, direction: true, service: true }
+        include: INCLUSION_COMPLETE
       });
     });
     return this.versVue(modifie);
@@ -149,6 +158,8 @@ export class AdminUtilisateursService {
       directionLibelle: u.direction?.libelle ?? null,
       serviceId: u.serviceId,
       serviceLibelle: u.service?.libelle ?? null,
+      sousFluxId: u.sousFluxId,
+      sousFluxLibelle: u.sousFlux?.libelle ?? null,
       roles: u.membresRole.map((m) => ({ code: m.role.code, libelle: m.role.libelle }))
     };
   }

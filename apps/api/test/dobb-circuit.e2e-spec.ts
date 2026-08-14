@@ -56,7 +56,7 @@ describe("E2E — circuit DOBB (B2B), parcours complet en HTTP réel", () => {
     const creation = await request(e2e.app.getHttpServer())
       .post("/api/demandes")
       .set("Cookie", initiateur.cookie)
-      .send({ circuit: "DOBB", nomClient: "E2E Société ABC", commentaire: `Essai e2e DOBB ${suffixe}` })
+      .send({ circuit: "DOBB", nomClient: "E2E Société ABC", commentaire: `Essai e2e DOBB ${suffixe}`, sousFlux: "Réclamation B2B" })
       .expect(201);
     const demandeId = creation.body.data.demande.id as string;
     demandeIds.push(demandeId);

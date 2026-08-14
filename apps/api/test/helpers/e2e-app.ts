@@ -48,7 +48,7 @@ export async function demarrerAppE2e(overrides?: Array<{ provider: unknown; useV
 // elle-même. Retourne l'en-tête Cookie prêt à poser sur une requête supertest.
 export async function cookieSession(
   sessionService: SessionService,
-  utilisateur: { id: string; identifiantAd: string; roles: string[] }
+  utilisateur: { id: string; identifiantAd: string; roles: string[]; sousFluxId?: string | null }
 ): Promise<string> {
   const { accessToken } = await sessionService.creerSession(utilisateur);
   const env = loadEnv();

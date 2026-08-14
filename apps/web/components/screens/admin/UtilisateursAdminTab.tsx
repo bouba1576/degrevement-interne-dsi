@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge, Icon } from "@pgd/ui";
-import type { AnnuaireResultat, DirectionResponsabiliteVue, RoleVue, UtilisateurAdminVue } from "@pgd/contracts";
+import type { AnnuaireResultat, DirectionResponsabiliteVue, RoleVue, SousFluxVue, UtilisateurAdminVue } from "@pgd/contracts";
 import {
   ApiError,
   listerDirectionsReferentiel,
   listerRoles,
+  listerSousFlux,
   listerUtilisateursAdmin,
   modifierUtilisateurAdmin,
   preEnregistrerUtilisateur
@@ -32,6 +33,7 @@ export function UtilisateursAdminTab() {
   const [utilisateurs, setUtilisateurs] = useState<UtilisateurAdminVue[] | null>(null);
   const [roles, setRoles] = useState<RoleVue[]>([]);
   const [directions, setDirections] = useState<DirectionResponsabiliteVue[]>([]);
+  const [sousFluxOptions, setSousFluxOptions] = useState<SousFluxVue[]>([]);
   const [erreurListe, setErreurListe] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalEtat>({ type: "fermee" });
   const [erreurFormulaire, setErreurFormulaire] = useState<string | null>(null);
@@ -39,10 +41,16 @@ export function UtilisateursAdminTab() {
 
   const charger = useCallback(async () => {
     try {
-      const [u, r, d] = await Promise.all([listerUtilisateursAdmin(), listerRoles(), listerDirectionsReferentiel()]);
+      const [u, r, d, sf] = await Promise.all([
+        listerUtilisateursAdmin(),
+        listerRoles(),
+        listerDirectionsReferentiel(),
+        listerSousFlux()
+      ]);
       setUtilisateurs(u);
       setRoles(r);
       setDirections(d);
+      setSousFluxOptions(sf);
       setErreurListe(null);
     } catch (e) {
       setErreurListe(e instanceof ApiError ? e.message : "Erreur inattendue.");
@@ -83,6 +91,7 @@ export function UtilisateursAdminTab() {
         roles: valeur.roles,
         directionId: valeur.directionId || undefined,
         serviceId: valeur.serviceId || undefined,
+        sousFluxId: valeur.sousFluxId || undefined,
         mfaMethode: valeur.mfaMethode
       };
       if (modal.utilisateur) {
@@ -177,6 +186,7 @@ export function UtilisateursAdminTab() {
           utilisateur={modal.utilisateur}
           roles={roles}
           directions={directions}
+          sousFluxOptions={sousFluxOptions}
           onFermer={() => setModal({ type: "fermee" })}
           onConfirmer={handleConfirmer}
           chargement={chargementFormulaire}

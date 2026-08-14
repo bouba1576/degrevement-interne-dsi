@@ -9,6 +9,7 @@ export interface UtilisateurRequete {
   id: string;
   identifiantAd: string;
   roles: string[];
+  sousFluxId: string | null;
   jti: string;
 }
 
@@ -46,6 +47,7 @@ export class AuthGuard implements CanActivate {
       id: resultat.sub,
       identifiantAd: resultat.identifiantAd,
       roles: resultat.roles,
+      sousFluxId: resultat.sousFluxId,
       jti: resultat.jti
     };
     return true;

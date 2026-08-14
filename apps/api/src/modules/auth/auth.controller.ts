@@ -103,7 +103,12 @@ export class AuthController {
     });
 
     if (rolesExigentMfa === 0) {
-      const jetons = await this.sessionService.creerSession({ id: utilisateur.id, identifiantAd, roles });
+      const jetons = await this.sessionService.creerSession({
+        id: utilisateur.id,
+        identifiantAd,
+        roles,
+        sousFluxId: utilisateur.sousFluxId
+      });
       this.poserCookiesSession(res, jetons);
       return { requiresMfa: false, methode: null, challengeId: null, redirectUrl: null, totpEnrole: null };
     }
@@ -201,7 +206,12 @@ export class AuthController {
     await this.mfaService.invaliderChallenge(challengeId);
 
     const roles = await this.rolesDe(utilisateur.id);
-    const jetons = await this.sessionService.creerSession({ id: utilisateur.id, identifiantAd: utilisateur.identifiantAd, roles });
+    const jetons = await this.sessionService.creerSession({
+      id: utilisateur.id,
+      identifiantAd: utilisateur.identifiantAd,
+      roles,
+      sousFluxId: utilisateur.sousFluxId
+    });
     this.poserCookiesSession(res, jetons);
 
     return { requiresMfa: false, methode: "TOTP", challengeId: null, redirectUrl: null, totpEnrole: true };
@@ -239,10 +249,15 @@ export class AuthController {
 
     await this.mfaService.invaliderChallenge(challengeId);
     const roles = await this.rolesDe(challenge.utilisateurId);
+    const { sousFluxId } = await this.prisma.utilisateur.findUniqueOrThrow({
+      where: { id: challenge.utilisateurId },
+      select: { sousFluxId: true }
+    });
     const jetons = await this.sessionService.creerSession({
       id: challenge.utilisateurId,
       identifiantAd: challenge.identifiantAd,
-      roles
+      roles,
+      sousFluxId
     });
     this.poserCookiesSession(res, jetons);
     res.redirect(env.CORS_ORIGIN);
@@ -323,6 +338,7 @@ export class AuthController {
       identifiantAd: enBase.identifiantAd,
       nom: enBase.nom,
       roles: utilisateur.roles,
+      sousFluxId: utilisateur.sousFluxId,
       mfaMethode: enBase.mfaMethode
     };
   }

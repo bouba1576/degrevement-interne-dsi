@@ -62,7 +62,7 @@ describe("E2E — circuit DF (Wholesale), parcours complet en HTTP réel", () =>
     const creation = await request(e2e.app.getHttpServer())
       .post("/api/demandes")
       .set("Cookie", initiateur.cookie)
-      .send({ circuit: "DF", nomClient: "E2E Opérateur Wholesale Partenaire", commentaire: `Essai e2e DF ${suffixe}` })
+      .send({ circuit: "DF", nomClient: "E2E Opérateur Wholesale Partenaire", commentaire: `Essai e2e DF ${suffixe}`, sousFlux: "Réclamation opérateur" })
       .expect(201);
     const demandeId = creation.body.data.demande.id as string;
     demandeIds.push(demandeId);

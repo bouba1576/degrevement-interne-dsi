@@ -56,6 +56,7 @@ export const sessionUtilisateurSchema = z.object({
   identifiantAd: z.string(),
   nom: z.string(),
   roles: z.array(z.string()),
+  sousFluxId: z.string().uuid().nullable(),
   mfaMethode: enumMethodeMfa
 });
 export type SessionUtilisateur = z.infer<typeof sessionUtilisateurSchema>;

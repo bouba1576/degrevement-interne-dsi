@@ -108,7 +108,7 @@ describe("DemandeWorkflowService.soumettre — R13/R14/R15/R17 + instanciation",
 
   async function creerDemandeBrouillon(): Promise<string> {
     const detail = await demandeService.creer(
-      { circuit: "DOBB", nomClient: "Client Test", compteClient: compteId, motifId },
+      { circuit: "DOBB", nomClient: "Client Test", compteClient: compteId, motifId, sousFlux: "Réclamation B2B" },
       acteur.id
     );
     return detail.demande.id;
@@ -123,6 +123,32 @@ describe("DemandeWorkflowService.soumettre — R13/R14/R15/R17 + instanciation",
           expect.objectContaining({ code: "R14_COMMENTAIRE_REQUIS" }),
           expect.objectContaining({ code: "R17_FORMULE_REQUISE" })
         ])
+      }
+    });
+  });
+
+  it("SOUS_FLUX_REQUIS — rejette une soumission sans sous-flux (obligatoire à la soumission, pas à la création)", async () => {
+    const detail = await demandeService.creer(
+      { circuit: "DOBB", nomClient: "Client Test", compteClient: compteId, motifId },
+      acteur.id
+    );
+    const demandeId = detail.demande.id;
+    await demandeService.modifier(demandeId, { commentaire: "Commentaire valide." }, acteur.id);
+    await demandeLigneService.definirLignes(
+      demandeId,
+      { lignes: [{ ligneId: ligneActiveId, formuleId: formuleActiveId, recurrent: 25000, montantHtLigne: 25000 }] },
+      acteur.id
+    );
+    await piece.ajouter(
+      demandeId,
+      { originalname: "facture.pdf", mimetype: "application/pdf", size: 100, buffer: Buffer.from("test") },
+      pieceAfferenteId
+    );
+
+    await expect(workflow.soumettre(demandeId, acteur)).rejects.toMatchObject({
+      response: {
+        code: "REGLE_METIER_VIOLEE",
+        details: expect.arrayContaining([expect.objectContaining({ code: "SOUS_FLUX_REQUIS" })])
       }
     });
   });

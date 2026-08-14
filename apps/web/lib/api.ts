@@ -257,6 +257,16 @@ export function listerUniversFmi(): Promise<UniversFmiVue[]> {
   return requete("/api/referentiels/univers-fmi", z.array(universFmiVueSchema));
 }
 
+// 14/08/2026 (champ sousFluxId sur Utilisateur) — GET /api/referentiels/
+// sous-flux, ouvert à tout authentifié. Distinct de listerSousFlux()
+// ci-dessous (GET /api/admin/sous-flux, ADMIN_PGD-only, CRUD complet) : celui-
+// ci alimente le menu de préremplissage de NouvelleDemandeScreen, pas l'écran
+// d'administration.
+export function listerSousFluxReferentiel(circuit?: string): Promise<SousFluxVue[]> {
+  const query = circuit ? `?circuit=${circuit}` : "";
+  return requete(`/api/referentiels/sous-flux${query}`, z.array(sousFluxVueSchema));
+}
+
 export function listerFacteursReferentiel(): Promise<FacteurDegrevementVue[]> {
   return requete("/api/referentiels/facteurs", z.array(facteurDegrevementVueSchema));
 }

@@ -9,6 +9,7 @@ import {
   listerMotifsQuerySchema,
   motifVueSchema,
   parametresCalculPublicVueSchema,
+  sousFluxVueSchema,
   universFmiVueSchema,
   type CircuitVue,
   type DirectionResponsabiliteVue,
@@ -16,12 +17,14 @@ import {
   type LibelleAjustementVue,
   type MotifVue,
   type ParametresCalculPublicVue,
+  type SousFluxVue,
   type UniversFmiVue
 } from "@pgd/contracts";
 import { ApiZodQuery, ApiZodResponse } from "../../common/swagger/zod-schema";
 import { Authenticated } from "../../common/decorators/authenticated.decorator";
 import { AdminMotifsService } from "../admin/services/admin-motifs.service";
 import { AdminLibellesAjustementService } from "../admin/services/admin-libelles-ajustement.service";
+import { AdminSousFluxService } from "../admin/services/admin-sous-flux.service";
 import { AdminCircuitsService } from "../admin/services/admin-circuits.service";
 import { ReferentielsService } from "./services/referentiels.service";
 
@@ -38,6 +41,7 @@ export class ReferentielsController {
     private readonly referentiels: ReferentielsService,
     private readonly motifs: AdminMotifsService,
     private readonly libellesAjustement: AdminLibellesAjustementService,
+    private readonly sousFlux: AdminSousFluxService,
     private readonly circuits: AdminCircuitsService
   ) {}
 
@@ -72,6 +76,18 @@ export class ReferentielsController {
   async listerLibellesAjustement(@Query() query: unknown): Promise<LibelleAjustementVue[]> {
     const { circuit } = listerMotifsQuerySchema.parse(query);
     return this.libellesAjustement.listerActifs(circuit);
+  }
+
+  // GET /api/referentiels/sous-flux?circuit= (14/08/2026, champ sousFluxId
+  // sur Utilisateur) — NouvelleDemandeScreen peuple son menu de
+  // préremplissage depuis cette route, pas admin/sous-flux (ADMIN_PGD).
+  @Authenticated()
+  @Get("sous-flux")
+  @ApiZodQuery(listerMotifsQuerySchema)
+  @ApiZodResponse(200, z.array(sousFluxVueSchema))
+  async listerSousFlux(@Query() query: unknown): Promise<SousFluxVue[]> {
+    const { circuit } = listerMotifsQuerySchema.parse(query);
+    return this.sousFlux.lister(circuit);
   }
 
   @Authenticated()

@@ -198,9 +198,18 @@ model Utilisateur {
   // être pré-enregistré (rôle posé) sans direction/service renseignés.
   directionId   String?   @map("direction_id") @db.Uuid
   serviceId     String?   @map("service_id") @db.Uuid
+  // Sous-flux de rattachement (14/08/2026, CLAUDE.md « Sous-flux — référentiel
+  // SF-PGD-109 ») — colonne générique (n'importe quel circuit), pas
+  // sousFluxDobbId/sousFluxDxcId : un seul champ, cohérent avec direction/
+  // service ci-dessus. Source de dérivation du sous-flux à la création d'un
+  // dossier (préremplissage, jamais figé) — décision explicite, mécanisme
+  // vérifié dans la maquette (docs/design/screens3.jsx:981, champ dédié sur
+  // l'utilisateur, PAS un rôle granulaire par sous-flux).
+  sousFluxId    String?   @map("sous_flux_id") @db.Uuid
 
   direction                       DirectionResponsabilite? @relation(fields: [directionId], references: [id])
   service                         ServiceResponsabilite?   @relation(fields: [serviceId], references: [id])
+  sousFlux                        SousFlux?                @relation(fields: [sousFluxId], references: [id])
   membresRole                     MembreRole[]
   demandesInitiees                Demande[]           @relation("DemandeInitiateur")
   tachesReclamees                 Tache[]             @relation("TacheAgentClaim")
@@ -212,6 +221,7 @@ model Utilisateur {
   notifications                   Notification[]
 
   @@index([directionId, serviceId])
+  @@index([sousFluxId])
 
   @@map("utilisateur")
 }
@@ -330,7 +340,8 @@ model SousFlux {
   circuit EnumCircuit
   libelle String
 
-  circuitRef Circuit @relation(fields: [circuit], references: [code])
+  circuitRef  Circuit       @relation(fields: [circuit], references: [code])
+  utilisateurs Utilisateur[]
 
   @@unique([circuit, libelle])
   @@map("sous_flux")

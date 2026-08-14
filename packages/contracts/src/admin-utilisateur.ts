@@ -35,6 +35,8 @@ export const utilisateurAdminVueSchema = z.object({
   directionLibelle: z.string().nullable(),
   serviceId: z.string().uuid().nullable(),
   serviceLibelle: z.string().nullable(),
+  sousFluxId: z.string().uuid().nullable(),
+  sousFluxLibelle: z.string().nullable(),
   roles: z.array(roleAffecteVueSchema)
 });
 export type UtilisateurAdminVue = z.infer<typeof utilisateurAdminVueSchema>;
@@ -45,6 +47,7 @@ export const preEnregistrerUtilisateurRequeteSchema = z.object({
   roles: z.array(z.string().min(1)).min(1, "Au moins un rôle est requis."),
   directionId: z.string().uuid().optional(),
   serviceId: z.string().uuid().optional(),
+  sousFluxId: z.string().uuid().optional(),
   mfaMethode: enumMethodeMfa.optional()
 });
 export type PreEnregistrerUtilisateurRequete = z.infer<typeof preEnregistrerUtilisateurRequeteSchema>;

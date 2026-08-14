@@ -17,6 +17,7 @@ import type {
   ParametresCalculPublicVue,
   SessionUtilisateur,
   SoumissionReponse,
+  SousFluxVue,
   UniversFmiVue
 } from "@pgd/contracts";
 import {
@@ -29,6 +30,7 @@ import {
   listerFacteursReferentiel,
   listerLibellesAjustementActifs,
   listerMotifsActifs,
+  listerSousFluxReferentiel,
   listerUniversFmi,
   modifierTaxes,
   obtenirParametresCalculReferentiel,
@@ -175,6 +177,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
   const [matriculeInitiateur, setMatriculeInitiateur] = useState("");
   const [agentSaisie, setAgentSaisie] = useState(utilisateur.nom);
   const [sousFlux, setSousFlux] = useState("");
+  const [sousFluxOptions, setSousFluxOptions] = useState<SousFluxVue[] | null>(null);
   const [libelle, setLibelle] = useState("");
   const [motifId, setMotifId] = useState("");
   const [universFmiCode, setUniversFmiCode] = useState("");
@@ -210,6 +213,24 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
     setLibellesAjustement(null);
     void listerLibellesAjustementActifs(circuit).then(setLibellesAjustement);
   }, [circuit]);
+
+  // Sous-flux (14/08/2026, champ sousFluxId sur Utilisateur) — même mécanique
+  // que motifs/libellés : référentiel réel scopé au circuit, jamais un
+  // tableau codé en dur. Préremplissage depuis le profil de session
+  // (utilisateur.sousFluxId, JWT — jamais résolu à la lecture, cf. CLAUDE.md
+  // « cohérence plutôt que fraîcheur ») uniquement si l'entrée référentielle
+  // correspond au circuit actuellement sélectionné ; sinon aucune
+  // présélection, l'initiateur choisit manuellement. Reste éditable dans
+  // tous les cas — un préremplissage n'est jamais une valeur figée.
+  useEffect(() => {
+    setSousFlux("");
+    setSousFluxOptions(null);
+    void listerSousFluxReferentiel(circuit).then((options) => {
+      setSousFluxOptions(options);
+      const prefill = utilisateur.sousFluxId ? options.find((s) => s.id === utilisateur.sousFluxId) : undefined;
+      if (prefill) setSousFlux(prefill.libelle);
+    });
+  }, [circuit, utilisateur.sousFluxId]);
 
   const motifSelectionne = motifs?.find((m) => m.id === motifId) ?? null;
 
@@ -737,12 +758,19 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
           </div>
           <div>
             <label className="mb-1 block text-13 font-bold text-gris800">Sous-flux</label>
-            <input
+            <select
               className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
               value={sousFlux}
               onChange={(e) => setSousFlux(e.target.value)}
-              disabled={!!demande}
-            />
+              disabled={!!demande || !sousFluxOptions}
+            >
+              <option value="">— Choisir —</option>
+              {sousFluxOptions?.map((s) => (
+                <option key={s.id} value={s.libelle}>
+                  {s.libelle}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="mb-1 block text-13 font-bold text-gris800">Motif</label>

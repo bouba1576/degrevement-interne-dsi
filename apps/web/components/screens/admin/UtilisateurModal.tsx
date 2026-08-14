@@ -2,13 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { Modal } from "@pgd/ui";
-import type { DirectionResponsabiliteVue, EnumMethodeMfa, RoleVue, UtilisateurAdminVue } from "@pgd/contracts";
+import type { DirectionResponsabiliteVue, EnumMethodeMfa, RoleVue, SousFluxVue, UtilisateurAdminVue } from "@pgd/contracts";
 
 export interface UtilisateurModalValeur {
   nom: string;
   roles: string[];
   directionId: string;
   serviceId: string;
+  sousFluxId: string;
   mfaMethode: EnumMethodeMfa;
   actif: boolean;
 }
@@ -22,6 +23,7 @@ export interface UtilisateurModalProps {
   utilisateur: UtilisateurAdminVue | null;
   roles: RoleVue[];
   directions: DirectionResponsabiliteVue[];
+  sousFluxOptions: SousFluxVue[];
   onFermer: () => void;
   onConfirmer: (valeur: UtilisateurModalValeur) => void;
   chargement: boolean;
@@ -34,6 +36,7 @@ export function UtilisateurModal({
   utilisateur,
   roles,
   directions,
+  sousFluxOptions,
   onFermer,
   onConfirmer,
   chargement,
@@ -46,10 +49,11 @@ export function UtilisateurModal({
           roles: utilisateur.roles.map((r) => r.code),
           directionId: utilisateur.directionId ?? "",
           serviceId: utilisateur.serviceId ?? "",
+          sousFluxId: utilisateur.sousFluxId ?? "",
           mfaMethode: utilisateur.mfaMethode,
           actif: utilisateur.actif
         }
-      : { nom: nomInitial, roles: [], directionId: "", serviceId: "", mfaMethode: "DUO", actif: true }
+      : { nom: nomInitial, roles: [], directionId: "", serviceId: "", sousFluxId: "", mfaMethode: "DUO", actif: true }
   );
 
   const set = <K extends keyof UtilisateurModalValeur>(k: K, v: UtilisateurModalValeur[K]) =>
@@ -66,6 +70,12 @@ export function UtilisateurModal({
     () => directions.find((d) => d.id === valeur.directionId)?.services ?? [],
     [directions, valeur.directionId]
   );
+
+  const sousFluxParCircuit = useMemo(() => {
+    const table: Record<string, SousFluxVue[]> = {};
+    for (const s of sousFluxOptions) (table[s.circuit] ??= []).push(s);
+    return table;
+  }, [sousFluxOptions]);
 
   const valide = valeur.nom.trim().length > 0 && valeur.roles.length > 0;
 
@@ -133,6 +143,28 @@ export function UtilisateurModal({
                 </option>
               ))}
             </select>
+          </label>
+          <label className="flex flex-col gap-1 text-13">
+            Sous-flux de rattachement
+            <select
+              value={valeur.sousFluxId}
+              onChange={(e) => set("sousFluxId", e.target.value)}
+              className="rounded border border-gris300 px-2 py-1 text-13"
+            >
+              <option value="">— Aucun —</option>
+              {Object.entries(sousFluxParCircuit).map(([circuit, options]) => (
+                <optgroup key={circuit} label={circuit}>
+                  {options.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.libelle}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            <span className="text-11 text-gris500">
+              Source de préremplissage à la création d&apos;un dossier — reste modifiable par l&apos;initiateur.
+            </span>
           </label>
           <label className="flex flex-col gap-1 text-13">
             Méthode MFA

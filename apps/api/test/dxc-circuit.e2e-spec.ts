@@ -48,7 +48,7 @@ describe("E2E — circuit DXC (B2C), parcours complet en HTTP réel", () => {
     const creation = await request(e2e.app.getHttpServer())
       .post("/api/demandes")
       .set("Cookie", initiateur.cookie)
-      .send({ circuit: "DXC", nomClient: "E2E Kouassi Jean-Baptiste", commentaire: `Essai e2e DXC ${suffixe}` })
+      .send({ circuit: "DXC", nomClient: "E2E Kouassi Jean-Baptiste", commentaire: `Essai e2e DXC ${suffixe}`, sousFlux: "Réclamation" })
       .expect(201);
     const demandeId = creation.body.data.demande.id as string;
     demandeIds.push(demandeId);

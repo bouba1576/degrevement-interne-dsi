@@ -73,6 +73,19 @@ import { AuthModule } from "../auth/auth.module";
   // ouvert à tout authentifié : ApercuTab (n'importe quel viewer d'un
   // dossier) a besoin de Circuit.libelle, jamais du contrôleur admin/circuits
   // (ADMIN_PGD, expose aussi l'écriture PATCH).
-  exports: [AdminMotifsService, AdminLibellesAjustementService, AdminParametresCalculService, AdminCircuitsService]
+  // AdminSousFluxService.lister() est repris de même (14/08/2026, champ
+  // sousFluxId sur Utilisateur) — GET /api/referentiels/sous-flux, ouvert à
+  // tout authentifié : NouvelleDemandeScreen en a besoin pour peupler le menu
+  // déroulant de préremplissage, pas seulement l'écran de pré-enregistrement
+  // (admin/sous-flux, ADMIN_PGD, CRUD complet). Pas de listerActifs() séparé
+  // ici — SousFlux n'a pas de champ `actif` (contrairement à Motif/
+  // LibelleAjustement), lister() suffit.
+  exports: [
+    AdminMotifsService,
+    AdminLibellesAjustementService,
+    AdminSousFluxService,
+    AdminParametresCalculService,
+    AdminCircuitsService
+  ]
 })
 export class AdminModule {}

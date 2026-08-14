@@ -4,10 +4,20 @@ import { randomUUID } from "node:crypto";
 import { loadEnv } from "@pgd/config";
 import { CacheService } from "../../../infra/redis/cache.service";
 
+// sousFluxId (14/08/2026, CLAUDE.md « Sous-flux — référentiel SF-PGD-109 ») —
+// porté en session exactement comme `roles` : figé à la connexion, jamais
+// résolu à la lecture de GET /api/auth/session ni à `rafraichir()` (qui
+// réémet depuis `SessionEnregistree`, pas depuis une relecture de
+// Utilisateur). Décision explicite : cohérence plutôt que fraîcheur — le
+// même écran d'administration modifie rôle/direction/service/sous-flux, s'ils
+// n'obéissaient pas tous à la même règle de « prend effet quand », un
+// administrateur changeant plusieurs champs à la fois observerait un
+// comportement incohérent d'un champ à l'autre sur le même écran.
 export interface SessionEnregistree {
   utilisateurId: string;
   identifiantAd: string;
   roles: string[];
+  sousFluxId: string | null;
   mfaSatisfaite: boolean;
   creeLe: string;
 }
@@ -21,6 +31,7 @@ interface AccessPayload {
   sub: string;
   identifiantAd: string;
   roles: string[];
+  sousFluxId: string | null;
   jti: string;
 }
 
@@ -47,7 +58,12 @@ export class SessionService {
     private readonly cache: CacheService
   ) {}
 
-  async creerSession(utilisateur: { id: string; identifiantAd: string; roles: string[] }): Promise<PaireJetons> {
+  async creerSession(utilisateur: {
+    id: string;
+    identifiantAd: string;
+    roles: string[];
+    sousFluxId?: string | null;
+  }): Promise<PaireJetons> {
     const env = loadEnv();
     const jti = randomUUID();
 
@@ -55,12 +71,13 @@ export class SessionService {
       utilisateurId: utilisateur.id,
       identifiantAd: utilisateur.identifiantAd,
       roles: utilisateur.roles,
+      sousFluxId: utilisateur.sousFluxId ?? null,
       mfaSatisfaite: false,
       creeLe: new Date().toISOString()
     };
     await this.cache.set(this.cleSession(jti), session, this.dureeEnSecondes(env.REFRESH_TOKEN_EXPIRES_IN));
 
-    return this.emettreJetons(utilisateur, jti);
+    return this.emettreJetons({ ...utilisateur, sousFluxId: session.sousFluxId }, jti);
   }
 
   async marquerMfaSatisfaite(jti: string): Promise<void> {
@@ -98,7 +115,12 @@ export class SessionService {
     if (!session) return null;
 
     return this.emettreJetons(
-      { id: session.utilisateurId, identifiantAd: session.identifiantAd, roles: session.roles },
+      {
+        id: session.utilisateurId,
+        identifiantAd: session.identifiantAd,
+        roles: session.roles,
+        sousFluxId: session.sousFluxId
+      },
       payload.jti
     );
   }
@@ -108,12 +130,18 @@ export class SessionService {
   }
 
   private async emettreJetons(
-    utilisateur: { id: string; identifiantAd: string; roles: string[] },
+    utilisateur: { id: string; identifiantAd: string; roles: string[]; sousFluxId?: string | null },
     jti: string
   ): Promise<PaireJetons> {
     const env = loadEnv();
     const accessToken = this.jwt.sign(
-      { sub: utilisateur.id, identifiantAd: utilisateur.identifiantAd, roles: utilisateur.roles, jti } satisfies AccessPayload,
+      {
+        sub: utilisateur.id,
+        identifiantAd: utilisateur.identifiantAd,
+        roles: utilisateur.roles,
+        sousFluxId: utilisateur.sousFluxId ?? null,
+        jti
+      } satisfies AccessPayload,
       { secret: env.JWT_SECRET, expiresIn: env.JWT_EXPIRES_IN }
     );
     const refreshToken = this.jwt.sign({ sub: utilisateur.id, jti } satisfies RefreshPayload, {

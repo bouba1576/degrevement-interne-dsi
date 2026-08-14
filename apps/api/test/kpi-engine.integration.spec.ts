@@ -40,9 +40,9 @@ describe("KpiEngineService — agrégations DEMANDE (docs/04 §3.2)", () => {
     agentId = agent.id;
     autreAgentId = autreAgent.id;
 
-    admin = { id: agentId, identifiantAd: agent.identifiantAd, roles: ["ADMIN_PGD"], jti: "test" };
-    initiateurAppelant = { id: agentId, identifiantAd: agent.identifiantAd, roles: [], jti: "test" };
-    initiateurAutre = { id: autreAgentId, identifiantAd: autreAgent.identifiantAd, roles: [], jti: "test" };
+    admin = { id: agentId, identifiantAd: agent.identifiantAd, roles: ["ADMIN_PGD"], sousFluxId: null, jti: "test" };
+    initiateurAppelant = { id: agentId, identifiantAd: agent.identifiantAd, roles: [], sousFluxId: null, jti: "test" };
+    initiateurAutre = { id: autreAgentId, identifiantAd: autreAgent.identifiantAd, roles: [], sousFluxId: null, jti: "test" };
     // Tache.roleCorbeille est une FK vers Role (contrainte réelle en base) —
     // deux rôles jetables et uniques à ce run rendent le test hermétique au
     // bruit des autres fichiers exécutés en parallèle (un vrai
@@ -53,8 +53,14 @@ describe("KpiEngineService — agrégations DEMANDE (docs/04 §3.2)", () => {
       prisma.role.create({ data: { code: roleTestDetenu, libelle: roleTestDetenu, groupeAd: `GG-${roleTestDetenu}`, niveau: 1, type: "METIER" } }),
       prisma.role.create({ data: { code: roleTestNonDetenu, libelle: roleTestNonDetenu, groupeAd: `GG-${roleTestNonDetenu}`, niveau: 1, type: "METIER" } })
     ]);
-    valideurDobb = { id: agentId, identifiantAd: agent.identifiantAd, roles: [roleTestDetenu], jti: "test" };
-    valideurAutreRole = { id: agentId, identifiantAd: agent.identifiantAd, roles: [roleTestNonDetenu], jti: "test" };
+    valideurDobb = { id: agentId, identifiantAd: agent.identifiantAd, roles: [roleTestDetenu], sousFluxId: null, jti: "test" };
+    valideurAutreRole = {
+      id: agentId,
+      identifiantAd: agent.identifiantAd,
+      roles: [roleTestNonDetenu],
+      sousFluxId: null,
+      jti: "test"
+    };
 
     const [motifFixe, motifMobile] = await Promise.all([
       prisma.motif.create({ data: { circuit: "DOBB", libelle: `TEST_MOTIF_FIXE_${suffixe}` } }),

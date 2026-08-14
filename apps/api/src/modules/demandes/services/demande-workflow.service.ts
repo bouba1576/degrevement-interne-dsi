@@ -54,6 +54,15 @@ export class DemandeWorkflowService {
       erreurs.push({ code: "R14_COMMENTAIRE_REQUIS", message: "Le commentaire est obligatoire à la soumission." });
     }
 
+    // Sous-flux (14/08/2026, champ sousFluxId sur Utilisateur) — même
+    // mécanisme cumulable que R13/R14 : obligatoire à la soumission, pas à
+    // la création (un BROUILLON peut exister sans sous-flux, tant qu'il
+    // n'est pas soumis). Présent sur les trois circuits (DOBB/DXC/DF, SF-
+    // PGD-109), pas seulement DOBB — la maquette le montre uniformément.
+    if (!demande.sousFlux || demande.sousFlux.trim() === "") {
+      erreurs.push({ code: "SOUS_FLUX_REQUIS", message: "Le sous-flux est obligatoire à la soumission." });
+    }
+
     if (demande.lignes.length === 0) {
       erreurs.push({ code: "R17_FORMULE_REQUISE", message: "Aucune ligne retenue avec formule sélectionnée." });
     }

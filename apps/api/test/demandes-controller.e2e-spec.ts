@@ -39,7 +39,7 @@ describe("E2E — DemandesController, routes restantes en HTTP réel", () => {
     const creation = await request(e2e.app.getHttpServer())
       .post("/api/demandes")
       .set("Cookie", initiateurCookie)
-      .send({ circuit: "DOBB", nomClient, commentaire: `E2E controller ${suffixe}` })
+      .send({ circuit: "DOBB", nomClient, commentaire: `E2E controller ${suffixe}`, sousFlux: "Réclamation B2B" })
       .expect(201);
     const demandeId = creation.body.data.demande.id as string;
     demandeIds.push(demandeId);
