@@ -864,6 +864,54 @@ Rapport Trivy sur les trois images (`api`/`web`/`worker`) : 8 vulnérabilités C
 
 ---
 
+## Migration image de base Node 20 → 24 (17/08/2026)
+
+Suite directe du chantier Trivy ci-dessus, pas un sujet séparé. `node:20-slim` est en fin de vie officielle depuis le 30/04/2026 (aucun correctif de sécurité à venir, de façon définitive). Cible : Node 24, LTS active (support jusqu'en avril 2028) — Node 22 écartée (déjà en maintenance, fenêtre de support plus courte), Node 26 écartée (pas encore LTS avant octobre 2026).
+
+**Vérification de compatibilité, avant tout changement de Dockerfile** — rapport complet produit et validé avant construction, même discipline que pour le chantier Trivy :
+- Aucun `engines.node` du monorepo (seul le `package.json` racine en déclare un, `>=20`, sans plafond) n'exclut Node 24 ; toutes les dépendances clés inspectées (`jest`, `ts-jest`, `next`, `@nestjs/cli`, `@prisma/client`/`prisma`, `ioredis`, `amqplib`) déclarent des bornes ouvertes.
+- Aucun module natif installé dans `node_modules` (aucun `.node`, aucun `binding.gyp`) — `@tailwindcss/oxide` (build-time only, `apps/web`) est basé napi-rs, conçu pour la stabilité ABI inter-versions Node, pas un risque. Prisma utilise un moteur binaire autonome, insensible à la version de Node.
+- Zéro appel `fetch()` réel dans le code applicatif (les seuls hits grep étaient `channel.prefetch()` d'amqplib, un faux positif de sous-chaîne vérifié explicitement) — les changements Undici 7/fetch plus strict de Node 24 sont sans objet.
+- Timers : usage limité à `setTimeout`/`setInterval`/`clearTimeout` standards — les API supprimées dans Node 24 (`timers.enroll()`/`unenroll()`/`active()`) ne sont utilisées nulle part.
+- Crypto (`totp-secret-crypto.ts`) utilise `createCipheriv`/`createDecipheriv` (conservées), pas `createCipher`/`createDecipher` (supprimées). Zéro usage de `url.parse()`, `tls.createSecurePair`, `SlowBuffer`, flags `--experimental-permission`.
+- Tous les `package.json` du monorepo sont en CommonJS implicite, uniforme — aucun risque d'interop ESM/CJS.
+- `node:24-slim` confirmé présent sur Docker Hub (`docker manifest inspect`, manifestes `amd64`/`arm64`) avant utilisation, pas supposé.
+
+Aucun point de rupture identifié. Étape intermédiaire par Node 22 jugée inutile — chaque rupture documentée du saut 20→22 (ESM/CJS, timers, crypto, permission model) vérifiée absente du code réel.
+
+**`FROM node:20-slim` → `FROM node:24-slim`** dans les trois Dockerfiles — seule ligne changée, le reste (upgrade `libgnutls30`, retrait de `npm`, `--filter <app>...`) reste identique et continue de s'appliquer sur la nouvelle base.
+
+**Sweep — lint/typecheck/build verts sur l'hôte** (Node 24.16.0, déjà la version installée sur ce poste) : `pnpm lint`/`pnpm typecheck`/`pnpm build`, 13/13 tâches Turborepo, aucune erreur.
+
+**Suite de tests — flakiness réelle trouvée, investiguée à fond, pas ignorée.** `pnpm --filter @pgd/api test` (parallélisme par défaut de Jest, PowerShell, `.env` chargé) a échoué de façon variable sur six exécutions consécutives (36, 70, 21, 11, 14, 69 tests en échec selon la run), toujours avec la même famille de symptôme — `Can't reach database server`, `Connection is closed` (Redis), puis `read ECONNRESET` — **jamais** une assertion métier en échec (sauf un cas isolé, expliqué ci-dessous). Diagnostic mené avant de conclure, pas supposé :
+- **Épuisement du pool de connexions Postgres écarté explicitement** : surveillance de `pg_stat_activity` pendant une exécution complète (parallélisme par défaut) — pic observé à 12 connexions, largement sous `max_connections=100`.
+- **Contention par builds Docker concurrents écartée** : le premier échec coïncidait avec un build `web` encore en cours ; reproduit à l'identique après confirmation que plus aucun build ne tournait (`docker ps`, `pg_isready`, `redis-cli ping` tous verts juste avant le run).
+- **Redémarrage propre de `postgres`/`redis` sans effet** — le symptôme persiste après un cycle `restart` complet des deux conteneurs.
+- **Corrélation directe avec le parallélisme Jest** : `--maxWorkers=4` → 21 échecs (net progrès) ; `--runInBand` (série complète) → 11 échecs, **avec un changement de nature** — plus aucune erreur de connexion, uniquement une assertion `compte-service.integration.spec.ts` cohérente avec la convention documentée plus haut dans ce fichier (« tests contre référentiels », suite explicitement conçue pour tourner **en parallèle**, jamais en `--runInBand` — cet artefact-là n'est donc pas un bug non plus, juste un mode d'exécution non supporté par la suite).
+- **Confusion écartée séparément, pas confondue avec ce qui précède** : `pnpm --filter @pgd/worker test` échouait aussi (`ECONNRESET`) tant que le conteneur `worker` dev tournait en parallèle de sa propre suite de tests — les deux consomment les mêmes files RabbitMQ/la même base. Une fois `docker compose stop worker` fait (comme pour la suite `api`, déjà la convention documentée), la suite `worker` passe à 100 % (7/7, 25/25, T8 compris) — un vrai défaut de méthode trouvé et corrigé, distinct de la flakiness `api` ci-dessus (`worker` était déjà arrêté pendant les six runs `api`).
+
+**Conclusion honnête, pas forcée** : la cause la plus probable est une limite de débit du relais réseau de Docker Desktop sous Windows face à une rafale de connexions quasi simultanées (chaque worker Jest ouvre son propre pool Prisma + client ioredis au démarrage) — un nombre de connexions élevé, pas un nombre de connexions soutenu (d'où le pic Postgres à seulement 12). **Impossible de certifier à 100 % un lien avec Node 24** : aucune autre version de Node n'est installée sur ce poste (pas de nvm) pour un vrai contrôle A/B, et cette machine n'avait par ailleurs jamais été revérifiée sous forte charge Docker avant ce chantier. Élément à charge tout de même : l'historique de ce fichier documente de nombreux sweeps `234/234` parfaitement déterministes avec la même méthode (PowerShell + `.env`) sur ce même poste — jamais cette signature d'échec avant aujourd'hui. **Recommandation, pas une conclusion imposée** : si cette flakiness doit être définitivement close, la reproduire sur un poste avec Node 20 encore installé (contrôle réel) plutôt que déduire d'une seule machine. En attendant, la suite reste fiable à `--maxWorkers=4` ou en CI (runner Linux, pas de relais réseau Windows) — le code applicatif lui-même n'est pas en cause : aucun test n'a échoué sur une assertion métier en dehors de l'artefact `runInBand` déjà expliqué.
+
+**Vérification live, en conditions réelles, pas seulement au niveau code** — trois images `runtime` reconstruites sur `node:24-slim`, démarrées contre le vrai réseau Docker Compose (Postgres/Redis/RabbitMQ réels) :
+- `apps/api` : `GET /api/health/ready` → `postgresql:true, redis:true, rabbitmq:true, ad:true` (`mfa:false` attendu, DUO non configuré dans cet environnement jetable).
+- `apps/worker` : logs de démarrage confirment `Consumers démarrés : q.locks-sweeper, q.sla-escalation, q.si-push, q.notifications` ; `GET /health/ready` → `rabbitmq:true`. « Rejeu de T8 » satisfait par la suite `apps/worker` elle-même (ci-dessus, 25/25 verts, RabbitMQ réel) — même mécanisme de consommation que celui exercé par le conteneur live.
+- `apps/web` : `/login` sert `200` avec un vrai formulaire (champs identifiant/mot de passe, bouton submit) et des chunks JS `_next/static` qui se chargent en `200` — navigation/hydratation fonctionnelle, pas une coquille statique.
+
+**Re-scan Trivy réel, pas documenté pour plus tard** — `trivy` non installé localement, mais l'image `aquasec/trivy` (Docker Hub) accessible et utilisée directement (`docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity CRITICAL,HIGH,MEDIUM <image>` — sur Git Bash Windows, préfixer `MSYS_NO_PATHCONV=1` pour éviter le même mangling de chemin déjà documenté ailleurs dans ce fichier). Comparaison directe, même Dockerfile (déjà corrigé, chantier précédent) sur les deux bases :
+
+| Couche | Node 20 (Debian 12.13) | Node 24 (Debian 12.15) | Delta |
+|---|---|---|---|
+| OS (`os-pkgs`) — CRITICAL | 5 | 5 | 0 — les 5 mêmes (`perl-base`×4, `zlib1g`×1), déjà documentées comme risque accepté ci-dessus ; `libgnutls30` et `tar`/npm confirmés toujours absents sur les deux |
+| OS (`os-pkgs`) — HIGH | 19 | 18 | −1 |
+| OS (`os-pkgs`) — MEDIUM | 85 | 67 | **−18** |
+| npm (`lang-pkgs`, `package.json`) — tout niveau | 61 (33 MEDIUM, 28 HIGH, 0 CRITICAL) | 61 (identique) | 0 — attendu, ce niveau dépend de `pnpm-lock.yaml`, pas de l'image de base ; **hors périmètre de cette migration**, une passe de mise à jour npm distincte serait nécessaire (`undici`, `sharp`, `qs`, `tmp`, `uuid` notamment repérés en HIGH/MEDIUM) |
+
+Confirme l'objectif posé : **le passage à Node 24 réduit bien le compte de vulnérabilités du runtime lui-même** (−19 vulnérabilités OS au total, aucune régression CRITICAL), sans toucher au périmètre déjà traité (`libgnutls30`/`tar` restent corrigés) ni au périmètre npm applicatif (distinct, non couvert par ce chantier). Vérifié sur les trois images (`api`/`worker`/`web` partagent la même couche OS — confirmé identique, 5 CRITICAL sur les trois).
+
+**Rappel du chantier précédent, toujours valable ici** : la question du pipeline Nexus reste entière — ce correctif (comme celui de `libgnutls30`/`tar`) ne s'appliquera au prochain déploiement que si le pipeline réel qui construit l'image Nexus consomme bien ces Dockerfiles.
+
+---
+
 ## Commandes
 
 ```bash

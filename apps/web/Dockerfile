@@ -1,4 +1,4 @@
-FROM node:20-slim AS base
+FROM node:24-slim AS base
 # --only-upgrade sur libgnutls30 (CVE-2026-33845, CVE-2026-42010) — cf.
 # apps/api/Dockerfile pour la justification complète. apps/web n'avait
 # jusqu'ici aucun apt-get dans ce stage (aucun paquet applicatif requis),

@@ -1,4 +1,4 @@
-FROM node:20-slim AS base
+FROM node:24-slim AS base
 # procps fournit `ps`, requis par `nest start --watch` en dev (même raison
 # que apps/api/Dockerfile) pour éviter un crash à chaque redémarrage à chaud.
 # --only-upgrade sur libgnutls30 (CVE-2026-33845, CVE-2026-42010) — cf.

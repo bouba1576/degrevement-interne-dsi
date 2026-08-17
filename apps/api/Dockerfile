@@ -1,4 +1,4 @@
-FROM node:20-slim AS base
+FROM node:24-slim AS base
 # procps fournit `ps`, utilisé par `nest start --watch` (apps/api en dev, cf.
 # docker-compose.override.yml) pour retrouver/tuer le process enfant à chaque
 # redémarrage à chaud. Sans lui, tout changement de fichier détecté fait
