@@ -28,6 +28,14 @@ import type { EnumTypeRole, PrismaClient } from "@prisma/client";
 //
 // Action attendue : fiche RH/AD réelle ou export du catalogue de rôles PGD
 // (probablement la source des 34, non fournie dans ce lot de livrables).
+//
+// NE PAS CONFONDRE — les 9 rôles DOBB différenciés par sous-flux ajoutés le
+// 14/08/2026 (ROLES_DOBB_DIFFERENCIES ci-dessous) ne sont PAS les 9 codes
+// manquants ci-dessus : le catalogue atteint désormais 34 lignes par pure
+// coïncidence arithmétique, pas par résolution du gap documenté. Ces 9-là
+// sont une décision métier distincte et explicitement confirmée (chantier
+// sous-flux, R14-style à la soumission), pas une déduction depuis docs/01.
+// L'écart non résolu ci-dessus reste entièrement ouvert.
 
 interface DefinitionRole {
   code: string;
@@ -107,6 +115,137 @@ function rolesMetier(): DefinitionRole[] {
   });
   return roles;
 }
+
+// Rôles DOBB différenciés par sous-flux (14/08/2026, chantier sous-flux
+// Partie 2) — remplacent, pour le routage réel (EtapeRegle), les trois rôles
+// génériques RESPONSABLE_DOBB/MANAGER_DOBB/MANAGER_SENIOR_DOBB au sein des
+// nouveaux paliers DOBB. Conception confirmée par la personne pilotant le
+// projet après le rapport de réconciliation (docs/11, source primaire pour
+// les 4 services DOBB) : Réclamation B2B et Recouvrement gardent un
+// Responsable ET un Manager propres ; ADV et Facturation partagent un seul
+// palier Manager commun (MSOC — Manager Service Opérations Client) faute de
+// Manager dédié dans docs/11 pour ces deux-là ; les quatre convergent ensuite
+// vers un unique Manager Senior transverse (remplace MANAGER_SENIOR_DOBB,
+// jamais réutilisé — retiré des EtapeRegle, jamais supprimé, cf. discipline
+// non destructive du projet). DAOB_DOBB (Directeur Adjoint des Opérations
+// Business) est un rôle terminal nouveau pour le palier DOBB au-delà de 5M —
+// aucune source ne nomme ce rôle littéralement pour DOBB (contrairement à
+// R2/DGA-DG pour DF) ; ajouté pour donner un point de convergence unique au
+// palier le plus élevé, à la même place fonctionnelle que DGA_DG pour DF.
+// Les trois rôles génériques DOBB restent au catalogue, inertes (jamais
+// supprimés) — cf. Role.niveau : purement descriptif, ne pilote aucune
+// logique de routage (EtapeRegle.ordre le fait), donc les valeurs ci-dessous
+// n'ont pas besoin de correspondre à un ordre global unique entre circuits.
+const ROLES_DOBB_DIFFERENCIES: DefinitionRole[] = [
+  {
+    code: "RESPONSABLE_RECLAMATION_B2B_DOBB",
+    libelle: "Responsable Réclamation B2B DOBB",
+    groupeAd: "GG-DGR-RESPONSABLE-RECLAMATION-B2B-DOBB",
+    niveau: 2,
+    type: "METIER",
+    dansMatrice: true,
+    requiertMfa: false,
+    slaHeures: 8,
+    minuteurBloquant: true,
+    commentaireSla: "estimée par analogie avec le palier RESPONSABLE_DOBB générique déjà seedé"
+  },
+  {
+    code: "MANAGER_RECLAMATION_B2B_DOBB",
+    libelle: "Manager Réclamation B2B DOBB",
+    groupeAd: "GG-DGR-MANAGER-RECLAMATION-B2B-DOBB",
+    niveau: 3,
+    type: "METIER",
+    dansMatrice: true,
+    requiertMfa: false,
+    slaHeures: 8,
+    minuteurBloquant: true,
+    commentaireSla: "estimée par analogie avec le palier MANAGER_DOBB générique déjà seedé"
+  },
+  {
+    code: "RESPONSABLE_RECOUVREMENT_DOBB",
+    libelle: "Responsable Recouvrement DOBB",
+    groupeAd: "GG-DGR-RESPONSABLE-RECOUVREMENT-DOBB",
+    niveau: 2,
+    type: "METIER",
+    dansMatrice: true,
+    requiertMfa: false,
+    slaHeures: 8,
+    minuteurBloquant: true,
+    commentaireSla: "estimée par analogie avec le palier RESPONSABLE_DOBB générique déjà seedé"
+  },
+  {
+    code: "MANAGER_RECOUVREMENT_DOBB",
+    libelle: "Manager Recouvrement DOBB",
+    groupeAd: "GG-DGR-MANAGER-RECOUVREMENT-DOBB",
+    niveau: 3,
+    type: "METIER",
+    dansMatrice: true,
+    requiertMfa: false,
+    slaHeures: 8,
+    minuteurBloquant: true,
+    commentaireSla: "estimée par analogie avec le palier MANAGER_DOBB générique déjà seedé"
+  },
+  {
+    code: "RESPONSABLE_ADV_DOBB",
+    libelle: "Responsable ADV DOBB",
+    groupeAd: "GG-DGR-RESPONSABLE-ADV-DOBB",
+    niveau: 2,
+    type: "METIER",
+    dansMatrice: true,
+    requiertMfa: false,
+    slaHeures: 8,
+    minuteurBloquant: true,
+    commentaireSla: "estimée par analogie avec le palier RESPONSABLE_DOBB générique déjà seedé"
+  },
+  {
+    code: "RESPONSABLE_FACTURATION_DOBB",
+    libelle: "Responsable Facturation DOBB",
+    groupeAd: "GG-DGR-RESPONSABLE-FACTURATION-DOBB",
+    niveau: 2,
+    type: "METIER",
+    dansMatrice: true,
+    requiertMfa: false,
+    slaHeures: 8,
+    minuteurBloquant: true,
+    commentaireSla: "estimée par analogie avec le palier RESPONSABLE_DOBB générique déjà seedé"
+  },
+  {
+    code: "MANAGER_SERVICE_OPERATIONS_CLIENT_DOBB",
+    libelle: "Manager Service Opérations Client DOBB",
+    groupeAd: "GG-DGR-MANAGER-SERVICE-OPERATIONS-CLIENT-DOBB",
+    niveau: 3,
+    type: "METIER",
+    dansMatrice: true,
+    requiertMfa: false,
+    slaHeures: 8,
+    minuteurBloquant: true,
+    commentaireSla: "estimée par analogie avec le palier MANAGER_DOBB générique déjà seedé — partagé ADV+Facturation (docs/11, MSOC)"
+  },
+  {
+    code: "MANAGER_SENIOR_RELATION_CLIENT_B2B_DOBB",
+    libelle: "Manager Senior Relation Client B2B DOBB",
+    groupeAd: "GG-DGR-MANAGER-SENIOR-RELATION-CLIENT-B2B-DOBB",
+    niveau: 4,
+    type: "METIER",
+    dansMatrice: true,
+    requiertMfa: false,
+    slaHeures: 8,
+    minuteurBloquant: true,
+    commentaireSla: "estimée par analogie avec le palier MANAGER_SENIOR_DOBB générique déjà seedé — point de convergence transverse aux 4 sous-flux"
+  },
+  {
+    code: "DAOB_DOBB",
+    libelle: "Directeur Adjoint des Opérations Business DOBB",
+    groupeAd: "GG-DGR-DAOB-DOBB",
+    niveau: 6,
+    type: "METIER",
+    dansMatrice: true,
+    requiertMfa: true,
+    slaHeures: 24,
+    minuteurBloquant: true,
+    commentaireSla: "estimée par analogie avec le rôle terminal DOBB (24h, MFA) — aucun rôle équivalent nommé pour DOBB dans les sources, ajouté par analogie avec DGA_DG pour DF (R2)"
+  }
+];
 
 const ROLES_PIVOT: DefinitionRole[] = [
   {
@@ -249,7 +388,7 @@ const ROLES_SYSTEME: DefinitionRole[] = [
 ];
 
 export async function seedRoles(prisma: PrismaClient): Promise<void> {
-  const tous = [...rolesMetier(), ...ROLES_PIVOT, ...ROLES_CONTROLE, ...ROLES_SYSTEME];
+  const tous = [...rolesMetier(), ...ROLES_DOBB_DIFFERENCIES, ...ROLES_PIVOT, ...ROLES_CONTROLE, ...ROLES_SYSTEME];
 
   for (const role of tous) {
     await prisma.role.upsert({
