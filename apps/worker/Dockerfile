@@ -1,7 +1,9 @@
 FROM node:20-slim AS base
 # procps fournit `ps`, requis par `nest start --watch` en dev (même raison
 # que apps/api/Dockerfile) pour éviter un crash à chaque redémarrage à chaud.
-RUN apt-get update -y && apt-get install -y openssl procps && rm -rf /var/lib/apt/lists/*
+# --only-upgrade sur libgnutls30 (CVE-2026-33845, CVE-2026-42010) — cf.
+# apps/api/Dockerfile pour la justification complète.
+RUN apt-get update -y && apt-get install -y openssl procps && apt-get install --only-upgrade -y libgnutls30 && rm -rf /var/lib/apt/lists/*
 RUN corepack enable
 WORKDIR /repo
 
@@ -21,11 +23,17 @@ RUN pnpm --filter @pgd/database prisma:generate
 
 FROM deps AS build
 COPY . .
-RUN pnpm --filter @pgd/contracts... --filter @pgd/worker build
+# --filter @pgd/worker... (suffixe) — même correctif que apps/api/Dockerfile,
+# même bug (l'ancienne commande ne construisait ni @pgd/database ni
+# @pgd/config ni @pgd/messaging, dont @pgd/worker dépend tous les trois).
+RUN pnpm --filter @pgd/worker... build
 
 FROM base AS runtime
 ENV NODE_ENV=production
 RUN groupadd --system pgd && useradd --system --gid pgd pgd
+# tar bundlé par npm (CVE-2026-59873) — cf. apps/api/Dockerfile. npm jamais
+# invoqué au runtime ici non plus (CMD lance `node` directement).
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 COPY --from=build /repo /repo
 USER pgd
 WORKDIR /repo/apps/worker
