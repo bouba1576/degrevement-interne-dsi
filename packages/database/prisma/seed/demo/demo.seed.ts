@@ -127,7 +127,21 @@ async function creerLigneAvecFormules(
   const existante = await prisma.ligne.findUnique({
     where: { compteId_nd: { compteId: params.compteId, nd: params.nd } }
   });
-  if (existante) return;
+  // Trouvé le 17/08/2026 (incident cf. CLAUDE.md) : ce garde-fou d'idempotence
+  // sortait avant tout réétablissement de formuleCouranteId — si ce pointeur
+  // était nul pour une raison externe (jamais correctement identifiée), aucun
+  // nombre de reseeds ne pouvait le réparer, puisque la ligne "existe déjà"
+  // court-circuitait la boucle plus bas qui le renseigne. Un reseed reste
+  // idempotent sur la CRÉATION de la ligne et des formules (jamais de doublon,
+  // jamais recréé) mais répare désormais le pointeur s'il a été perdu.
+  if (existante) {
+    if (existante.formuleCouranteId) return;
+    const formuleCourante = await prisma.formule.findFirst({ where: { ligneId: existante.id, courante: true } });
+    if (formuleCourante) {
+      await prisma.ligne.update({ where: { id: existante.id }, data: { formuleCouranteId: formuleCourante.id } });
+    }
+    return;
+  }
 
   const ligne = await prisma.ligne.create({
     data: {

@@ -912,6 +912,55 @@ Confirme l'objectif posé : **le passage à Node 24 réduit bien le compte de vu
 
 ---
 
+## Incident — secrets exposés dans l'historique Git, socle d'identités disparu (17/08/2026)
+
+Deux événements distincts, traités dans la même intervention parce que découverts l'un après l'autre, pas parce qu'ils partagent une cause commune établie.
+
+### Rotation JWT_SECRET / REFRESH_TOKEN_SECRET / TOTP_ENCRYPTION_KEY
+
+Un scan Gitleaks (branche `dev`) a signalé trois « Generic API Key » dans `.env.example`. Vérification par `git show` (pas par déduction) : le fichier actuel est déjà propre (placeholders factices depuis le commit `42f6046b`, 22/07/2026) — Gitleaks scanne l'historique complet, pas seulement HEAD, et a trouvé le commit **antérieur** au correctif (`b7de46a7`, scaffold initial), où `JWT_SECRET`/`REFRESH_TOKEN_SECRET`/`TOTP_ENCRYPTION_KEY` portaient de vraies valeurs hex à ces mêmes numéros de ligne (36/38/64 — correspondance exacte).
+
+**Découverte allant au-delà de la question posée** : ces trois valeurs, bien que retirées du fichier exemple committé, étaient encore les valeurs **réellement utilisées** par le `.env` local de ce poste (jamais régénéré depuis le correctif de juillet) — confirmé aussi dans `docker-compose.yml` (interpolation `${JWT_SECRET}` etc.). Les conteneurs `api`/`worker` tournaient avec ces secrets exposés au moment de la découverte.
+
+**Décision actée** : régénérer les trois immédiatement plutôt que différer (« différer ne réduirait pas le travail, seulement la durée d'exposition d'une clé déjà compromise »), et **ne pas réécrire l'historique Git** — une fois les secrets rotés, les anciennes valeurs dans l'historique sont inertes (connaître un secret qui n'est plus utilisé ne donne plus d'accès) ; réécrire aurait cassé les hachages de commit existants pour un bénéfice pratique nul.
+
+**Fait** : trois nouvelles valeurs (`openssl rand -hex 32`) écrites dans `.env`, conteneurs `api`/`worker` recréés (`docker compose up -d --force-recreate`, pas un simple `restart` — l'interpolation `.env` ne se relit qu'à la création du conteneur). Vérifié directement : `docker compose exec api sh -c 'echo $JWT_SECRET'` renvoie la nouvelle valeur, `GET /api/health/ready` confirme la connectivité complète après recréation.
+
+### Disparition du socle des 15 identités persistantes
+
+En tentant de ré-enrôler le TOTP des 6 identités concernées par la rotation, découverte que la table `Utilisateur` était **entièrement vide** (0 ligne) — pas seulement les 6, les 15. `Demande`/`MembreRole` vides aussi. Tous les référentiels (`role`=35, `sous_flux`=7, `circuit`=3, `configuration_circuit`=6, etc.) et les journaux d'audit/sécurité (`journal_audit`=4209, `journal_securite`=1153) intacts — **ciblé, pas une réinitialisation de schéma**.
+
+**Investigation poussée jusqu'à sa limite réelle, pas jusqu'à ce qu'elle s'arrête d'elle-même** :
+- Le script de rotation TOTP lui-même écarté avec certitude, pas par déduction : relu ligne par ligne, une seule opération DB (`update` scopé par `identifiantAd` exact), a échoué dès sa première itération (identité déjà absente **avant** son exécution), jamais atteint les 5 autres identités, jamais émis de `DELETE`.
+- Recherche exhaustive dans `apps/`, `packages/` (pas seulement les tests) : aucun `utilisateur.deleteMany()` non scopé nulle part dans le code actuel.
+- Deux tentatives de `DELETE FROM utilisateur WHERE 1=1` trouvées dans les logs Postgres (11:37 et 11:40 UTC ce jour) — **toutes les deux échouées** sur la contrainte FK `demande_initiateur_id_fkey`. Aucune n'a pu vider la table.
+- **Constat qui ferme cette piste précisément, pas par manque d'effort** : `SHOW log_statement` renvoie `none` — Postgres ne journalise le texte d'une requête que si elle échoue. Toute suppression **réussie**, aujourd'hui ou lors d'une session antérieure, est structurellement invisible dans ces logs. Ce n'est pas que la recherche n'a pas été assez loin ; l'outil ne peut pas répondre à cette question avec cette configuration.
+
+**Conclusion** : disparition ciblée, cause exacte non déterminable avec les outils disponibles dans cette session. Aucune piste ne pointe vers le code, les tests ou les scripts actuels de ce dépôt. Hypothèse la plus probable au moment de la clôture de cet incident : intervention manuelle volontaire (le fait que `Demande` ait disparu avec `Utilisateur`, sans qu'aucun référentiel ne bouge, ressemble à un nettoyage réfléchi plutôt qu'à un accident ou une compromission) — **en cours de vérification séparément par la personne pilotant le projet au moment de la rédaction de cette entrée**, à mettre à jour si elle obtient confirmation.
+
+**Effet de bord découvert en réparant, pas anticipé — `ligne.formuleCouranteId` nul sur les 5 lignes de démo.** En revérifiant la suite e2e après reconstruction des identités, les 7 specs `*-circuit.e2e-spec.ts`/`demandes-controller.e2e-spec.ts` échouaient toutes sur `PUT .../lignes → 400 VALIDATION_ECHOUEE` (`formuleId: Expected string, received null`). Cause : `ligne.formule_courante_id` était `NULL` sur les 5 lignes de démo, alors que la `Formule` correspondante (`courante=true`) existait bien pour chacune — un pointeur cassé, pas une donnée manquante, et touchant systématiquement les 5 lignes de la même façon (même famille d'anomalie « ciblée » que `Utilisateur`/`Demande`, pas un hasard isolé — élément supplémentaire pour l'investigation en cours côté métier). Réparé par un `UPDATE` direct rétablissant le pointeur vers la formule `courante` déjà existante (aucune recréation, `formule` restée à 8 lignes tout du long).
+
+**Bug structurel trouvé et corrigé au passage, indépendant de la cause de la nullité** : `creerLigneAvecFormules` (`packages/database/prisma/seed/demo/demo.seed.ts`) sortait immédiatement (`if (existante) return`) dès que la ligne existait déjà — avant d'atteindre le code qui renseigne `formuleCouranteId`. Concrètement : quel que soit le nombre de fois où `pnpm db:seed` est rejoué, ce pointeur ne pouvait **jamais** s'auto-réparer une fois cassé, puisque toute ligne déjà créée court-circuitait la boucle de réassignation. Corrigé : la fonction vérifie désormais, pour une ligne déjà existante, si `formuleCouranteId` est manquant et le réassigne depuis la formule `courante=true` déjà en base — sans jamais recréer de formule ni casser l'idempotence sur la création.
+
+**Vérifié en direct après les deux réparations** : suite e2e complète, 7/7 suites, 20/20 tests verts ; suite d'intégration complète, 39/39 suites, 234/234 tests verts.
+
+### Reconstruction du socle (17/08/2026)
+
+Les 15 identités reconstruites à l'identique — LDAP intact (vérifié séparément, 15 entrées avec les mêmes `cn`), seule la table Postgres `Utilisateur` avait disparu. Script jetable (même discipline que d'habitude, supprimé après usage) recréant `Utilisateur` + `MembreRole` avec les mêmes `identifiantAd`/rôles/noms que documentés plus haut dans ce fichier (table « Identités de test persistantes »), et régénérant un secret TOTP réel (même mécanisme que `TotpProvider.genererEnrolement`, chiffré avec la **nouvelle** `TOTP_ENCRYPTION_KEY`) pour les 6 identités qui l'exigent.
+
+**Vérifié en direct, dans les deux sens, pour les 6 identités TOTP** : script e2e jetable — nouveau secret → `POST /api/auth/mfa/verify` accepté, cookie de session posé, `GET /api/auth/session` confirme le bon `identifiantAd` ; code généré avec un secret arbitraire différent (jamais le vrai ancien secret, qui n'a jamais été connu de cette vérification) → `401` propre. Les deux réparations de données (identités + `formuleCouranteId`) confirmées par un sweep complet vert (ci-dessus).
+
+### Mesure de précaution — proposée, pas construite
+
+La personne pilotant le projet a demandé une proposition de mécanisme léger rendant un futur incident de ce type visible et attribuable le jour même, avec le coût affiché avant toute décision. Deux options, pas exclusives l'une de l'autre :
+
+1. **`log_statement = mod` sur l'environnement de dev** (journalise les requêtes de modification — INSERT/UPDATE/DELETE — pas seulement celles qui échouent, contrairement au réglage actuel `none`). Coût : verbosité des logs nettement plus élevée (chaque écriture, pas seulement les échecs — pour un environnement de dev avec une suite de tests qui écrit abondamment, cela peut représenter un volume de logs important sur une session de travail chargée) ; aucune modification de code ni de schéma, un seul paramètre Postgres (`postgresql.conf` ou `ALTER SYSTEM`) ; n'aurait pas empêché l'incident, mais aurait rendu **immédiatement lisible** la requête exacte qui a vidé `Utilisateur`, avec son origine (adresse, utilisateur DB) — exactement ce qui a manqué dans cette investigation.
+2. **Export périodique du nombre de lignes des tables clés** (`Utilisateur`, `Demande`, `MembreRole`, `Ligne` avec `formuleCouranteId` non nul, plus les référentiels) — un script trivial (quelques requêtes `count(*)`, écrites dans un fichier horodaté ou une table dédiée), déclenché par exemple à chaque démarrage de la stack dev ou via une tâche planifiée légère. Coût : quasi nul en ressources ; ne dit jamais *qui* ni *comment*, seulement *qu'*un écart a eu lieu et *quand* il est apparu pour la première fois — un signal d'alerte, pas un journal d'audit. Utile même rétroactivement pour cet incident précis : aurait borné la fenêtre de recherche à quelques heures au lieu de « tout l'historique du conteneur ».
+
+Les deux se combinent bien : l'export périodique dit *qu'*un problème est apparu et *quand* ; `log_statement=mod`, activé en continu ou seulement pendant la fenêtre suspecte une fois l'alerte donnée, dit *quoi* exactement. Aucun des deux n'est construit — en attente de décision.
+
+---
+
 ## Commandes
 
 ```bash
