@@ -59,4 +59,12 @@ COPY --from=build /repo /repo
 USER pgd
 WORKDIR /repo/apps/api
 EXPOSE 3000
+# node -e plutôt que curl/wget — image slim, aucun des deux n'est présent et
+# en ajouter un uniquement pour ce sondage serait une surface supplémentaire
+# non justifiée. /api/health (liveness, @Public()) répond sans dépendance
+# externe — jamais /api/health/ready, qui refléterait l'état de Postgres/
+# Redis/RabbitMQ/AD et ferait échouer le healthcheck du conteneur sur une
+# panne d'un service tiers plutôt que sur une panne du process lui-même.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD node -e "require('http').get('http://127.0.0.1:3000/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
 CMD ["node", "dist/main.js"]

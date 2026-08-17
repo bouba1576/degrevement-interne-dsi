@@ -7,3 +7,14 @@ node_modules
 .git
 .claude
 docs/design
+
+# Trouvé absent le 17/08/2026 (constat SonarQube « Copying recursively might
+# inadvertently add sensitive data », vérifié réel — pas un faux positif comme
+# les COPY --chown) : COPY . . (stage build) embarquait le vrai .env (racine
+# ET packages/database/.env, tous deux réels/gitignorés, jamais exemple) dans
+# l'image de production, confirmé par reconstruction + lecture directe du
+# fichier depuis l'image runtime. .env.example reste committé et sûr — pas
+# besoin de l'exclure, mais explicite ici pour éviter toute ambiguïté future.
+.env
+**/.env
+!.env.example

@@ -37,4 +37,10 @@ COPY --from=build /repo /repo
 USER pgd
 WORKDIR /repo/apps/web
 EXPOSE 3001
+# node -e plutôt que curl/wget — même raisonnement que apps/api/Dockerfile.
+# apps/web n'a pas de route /health dédiée : /login est la seule route
+# statique publique connue à répondre 200 sans session (vérifié en direct,
+# migration Node 24 — cf. CLAUDE.md), utilisée ici faute d'alternative.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
+  CMD node -e "require('http').get('http://127.0.0.1:3001/login',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
 CMD ["node_modules/.bin/next", "start", "-p", "3001"]
