@@ -66,7 +66,7 @@ export function AnnuaireRechercheModal({ onFermer, onSelectionner, identifiantsD
       return;
     }
     if (!IDENTIFIANT_AD_REGEX.test(identifiant)) {
-      setErreurManuel("Forme attendue : identifiant@domaine (ex. jean.kouassi@orange.ci) — existence non vérifiable ici.");
+      setErreurManuel("Forme attendue : identifiant@domaine (ex. jean.kouassi@orange.com) — existence non vérifiable ici.");
       return;
     }
     setErreurManuel(null);
@@ -165,7 +165,7 @@ export function AnnuaireRechercheModal({ onFermer, onSelectionner, identifiantsD
             <input
               value={identifiantManuel}
               onChange={(e) => setIdentifiantManuel(e.target.value)}
-              placeholder="jean.kouassi@orange.ci"
+              placeholder="jean.kouassi@orange.com"
               className="mt-1 w-full rounded border border-gris300 px-3 py-2 font-mono text-13"
             />
           </label>

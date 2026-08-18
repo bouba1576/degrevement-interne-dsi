@@ -229,7 +229,7 @@ describe("RuleEngineService — sélection de palier + cache Redis (Phase 4/5)",
     const initiateur = await prisma.utilisateur.upsert({
       where: { id: "22222222-2222-2222-2222-222222222222" },
       update: {},
-      create: { id: "22222222-2222-2222-2222-222222222222", identifiantAd: "test.rule-engine@orange.ci", nom: "Test RuleEngine" }
+      create: { id: "22222222-2222-2222-2222-222222222222", identifiantAd: "test.rule-engine@orange.com", nom: "Test RuleEngine" }
     });
     const demande = await prisma.demande.create({
       data: {

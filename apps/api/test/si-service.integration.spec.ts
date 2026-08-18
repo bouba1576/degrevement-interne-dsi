@@ -20,7 +20,7 @@ describe("SiService (docs/06, PGD-062)", () => {
   beforeAll(async () => {
     await connexionRabbitMQ.connecter();
     const agent = await prisma.utilisateur.create({
-      data: { identifiantAd: `test.si-service-${suffixe}@orange.ci`, nom: "Agent Test SiService" }
+      data: { identifiantAd: `test.si-service-${suffixe}@orange.com`, nom: "Agent Test SiService" }
     });
     agentId = agent.id;
   });

@@ -18,10 +18,10 @@ describe("KpiService.correctionsParAgent — DEMANDE + HISTORIQUE_MONTANT unique
 
   beforeAll(async () => {
     const a = await prisma.utilisateur.create({
-      data: { identifiantAd: `test.kpi-agent-a-${suffixe}@orange.ci`, nom: "Agent KPI A" }
+      data: { identifiantAd: `test.kpi-agent-a-${suffixe}@orange.com`, nom: "Agent KPI A" }
     });
     const b = await prisma.utilisateur.create({
-      data: { identifiantAd: `test.kpi-agent-b-${suffixe}@orange.ci`, nom: "Agent KPI B" }
+      data: { identifiantAd: `test.kpi-agent-b-${suffixe}@orange.com`, nom: "Agent KPI B" }
     });
     agentA = a.id;
     agentB = b.id;

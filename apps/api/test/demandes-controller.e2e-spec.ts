@@ -28,7 +28,7 @@ describe("E2E — DemandesController, routes restantes en HTTP réel", () => {
 
   async function creerActeur(libelle: string, roles: string[]) {
     const utilisateur = await prisma.utilisateur.create({
-      data: { identifiantAd: `e2e.demandes.${libelle}-${suffixe}@orange.ci`, nom: `E2E Demandes ${libelle}` }
+      data: { identifiantAd: `e2e.demandes.${libelle}-${suffixe}@orange.com`, nom: `E2E Demandes ${libelle}` }
     });
     utilisateurIds.push(utilisateur.id);
     const cookie = await cookieSession(e2e.sessionService, { id: utilisateur.id, identifiantAd: utilisateur.identifiantAd, roles });

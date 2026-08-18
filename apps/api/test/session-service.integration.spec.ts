@@ -15,7 +15,7 @@ describe("SessionService — SF-PGD-003 (JWT + révocation Redis)", () => {
   const jwt = new JwtService({});
   const sessionService = new SessionService(jwt, cache);
 
-  const utilisateur = { id: "33333333-3333-3333-3333-333333333333", identifiantAd: "test.session@orange.ci", roles: ["DOBB"] };
+  const utilisateur = { id: "33333333-3333-3333-3333-333333333333", identifiantAd: "test.session@orange.com", roles: ["DOBB"] };
 
   afterAll(async () => {
     await redis.quit();

@@ -47,17 +47,20 @@ export type UtilisateurAdminVue = z.infer<typeof utilisateurAdminVueSchema>;
 // 18/08/2026 : ni DUO ni l'annuaire AD ne sont joignables, et l'API AD réelle
 // n'a de toute façon jamais exposé de capacité de recherche, cf. CLAUDE.md
 // « API AD réelle » — LdapPort.rechercher() ne peut donc pas rester le seul
-// chemin). Domaine volontairement non contraint dans ce regex : orange.ci vs
-// orange.com reste une question ouverte non tranchée dans ce dépôt — une
-// erreur d'existence (mauvais domaine, faute de frappe) ne peut être détectée
-// que par une tentative de connexion réelle, jamais par un pattern statique.
+// chemin). Domaine volontairement non contraint dans ce regex : orange.com
+// est confirmé (18/08/2026) comme le domaine réel, mais orange.ci continue de
+// désigner légitimement le socle de test dev dans ce même dépôt — un regex
+// imposant orange.com casserait la saisie manuelle pour ce socle. Une erreur
+// d'existence (mauvais domaine, faute de frappe) ne peut de toute façon être
+// détectée que par une tentative de connexion réelle, jamais par un pattern
+// statique.
 const identifiantAdRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const preEnregistrerUtilisateurRequeteSchema = z.object({
   identifiantAd: z
     .string()
     .min(1)
-    .regex(identifiantAdRegex, "Forme attendue : identifiant@domaine (ex. jean.kouassi@orange.ci)"),
+    .regex(identifiantAdRegex, "Forme attendue : identifiant@domaine (ex. jean.kouassi@orange.com)"),
   nom: z.string().min(1),
   roles: z.array(z.string().min(1)).min(1, "Au moins un rôle est requis."),
   directionId: z.string().uuid().optional(),

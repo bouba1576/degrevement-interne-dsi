@@ -13,7 +13,7 @@ describe("AdminParametresCalculService.modifier — recalcul brouillon / gel sou
   const historique = new HistoriqueMontantService(prisma);
   const service = new AdminParametresCalculService(prisma, montantService, historique);
 
-  const acteur = { id: "44444444-4444-4444-4444-444444444444", identifiantAd: "test.parametres@orange.ci" };
+  const acteur = { id: "44444444-4444-4444-4444-444444444444", identifiantAd: "test.parametres@orange.com" };
   let tauxOriginal: { tauxTsc: string; tauxTva: string };
   let assietteTvaDefautOriginal: "HT" | "HT_TSC";
   let demandeBrouillonId: string;

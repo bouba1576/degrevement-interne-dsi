@@ -33,7 +33,7 @@ describe("SiPushService.traiter — T5 (idempotence poussée SI) + R10 (erreur/r
   beforeAll(async () => {
     await connexionRabbitMQ.connecter();
     const agent = await prisma.utilisateur.create({
-      data: { identifiantAd: `test.si-push-${suffixe}@orange.ci`, nom: "Agent Test SI Push" }
+      data: { identifiantAd: `test.si-push-${suffixe}@orange.com`, nom: "Agent Test SI Push" }
     });
     agentId = agent.id;
   });

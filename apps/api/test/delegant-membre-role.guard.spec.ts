@@ -51,8 +51,8 @@ describe("DelegantMembreRoleGuard — R21/R22 (élévation de privilège via del
 
   beforeAll(async () => {
     const [membre, sansRole] = await Promise.all([
-      prisma.utilisateur.create({ data: { identifiantAd: `test.deleg-membre-${suffixe}@orange.ci`, nom: "Membre Réel" } }),
-      prisma.utilisateur.create({ data: { identifiantAd: `test.deleg-sans-role-${suffixe}@orange.ci`, nom: "Sans Rôle Réel" } })
+      prisma.utilisateur.create({ data: { identifiantAd: `test.deleg-membre-${suffixe}@orange.com`, nom: "Membre Réel" } }),
+      prisma.utilisateur.create({ data: { identifiantAd: `test.deleg-sans-role-${suffixe}@orange.com`, nom: "Sans Rôle Réel" } })
     ]);
     membreReelId = membre.id;
     delegataireSansRoleId = sansRole.id;

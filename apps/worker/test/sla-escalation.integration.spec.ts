@@ -25,7 +25,7 @@ describe("SlaEscalationService.escalader — T8 (idempotence)", () => {
   beforeAll(async () => {
     await connexionRabbitMQ.connecter();
     const agent = await prisma.utilisateur.create({
-      data: { identifiantAd: `test.sla-${suffixe}@orange.ci`, nom: "Agent Test SLA" }
+      data: { identifiantAd: `test.sla-${suffixe}@orange.com`, nom: "Agent Test SLA" }
     });
     agentId = agent.id;
   });

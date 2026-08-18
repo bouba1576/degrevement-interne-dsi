@@ -19,9 +19,9 @@ describe("DelegationService.creer — T7, R22 (excl_delegation_concurrente)", ()
 
   beforeAll(async () => {
     const [delegant, delegataire1, delegataire2] = await Promise.all([
-      prisma.utilisateur.create({ data: { identifiantAd: `test.delegant-${suffixe}@orange.ci`, nom: "Delegant Test" } }),
-      prisma.utilisateur.create({ data: { identifiantAd: `test.delegataire1-${suffixe}@orange.ci`, nom: "Délégataire 1" } }),
-      prisma.utilisateur.create({ data: { identifiantAd: `test.delegataire2-${suffixe}@orange.ci`, nom: "Délégataire 2" } })
+      prisma.utilisateur.create({ data: { identifiantAd: `test.delegant-${suffixe}@orange.com`, nom: "Delegant Test" } }),
+      prisma.utilisateur.create({ data: { identifiantAd: `test.delegataire1-${suffixe}@orange.com`, nom: "Délégataire 1" } }),
+      prisma.utilisateur.create({ data: { identifiantAd: `test.delegataire2-${suffixe}@orange.com`, nom: "Délégataire 2" } })
     ]);
     delegantId = delegant.id;
     delegataire1Id = delegataire1.id;
@@ -119,7 +119,7 @@ describe("DelegationService.creer — T7, R22 (excl_delegation_concurrente)", ()
 
   it("aucun conflit entre deux délégants distincts sur le même rôle et la même période", async () => {
     const autreDelegant = await prisma.utilisateur.create({
-      data: { identifiantAd: `test.autre-delegant-${suffixe}@orange.ci`, nom: "Autre Délégant" }
+      data: { identifiantAd: `test.autre-delegant-${suffixe}@orange.com`, nom: "Autre Délégant" }
     });
 
     try {

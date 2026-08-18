@@ -29,8 +29,8 @@ describe("InitiateurDemandeGuard (audit Phase 8 — DemandesController)", () => 
 
   beforeAll(async () => {
     const [initiateur, tiers] = await Promise.all([
-      prisma.utilisateur.create({ data: { identifiantAd: `test.initiateur-${suffixe}@orange.ci`, nom: "Initiateur Test" } }),
-      prisma.utilisateur.create({ data: { identifiantAd: `test.tiers-${suffixe}@orange.ci`, nom: "Tiers Test" } })
+      prisma.utilisateur.create({ data: { identifiantAd: `test.initiateur-${suffixe}@orange.com`, nom: "Initiateur Test" } }),
+      prisma.utilisateur.create({ data: { identifiantAd: `test.tiers-${suffixe}@orange.com`, nom: "Tiers Test" } })
     ]);
     initiateurId = initiateur.id;
     tiersId = tiers.id;

@@ -20,7 +20,7 @@ describe("LocksSweeperService.balayer — T8 (désalignement Redis/Postgres)", (
 
   beforeAll(async () => {
     const agent = await prisma.utilisateur.create({
-      data: { identifiantAd: `test.sweeper-${suffixe}@orange.ci`, nom: "Agent Test Sweeper" }
+      data: { identifiantAd: `test.sweeper-${suffixe}@orange.com`, nom: "Agent Test Sweeper" }
     });
     agentId = agent.id;
   });

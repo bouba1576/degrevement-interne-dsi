@@ -47,7 +47,7 @@ describe("RbacResolutionService — pré-enregistrement (Temps 2, sans JIT ni re
   }
 
   it("refuse un identifiantAd totalement inconnu, sans créer de ligne Utilisateur (retrait du JIT)", async () => {
-    const identifiantAd = `inconnu.${Date.now()}@orange.ci`;
+    const identifiantAd = `inconnu.${Date.now()}@orange.com`;
 
     const resultat = await service.resoudre(ad(identifiantAd));
 
@@ -58,7 +58,7 @@ describe("RbacResolutionService — pré-enregistrement (Temps 2, sans JIT ni re
   });
 
   it("refuse un Utilisateur pré-existant mais sans aucun MembreRole actif", async () => {
-    const identifiantAd = `zero-role.${Date.now()}@orange.ci`;
+    const identifiantAd = `zero-role.${Date.now()}@orange.com`;
     const utilisateur = await prisma.utilisateur.create({
       data: { identifiantAd, nom: "Zéro Rôle" }
     });
@@ -73,7 +73,7 @@ describe("RbacResolutionService — pré-enregistrement (Temps 2, sans JIT ni re
   });
 
   it("autorise un Utilisateur pré-enregistré avec au moins un MembreRole, rôles lus depuis MembreRole", async () => {
-    const identifiantAd = `provisionne.${Date.now()}@orange.ci`;
+    const identifiantAd = `provisionne.${Date.now()}@orange.com`;
     const utilisateur = await prisma.utilisateur.create({
       data: { identifiantAd, nom: "Provisionné" }
     });
@@ -93,7 +93,7 @@ describe("RbacResolutionService — pré-enregistrement (Temps 2, sans JIT ni re
   });
 
   it("preuve du retrait de la resynchronisation AD : un rôle affecté manuellement survit à un appel avec des groupes AD non correspondants", async () => {
-    const identifiantAd = `manuel.${Date.now()}@orange.ci`;
+    const identifiantAd = `manuel.${Date.now()}@orange.com`;
     const utilisateur = await prisma.utilisateur.create({
       data: { identifiantAd, nom: "Rôle Manuel" }
     });
@@ -112,7 +112,7 @@ describe("RbacResolutionService — pré-enregistrement (Temps 2, sans JIT ni re
   });
 
   it("ne modifie jamais le champ nom depuis utilisateurAd (plus d'upsert JIT) — vérifié par absence de changement", async () => {
-    const identifiantAd = `nom-fige.${Date.now()}@orange.ci`;
+    const identifiantAd = `nom-fige.${Date.now()}@orange.com`;
     const utilisateur = await prisma.utilisateur.create({
       data: { identifiantAd, nom: "Nom Original En Base" }
     });

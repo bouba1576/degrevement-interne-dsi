@@ -11,7 +11,7 @@ describe("LdapProvider (OpenLDAP réel via Testcontainers)", () => {
   let container: StartedTestContainer;
   let provider: LdapProvider;
 
-  const BASE_DN = "dc=pgd,dc=orange,dc=ci";
+  const BASE_DN = "dc=pgd,dc=orange,dc=com";
   const LDIF = `
 dn: ou=users,${BASE_DN}
 objectClass: organizationalUnit
@@ -27,7 +27,7 @@ uid: jean.kouassi
 cn: Jean Kouassi
 sn: Kouassi
 givenName: Jean
-mail: jean.kouassi@orange.ci
+mail: jean.kouassi@orange.com
 userPassword: MotDePasseTest123!
 
 dn: cn=GG-DGR-INITIATEUR-DOBB,ou=groups,${BASE_DN}
@@ -40,7 +40,7 @@ member: uid=jean.kouassi,ou=users,${BASE_DN}
     container = await new GenericContainer("osixia/openldap:1.5.0")
       .withEnvironment({
         LDAP_ORGANISATION: "PGD Orange CI Test",
-        LDAP_DOMAIN: "pgd.orange.ci",
+        LDAP_DOMAIN: "pgd.orange.com",
         LDAP_ADMIN_PASSWORD: "admin"
       })
       .withExposedPorts(389)
@@ -89,21 +89,21 @@ member: uid=jean.kouassi,ou=users,${BASE_DN}
   });
 
   it("authentifie un utilisateur réel et résout ses groupes AD", async () => {
-    const resultat = await provider.authentifier("jean.kouassi@orange.ci", "MotDePasseTest123!");
+    const resultat = await provider.authentifier("jean.kouassi@orange.com", "MotDePasseTest123!");
     expect(resultat).toEqual({
-      identifiantAd: "jean.kouassi@orange.ci",
+      identifiantAd: "jean.kouassi@orange.com",
       nom: "Jean Kouassi",
       groupes: ["GG-DGR-INITIATEUR-DOBB"]
     });
   });
 
   it("refuse un mot de passe invalide sans distinguer l'erreur", async () => {
-    const resultat = await provider.authentifier("jean.kouassi@orange.ci", "mauvais-mot-de-passe");
+    const resultat = await provider.authentifier("jean.kouassi@orange.com", "mauvais-mot-de-passe");
     expect(resultat).toBeNull();
   });
 
   it("refuse un identifiant inconnu", async () => {
-    const resultat = await provider.authentifier("personne.inconnue@orange.ci", "peu-importe");
+    const resultat = await provider.authentifier("personne.inconnue@orange.com", "peu-importe");
     expect(resultat).toBeNull();
   });
 
@@ -113,14 +113,14 @@ member: uid=jean.kouassi,ou=users,${BASE_DN}
     it("trouve un utilisateur par fragment de nom (cn)", async () => {
       const resultats = await provider.rechercher("Kouassi");
       expect(resultats).toEqual([
-        { identifiantAd: "jean.kouassi@orange.ci", nom: "Jean Kouassi", groupes: ["GG-DGR-INITIATEUR-DOBB"] }
+        { identifiantAd: "jean.kouassi@orange.com", nom: "Jean Kouassi", groupes: ["GG-DGR-INITIATEUR-DOBB"] }
       ]);
     });
 
     it("trouve un utilisateur par fragment d'identifiant (mail)", async () => {
       const resultats = await provider.rechercher("jean.kou");
       expect(resultats).toHaveLength(1);
-      expect(resultats[0]?.identifiantAd).toBe("jean.kouassi@orange.ci");
+      expect(resultats[0]?.identifiantAd).toBe("jean.kouassi@orange.com");
     });
 
     it("renvoie un tableau vide sans erreur quand rien ne correspond", async () => {

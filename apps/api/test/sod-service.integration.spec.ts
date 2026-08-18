@@ -16,7 +16,7 @@ describe("SodService — R3 + R21 (délégation)", () => {
       update: {},
       create: {
         id: initiateurId,
-        identifiantAd: "test.initiateur@orange.ci",
+        identifiantAd: "test.initiateur@orange.com",
         nom: "Test Initiateur"
       }
     });
@@ -75,34 +75,34 @@ describe("SodService — R3 + R21 (délégation)", () => {
     const resultat = await sodService.verifier({
       demandeId,
       etapeOrdreActuelle: 2,
-      agentIdentifiantAd: "quelqu.un@orange.ci"
+      agentIdentifiantAd: "quelqu.un@orange.com"
     });
     expect(resultat.conflit).toBe(false);
   });
 
   it("R3 — détecte le conflit quand le même agent a agi à l'étape N-1", async () => {
     await prisma.journalAudit.create({
-      data: { demandeId, tacheId: tacheN1Id, acteur: "marie.diallo@orange.ci", action: "approbation" }
+      data: { demandeId, tacheId: tacheN1Id, acteur: "marie.diallo@orange.com", action: "approbation" }
     });
 
     const resultat = await sodService.verifier({
       demandeId,
       etapeOrdreActuelle: 2,
-      agentIdentifiantAd: "marie.diallo@orange.ci"
+      agentIdentifiantAd: "marie.diallo@orange.com"
     });
     expect(resultat.conflit).toBe(true);
-    expect(resultat.acteurEtapePrecedente).toBe("marie.diallo@orange.ci");
+    expect(resultat.acteurEtapePrecedente).toBe("marie.diallo@orange.com");
   });
 
   it("R3 — n'a pas de conflit quand un AUTRE agent traite l'étape N", async () => {
     await prisma.journalAudit.create({
-      data: { demandeId, tacheId: tacheN1Id, acteur: "marie.diallo@orange.ci", action: "approbation" }
+      data: { demandeId, tacheId: tacheN1Id, acteur: "marie.diallo@orange.com", action: "approbation" }
     });
 
     const resultat = await sodService.verifier({
       demandeId,
       etapeOrdreActuelle: 2,
-      agentIdentifiantAd: "paul.brou@orange.ci"
+      agentIdentifiantAd: "paul.brou@orange.com"
     });
     expect(resultat.conflit).toBe(false);
   });
@@ -110,18 +110,18 @@ describe("SodService — R3 + R21 (délégation)", () => {
   it("R21 — détecte le conflit quand le délégataire agit pour un délégant ayant traité N-1", async () => {
     // Le titulaire (délégant) a traité l'étape N-1 lui-même.
     await prisma.journalAudit.create({
-      data: { demandeId, tacheId: tacheN1Id, acteur: "chef.service@orange.ci", action: "approbation" }
+      data: { demandeId, tacheId: tacheN1Id, acteur: "chef.service@orange.com", action: "approbation" }
     });
 
     // Son intérimaire (délégataire) tente de traiter l'étape N en son nom.
     const resultat = await sodService.verifier({
       demandeId,
       etapeOrdreActuelle: 2,
-      agentIdentifiantAd: "interimaire@orange.ci",
-      agitPourCompteDe: "chef.service@orange.ci"
+      agentIdentifiantAd: "interimaire@orange.com",
+      agitPourCompteDe: "chef.service@orange.com"
     });
     expect(resultat.conflit).toBe(true);
-    expect(resultat.acteurEtapePrecedente).toBe("chef.service@orange.ci");
+    expect(resultat.acteurEtapePrecedente).toBe("chef.service@orange.com");
   });
 
   it("R21 — détecte le conflit quand le titulaire agit après que son intérimaire a traité N-1 pour lui", async () => {
@@ -130,9 +130,9 @@ describe("SodService — R3 + R21 (délégation)", () => {
       data: {
         demandeId,
         tacheId: tacheN1Id,
-        acteur: "interimaire@orange.ci",
+        acteur: "interimaire@orange.com",
         action: "approbation",
-        detail: { delegationId: "deleg-1", delegantIdentifiantAd: "chef.service@orange.ci" }
+        detail: { delegationId: "deleg-1", delegantIdentifiantAd: "chef.service@orange.com" }
       }
     });
 
@@ -140,21 +140,21 @@ describe("SodService — R3 + R21 (délégation)", () => {
     const resultat = await sodService.verifier({
       demandeId,
       etapeOrdreActuelle: 2,
-      agentIdentifiantAd: "chef.service@orange.ci"
+      agentIdentifiantAd: "chef.service@orange.com"
     });
     expect(resultat.conflit).toBe(true);
   });
 
   it("n'a pas de conflit entre deux délégations sans lien de titulaire commun", async () => {
     await prisma.journalAudit.create({
-      data: { demandeId, tacheId: tacheN1Id, acteur: "marie.diallo@orange.ci", action: "approbation" }
+      data: { demandeId, tacheId: tacheN1Id, acteur: "marie.diallo@orange.com", action: "approbation" }
     });
 
     const resultat = await sodService.verifier({
       demandeId,
       etapeOrdreActuelle: 2,
-      agentIdentifiantAd: "interimaire@orange.ci",
-      agitPourCompteDe: "quelqu.un-dautre@orange.ci"
+      agentIdentifiantAd: "interimaire@orange.com",
+      agitPourCompteDe: "quelqu.un-dautre@orange.com"
     });
     expect(resultat.conflit).toBe(false);
   });
@@ -185,7 +185,7 @@ describe("SodService — R24 (SoD étendu au contrôle a posteriori, typeActeur=
       update: {},
       create: {
         id: initiateurId,
-        identifiantAd: "test.initiateur.r24@orange.ci",
+        identifiantAd: "test.initiateur.r24@orange.com",
         nom: "Test Initiateur R24"
       }
     });
@@ -241,27 +241,27 @@ describe("SodService — R24 (SoD étendu au contrôle a posteriori, typeActeur=
 
   it("R24 — détecte le conflit quand l'acteur du contrôle a approuvé l'étape bloquante précédente", async () => {
     await prisma.journalAudit.create({
-      data: { demandeId, tacheId: tacheEtapeBloquanteId, acteur: "jean.kouassi@orange.ci", action: "approbation" }
+      data: { demandeId, tacheId: tacheEtapeBloquanteId, acteur: "jean.kouassi@orange.com", action: "approbation" }
     });
 
     const resultat = await sodService.verifier({
       demandeId,
       etapeOrdreActuelle: 2,
-      agentIdentifiantAd: "jean.kouassi@orange.ci"
+      agentIdentifiantAd: "jean.kouassi@orange.com"
     });
     expect(resultat.conflit).toBe(true);
-    expect(resultat.acteurEtapePrecedente).toBe("jean.kouassi@orange.ci");
+    expect(resultat.acteurEtapePrecedente).toBe("jean.kouassi@orange.com");
   });
 
   it("R24 — n'a pas de conflit quand un AUTRE acteur réalise le contrôle", async () => {
     await prisma.journalAudit.create({
-      data: { demandeId, tacheId: tacheEtapeBloquanteId, acteur: "jean.kouassi@orange.ci", action: "approbation" }
+      data: { demandeId, tacheId: tacheEtapeBloquanteId, acteur: "jean.kouassi@orange.com", action: "approbation" }
     });
 
     const resultat = await sodService.verifier({
       demandeId,
       etapeOrdreActuelle: 2,
-      agentIdentifiantAd: "fra.controleur@orange.ci"
+      agentIdentifiantAd: "fra.controleur@orange.com"
     });
     expect(resultat.conflit).toBe(false);
   });

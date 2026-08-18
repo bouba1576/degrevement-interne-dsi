@@ -19,7 +19,7 @@ conteneur démarré.
 ```bash
 docker compose up -d openldap
 docker cp docker/openldap/seed.ldif degrevement-interne-dsi-openldap-1:/tmp/seed.ldif
-docker compose exec openldap ldapadd -x -D "cn=admin,dc=pgd,dc=orange,dc=ci" -w admin -f /tmp/seed.ldif
+docker compose exec openldap ldapadd -x -D "cn=admin,dc=pgd,dc=orange,dc=com" -w admin -f /tmp/seed.ldif
 ```
 
 Idempotence : `ldapadd` échoue sur les entrées déjà présentes (`Already
@@ -27,7 +27,7 @@ exists`) — sans conséquence, à ignorer sur les runs suivants.
 
 ## Utilisateur de test
 
-- `jean.kouassi@orange.ci` / `MotDePasseTest123!`
+- `jean.kouassi@orange.com` / `MotDePasseTest123!`
 - Membre du groupe `GG-DGR-INITIATEUR-DOBB` (correspond à `Role.groupeAd` du
   rôle `INITIATEUR_DOBB` seedé par `packages/database/prisma/seed`)
 
@@ -37,22 +37,22 @@ Cf. CLAUDE.md, section « Identités de test persistantes (dev) » pour le
 détail complet (rôles, MFA, réactivation de lignes Postgres existantes).
 Même mot de passe dev que `jean.kouassi` : `MotDePasseTest123!`.
 
-- `jean.kouassi@orange.ci` — élargi à `GG-DGR-ADMIN-PGD` en plus de
+- `jean.kouassi@orange.com` — élargi à `GG-DGR-ADMIN-PGD` en plus de
   `GG-DGR-INITIATEUR-DOBB`.
-- `responsable.df@orange.ci` — `GG-DGR-RESPONSABLE-DF`
-- `manager.df@orange.ci` — `GG-DGR-MANAGER-DF`
-- `senior.df@orange.ci` — `GG-DGR-MANAGER_SENIOR-DF`
-- `validateur.df@orange.ci` — `GG-DGR-DF`
-- `fra.controleur@orange.ci` — `GG-DGR-FRA`
-- `dga.dg@orange.ci` — `GG-DGR-DGA-DG` (palier 3 DF, >50M, R2)
-- `responsable.dobb@orange.ci` — `GG-DGR-RESPONSABLE-DOBB`
-- `manager.dobb@orange.ci` — `GG-DGR-MANAGER-DOBB`
-- `senior.dobb@orange.ci` — `GG-DGR-MANAGER_SENIOR-DOBB`
-- `dobb@orange.ci` — `GG-DGR-DOBB`
-- `responsable.dxc@orange.ci` — `GG-DGR-RESPONSABLE-DXC`
-- `manager.dxc@orange.ci` — `GG-DGR-MANAGER-DXC`
-- `senior.dxc@orange.ci` — `GG-DGR-MANAGER_SENIOR-DXC`
-- `dxc@orange.ci` — `GG-DGR-DXC`
+- `responsable.df@orange.com` — `GG-DGR-RESPONSABLE-DF`
+- `manager.df@orange.com` — `GG-DGR-MANAGER-DF`
+- `senior.df@orange.com` — `GG-DGR-MANAGER_SENIOR-DF`
+- `validateur.df@orange.com` — `GG-DGR-DF`
+- `fra.controleur@orange.com` — `GG-DGR-FRA`
+- `dga.dg@orange.com` — `GG-DGR-DGA-DG` (palier 3 DF, >50M, R2)
+- `responsable.dobb@orange.com` — `GG-DGR-RESPONSABLE-DOBB`
+- `manager.dobb@orange.com` — `GG-DGR-MANAGER-DOBB`
+- `senior.dobb@orange.com` — `GG-DGR-MANAGER_SENIOR-DOBB`
+- `dobb@orange.com` — `GG-DGR-DOBB`
+- `responsable.dxc@orange.com` — `GG-DGR-RESPONSABLE-DXC`
+- `manager.dxc@orange.com` — `GG-DGR-MANAGER-DXC`
+- `senior.dxc@orange.com` — `GG-DGR-MANAGER_SENIOR-DXC`
+- `dxc@orange.com` — `GG-DGR-DXC`
 
 **NE PAS nettoyer ces entrées en fin de session** — contrairement aux
 identités jetables des vérifications e2e ponctuelles, ce socle est

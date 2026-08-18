@@ -1,7 +1,7 @@
 [
   {
     "nom": "Jean Kouassi",
-    "identifiantAd": "jean.kouassi@orange.ci",
+    "identifiantAd": "jean.kouassi@orange.com",
     "roles": ["INITIATEUR_DOBB"],
     "directionLibelle": "DOBB",
     "serviceLibelle": "FACTURATION",
@@ -9,7 +9,7 @@
   },
   {
     "nom": "Awa Diomandé",
-    "identifiantAd": "awa.diomande@orange.ci",
+    "identifiantAd": "awa.diomande@orange.com",
     "roles": ["RESPONSABLE_DF"],
     "directionLibelle": "DF",
     "mfaMethode": "DUO"

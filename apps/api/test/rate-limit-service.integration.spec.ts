@@ -15,7 +15,7 @@ describe("RateLimitService — SF-PGD-005 (anti-bruteforce Redis)", () => {
   // exécutions parallèles (convention de ce projet pour les tests contre un
   // Redis/Postgres partagé, cf. CLAUDE.md § Tests contre référentiels).
   function identifiantUnique(): string {
-    return `test.ratelimit.${Date.now()}.${Math.random().toString(36).slice(2)}@orange.ci`;
+    return `test.ratelimit.${Date.now()}.${Math.random().toString(36).slice(2)}@orange.com`;
   }
 
   afterAll(async () => {

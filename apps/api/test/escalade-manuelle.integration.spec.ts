@@ -22,7 +22,7 @@ describe("EscaladeManuelleService.escalader (docs/06 §9, 6.7)", () => {
 
   beforeAll(async () => {
     const agent = await prisma.utilisateur.create({
-      data: { identifiantAd: `test.escalade-manuelle-${suffixe}@orange.ci`, nom: "Agent Test Escalade" }
+      data: { identifiantAd: `test.escalade-manuelle-${suffixe}@orange.com`, nom: "Agent Test Escalade" }
     });
     agentId = agent.id;
   });

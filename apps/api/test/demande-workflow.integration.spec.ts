@@ -34,7 +34,7 @@ describe("DemandeWorkflowService.soumettre — R13/R14/R15/R17 + instanciation",
   const ruleEngine = new RuleEngineService(prisma, calendrierSla, cache);
   const workflow = new DemandeWorkflowService(prisma, demandeService, piece, ruleEngine, montant, historique);
 
-  const acteur = { id: "33333333-3333-3333-3333-333333333333", identifiantAd: "test.workflow@orange.ci" };
+  const acteur = { id: "33333333-3333-3333-3333-333333333333", identifiantAd: "test.workflow@orange.com" };
 
   let compteId: string;
   let ligneActiveId: string;
@@ -419,7 +419,7 @@ describe("DemandeLigneService.definirLignes — remplacement complet, pas incré
   const demandeService = new DemandeService(prisma, reference, montant, historique, new GedStubAdapter());
   const demandeLigneService = new DemandeLigneService(prisma, montant, historique, demandeService);
 
-  const acteur = { id: "44444444-4444-4444-4444-444444444444", identifiantAd: "test.lignes@orange.ci" };
+  const acteur = { id: "44444444-4444-4444-4444-444444444444", identifiantAd: "test.lignes@orange.com" };
   const suffixe = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
   let compteId: string;
@@ -547,7 +547,7 @@ describe("DemandeService.supprimer — suppression physique d'un BROUILLON", () 
   const demandeLigneService = new DemandeLigneService(prisma, montant, historique, demandeService);
   const piece = new PieceService(prisma, ged);
 
-  const acteur = { id: "55555555-5555-5555-5555-555555555555", identifiantAd: "test.suppression@orange.ci" };
+  const acteur = { id: "55555555-5555-5555-5555-555555555555", identifiantAd: "test.suppression@orange.com" };
   const suffixe = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
   let compteId: string;
@@ -654,8 +654,8 @@ describe("DemandeService.lister — profil=initiateur force le périmètre serve
   const historique = new HistoriqueMontantService(prisma);
   const demandeService = new DemandeService(prisma, reference, montant, historique, new GedStubAdapter());
 
-  const acteurAppelant = { id: "66666666-6666-6666-6666-666666666666", identifiantAd: "test.mesdemandes.appelant@orange.ci" };
-  const acteurAutre = { id: "77777777-7777-7777-7777-777777777777", identifiantAd: "test.mesdemandes.autre@orange.ci" };
+  const acteurAppelant = { id: "66666666-6666-6666-6666-666666666666", identifiantAd: "test.mesdemandes.appelant@orange.com" };
+  const acteurAutre = { id: "77777777-7777-7777-7777-777777777777", identifiantAd: "test.mesdemandes.autre@orange.com" };
   const suffixe = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
   let compteId: string;
@@ -724,7 +724,7 @@ describe("DemandeService.listerTaches — chaîne réelle, acteurNom seulement s
   const historique = new HistoriqueMontantService(prisma);
   const demandeService = new DemandeService(prisma, reference, montant, historique, new GedStubAdapter());
 
-  const acteur = { id: "88888888-8888-8888-8888-888888888888", identifiantAd: "test.chaine@orange.ci" };
+  const acteur = { id: "88888888-8888-8888-8888-888888888888", identifiantAd: "test.chaine@orange.com" };
   const suffixe = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const roleCode = `TEST_ROLE_CHAINE_${suffixe}`;
 

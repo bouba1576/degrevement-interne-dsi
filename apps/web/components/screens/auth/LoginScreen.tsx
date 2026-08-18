@@ -45,7 +45,7 @@ export function LoginScreen({ onConnecte }: LoginScreenProps) {
     try {
       const identifiantComplet = identifiantAd.includes("@")
         ? identifiantAd
-        : `${identifiantAd.trim()}@orange.ci`;
+        : `${identifiantAd.trim()}@orange.com`;
       const reponse = await login({ identifiantAd: identifiantComplet, motDePasse });
       if (!reponse.requiresMfa) {
         onConnecte();
@@ -173,7 +173,7 @@ export function LoginScreen({ onConnecte }: LoginScreenProps) {
                     className="w-full rounded border border-gris300 py-2 pl-9 pr-24 text-14 font-normal"
                   />
                   <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-13 text-gris500">
-                    @orange.ci
+                    @orange.com
                   </span>
                 </div>
               </label>

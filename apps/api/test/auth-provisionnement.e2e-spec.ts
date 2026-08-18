@@ -16,7 +16,7 @@ describe("E2E — POST /api/auth/login, refus d'un compte non pré-enregistré",
   let e2e: AppE2e;
   let prisma: PrismaService;
   const suffixe = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const identifiantInconnu = `e2e.non-provisionne.${suffixe}@orange.ci`;
+  const identifiantInconnu = `e2e.non-provisionne.${suffixe}@orange.com`;
   const utilisateurIds: string[] = [];
 
   const ldapFaux: Pick<LdapProvider, "authentifier" | "estDisponible" | "rechercher"> = {
@@ -75,7 +75,7 @@ describe("E2E — POST /api/auth/login, refus d'un compte non pré-enregistré",
   });
 
   it("refuse 401 COMPTE_NON_PROVISIONNE pour un Utilisateur déjà en base mais sans aucun MembreRole", async () => {
-    const identifiantZeroRole = `e2e.zero-role.${suffixe}@orange.ci`;
+    const identifiantZeroRole = `e2e.zero-role.${suffixe}@orange.com`;
     const utilisateur = await prisma.utilisateur.create({
       data: { identifiantAd: identifiantZeroRole, nom: "E2E Zéro Rôle" }
     });
@@ -99,7 +99,7 @@ describe("E2E — POST /api/auth/login, refus d'un compte non pré-enregistré",
     await prisma.role.create({
       data: { code: roleTest, libelle: roleTest, groupeAd: `GG-${roleTest}`, niveau: 1, type: "METIER", requiertMfa: false }
     });
-    const identifiantProvisionne = `e2e.provisionne.${suffixe}@orange.ci`;
+    const identifiantProvisionne = `e2e.provisionne.${suffixe}@orange.com`;
     const utilisateur = await prisma.utilisateur.create({
       data: { identifiantAd: identifiantProvisionne, nom: "E2E Provisionné" }
     });

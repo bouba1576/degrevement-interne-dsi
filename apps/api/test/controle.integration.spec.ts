@@ -28,7 +28,7 @@ describe("ControleService.soumettre (PGD-070)", () => {
 
   beforeAll(async () => {
     const agent = await prisma.utilisateur.create({
-      data: { identifiantAd: `test.controle-${suffixe}@orange.ci`, nom: "Contrôleur Test" }
+      data: { identifiantAd: `test.controle-${suffixe}@orange.com`, nom: "Contrôleur Test" }
     });
     agentId = agent.id;
   });

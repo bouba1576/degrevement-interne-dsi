@@ -12,7 +12,7 @@ describe("AuditService (docs/06 §8)", () => {
 
   beforeAll(async () => {
     const agent = await prisma.utilisateur.create({
-      data: { identifiantAd: `test.audit-svc-${suffixe}@orange.ci`, nom: "Agent Test Audit" }
+      data: { identifiantAd: `test.audit-svc-${suffixe}@orange.com`, nom: "Agent Test Audit" }
     });
     agentId = agent.id;
   });
@@ -100,7 +100,7 @@ describe("AuditService (docs/06 §8)", () => {
   it("journalSecurite filtre par identifiantAd et par événement", async () => {
     demandeId = "00000000-0000-0000-0000-000000000000"; // pas utilisé par ce test, afterEach no-op
     const { entrees } = await service.journalSecurite({
-      utilisateur: `test.audit-svc-${suffixe}@orange.ci`,
+      utilisateur: `test.audit-svc-${suffixe}@orange.com`,
       page: 1,
       limit: 50
     });
@@ -109,7 +109,7 @@ describe("AuditService (docs/06 §8)", () => {
 
   it("journalSecurite avec un identifiant inconnu renvoie un résultat vide (pas une erreur)", async () => {
     demandeId = "00000000-0000-0000-0000-000000000000";
-    const resultat = await service.journalSecurite({ utilisateur: "inconnu@orange.ci", page: 1, limit: 50 });
+    const resultat = await service.journalSecurite({ utilisateur: "inconnu@orange.com", page: 1, limit: 50 });
     expect(resultat.entrees).toEqual([]);
     expect(resultat.total).toBe(0);
   });

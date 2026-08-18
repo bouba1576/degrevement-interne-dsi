@@ -34,8 +34,8 @@ describe("KpiEngineService — agrégations DEMANDE (docs/04 §3.2)", () => {
 
   beforeAll(async () => {
     const [agent, autreAgent] = await Promise.all([
-      prisma.utilisateur.create({ data: { identifiantAd: `test.kpi-${suffixe}@orange.ci`, nom: "Agent Test KPI" } }),
-      prisma.utilisateur.create({ data: { identifiantAd: `test.kpi-autre-${suffixe}@orange.ci`, nom: "Autre Agent Test KPI" } })
+      prisma.utilisateur.create({ data: { identifiantAd: `test.kpi-${suffixe}@orange.com`, nom: "Agent Test KPI" } }),
+      prisma.utilisateur.create({ data: { identifiantAd: `test.kpi-autre-${suffixe}@orange.com`, nom: "Autre Agent Test KPI" } })
     ]);
     agentId = agent.id;
     autreAgentId = autreAgent.id;

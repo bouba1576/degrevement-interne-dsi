@@ -29,7 +29,7 @@ describe("KpiPerimetreGuard — profil pilotage réservé à ADMIN_PGD", () => {
   }
 
   beforeAll(async () => {
-    const agent = await prisma.utilisateur.create({ data: { identifiantAd: `test.kpi-perimetre-${suffixe}@orange.ci`, nom: "Agent Test Périmètre KPI" } });
+    const agent = await prisma.utilisateur.create({ data: { identifiantAd: `test.kpi-perimetre-${suffixe}@orange.com`, nom: "Agent Test Périmètre KPI" } });
     agentId = agent.id;
   });
 

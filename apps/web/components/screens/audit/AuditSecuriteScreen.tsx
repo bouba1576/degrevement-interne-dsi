@@ -81,7 +81,7 @@ export function AuditSecuriteScreen() {
           <input
             value={compte}
             onChange={(e) => changerFiltre(setCompte, e.target.value)}
-            placeholder="identifiant@orange.ci"
+            placeholder="identifiant@orange.com"
             className="rounded border border-gris300 px-2 py-1.5 text-13"
           />
         </label>

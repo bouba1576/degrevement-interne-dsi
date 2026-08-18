@@ -38,7 +38,7 @@ describe("E2E — circuit DF (Wholesale), parcours complet en HTTP réel", () =>
 
   async function creerActeur(libelle: string, roles: string[]) {
     const utilisateur = await prisma.utilisateur.create({
-      data: { identifiantAd: `e2e.df.${libelle}-${suffixe}@orange.ci`, nom: `E2E DF ${libelle}` }
+      data: { identifiantAd: `e2e.df.${libelle}-${suffixe}@orange.com`, nom: `E2E DF ${libelle}` }
     });
     utilisateurIds.push(utilisateur.id);
     const cookie = await cookieSession(e2e.sessionService, { id: utilisateur.id, identifiantAd: utilisateur.identifiantAd, roles });

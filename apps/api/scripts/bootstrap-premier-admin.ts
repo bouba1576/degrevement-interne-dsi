@@ -10,7 +10,7 @@
 // Usage :
 //   pnpm --filter @pgd/api exec ts-node --compiler-options '{"module":"commonjs"}' \
 //     scripts/bootstrap-premier-admin.ts \
-//     --identifiant jean.kouassi@orange.ci \
+//     --identifiant jean.kouassi@orange.com \
 //     --nom "Jean Kouassi" \
 //     --mfa TOTP \
 //     --qr-dir /chemin/hors/du/depot

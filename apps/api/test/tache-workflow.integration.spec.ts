@@ -36,7 +36,7 @@ describe("TacheWorkflowService.approuver / .rejeter (SF-PGD-080, 081, 082)", () 
   beforeAll(async () => {
     await connexionRabbitMQ.connecter();
     const agent = await prisma.utilisateur.create({
-      data: { identifiantAd: `test.workflow-${suffixe}@orange.ci`, nom: "Agent Test Workflow" }
+      data: { identifiantAd: `test.workflow-${suffixe}@orange.com`, nom: "Agent Test Workflow" }
     });
     agentId = agent.id;
   });
@@ -133,7 +133,7 @@ describe("TacheWorkflowService.approuver / .rejeter (SF-PGD-080, 081, 082)", () 
   it("approuver une tâche non réclamée par l'acteur → 409 TACHE_NON_RECLAMEE_PAR_VOUS", async () => {
     await creerDemandeAvecChaine(1);
     const autreAgent = await prisma.utilisateur.create({
-      data: { identifiantAd: `test.workflow-autre-${suffixe}@orange.ci`, nom: "Autre Agent" }
+      data: { identifiantAd: `test.workflow-autre-${suffixe}@orange.com`, nom: "Autre Agent" }
     });
 
     await expect(
@@ -223,7 +223,7 @@ describe("TacheWorkflowService.approuver / .rejeter (SF-PGD-080, 081, 082)", () 
   it("rejeter une tâche non réclamée par l'acteur → 409 TACHE_NON_RECLAMEE_PAR_VOUS", async () => {
     await creerDemandeAvecChaine(1);
     const autreAgent = await prisma.utilisateur.create({
-      data: { identifiantAd: `test.workflow-autre2-${suffixe}@orange.ci`, nom: "Autre Agent 2" }
+      data: { identifiantAd: `test.workflow-autre2-${suffixe}@orange.com`, nom: "Autre Agent 2" }
     });
 
     await expect(

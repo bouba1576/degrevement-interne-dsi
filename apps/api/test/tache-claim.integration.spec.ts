@@ -27,7 +27,7 @@ describe("TacheService.claim — T1, concurrence réelle (SF-PGD-072, R7)", () =
   beforeAll(async () => {
     const agents = await Promise.all(
       Array.from({ length: NB_AGENTS }, (_, i) =>
-        prisma.utilisateur.create({ data: { identifiantAd: `test.claim-${suffixe}-${i}@orange.ci`, nom: `Agent Test ${i}` } })
+        prisma.utilisateur.create({ data: { identifiantAd: `test.claim-${suffixe}-${i}@orange.com`, nom: `Agent Test ${i}` } })
       )
     );
     agentIds = agents.map((a) => a.id);

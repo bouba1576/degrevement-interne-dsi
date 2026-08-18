@@ -39,7 +39,7 @@ export const envSchema = z.object({
   LDAP_BIND_DN: z.string().min(1, "LDAP_BIND_DN est requis"),
   LDAP_BIND_PASSWORD: z.string().min(1, "LDAP_BIND_PASSWORD est requis"),
   LDAP_BASE_DN: z.string().min(1, "LDAP_BASE_DN est requis"),
-  LDAP_USER_DOMAIN: z.string().default("orange.ci"),
+  LDAP_USER_DOMAIN: z.string().default("orange.com"),
 
   // --- Phase 2 : MFA (MfaPort — réel, SF-PGD-002, ADR-08) ----------------
   DUO_CLIENT_ID: z.string().min(1, "DUO_CLIENT_ID est requis"),

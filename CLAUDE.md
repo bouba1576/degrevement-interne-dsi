@@ -589,23 +589,25 @@ Inventaire vérifié contre le contenu réel de `docs/design/` (noms de composan
 
 Outil de travail, pas une question ouverte — **ne pas nettoyer automatiquement en fin de session**, contrairement aux identités jetables des vérifications e2e ponctuelles (cf. essai de bout en bout de clôture de Phase 9 ci-dessus, ou la convention `mint-session-tmp.e2e-spec.ts` utilisée pendant l'audit visuel de Phase 9.3). Quinze identités, dev uniquement (`docker/openldap/`, jamais l'AD Orange CI réel), même mot de passe LDAP pour toutes : `MotDePasseTest123!`. Regroupées par circuit ci-dessous plutôt qu'en sections séparées — vu le nombre de comptes, une seule table reste plus lisible qu'un historique éclaté par chantier.
 
+**Domaine `@orange.com` depuis le 18/08/2026** (cf. section dédiée en fin de ce chantier, ci-dessous) — le domaine `@orange.ci` cité dans les sections narratives qui précèdent (Phase 9, Phase 9.2, R24, etc.) reflète fidèlement ce qui était vrai **au moment où ces vérifications ont eu lieu** ; ces passages ne sont pas rétroactivement corrigés, pour ne pas fabriquer un historique de vérifications qui n'ont jamais eu lieu sous ce domaine. Seule la table ci-dessous (état courant) et tout ce qui suit le 18/08/2026 utilisent `@orange.com`.
+
 | Circuit | Identifiant | Rôle | MFA |
 |---|---|---|---|
-| Pilotage | `jean.kouassi@orange.ci` | `INITIATEUR_DOBB`, `ADMIN_PGD` | TOTP (secret régénéré) |
-| DF | `responsable.df@orange.ci` | `RESPONSABLE_DF` | Aucun — `requiertMfa=false` |
-| DF | `manager.df@orange.ci` | `MANAGER_DF` | Aucun — `requiertMfa=false` |
-| DF | `senior.df@orange.ci` | `MANAGER_SENIOR_DF` | Aucun — `requiertMfa=false` |
-| DF | `validateur.df@orange.ci` | `DF` | TOTP (secret neuf) |
-| DF | `fra.controleur@orange.ci` | `FRA` | TOTP (secret neuf, écrase l'ancien) |
-| DF | `dga.dg@orange.ci` | `DGA_DG` | TOTP (secret neuf) |
-| DOBB | `responsable.dobb@orange.ci` | `RESPONSABLE_DOBB` | Aucun — `requiertMfa=false` |
-| DOBB | `manager.dobb@orange.ci` | `MANAGER_DOBB` | Aucun — `requiertMfa=false` |
-| DOBB | `senior.dobb@orange.ci` | `MANAGER_SENIOR_DOBB` | Aucun — `requiertMfa=false` |
-| DOBB | `dobb@orange.ci` | `DOBB` | TOTP (secret neuf) |
-| DXC | `responsable.dxc@orange.ci` | `RESPONSABLE_DXC` | Aucun — `requiertMfa=false` |
-| DXC | `manager.dxc@orange.ci` | `MANAGER_DXC` | Aucun — `requiertMfa=false` |
-| DXC | `senior.dxc@orange.ci` | `MANAGER_SENIOR_DXC` | Aucun — `requiertMfa=false` |
-| DXC | `dxc@orange.ci` | `DXC` | TOTP (secret neuf) |
+| Pilotage | `jean.kouassi@orange.com` | `INITIATEUR_DOBB`, `ADMIN_PGD` | TOTP (secret régénéré) |
+| DF | `responsable.df@orange.com` | `RESPONSABLE_DF` | Aucun — `requiertMfa=false` |
+| DF | `manager.df@orange.com` | `MANAGER_DF` | Aucun — `requiertMfa=false` |
+| DF | `senior.df@orange.com` | `MANAGER_SENIOR_DF` | Aucun — `requiertMfa=false` |
+| DF | `validateur.df@orange.com` | `DF` | TOTP (secret neuf) |
+| DF | `fra.controleur@orange.com` | `FRA` | TOTP (secret neuf, écrase l'ancien) |
+| DF | `dga.dg@orange.com` | `DGA_DG` | TOTP (secret neuf) |
+| DOBB | `responsable.dobb@orange.com` | `RESPONSABLE_DOBB` | Aucun — `requiertMfa=false` |
+| DOBB | `manager.dobb@orange.com` | `MANAGER_DOBB` | Aucun — `requiertMfa=false` |
+| DOBB | `senior.dobb@orange.com` | `MANAGER_SENIOR_DOBB` | Aucun — `requiertMfa=false` |
+| DOBB | `dobb@orange.com` | `DOBB` | TOTP (secret neuf) |
+| DXC | `responsable.dxc@orange.com` | `RESPONSABLE_DXC` | Aucun — `requiertMfa=false` |
+| DXC | `manager.dxc@orange.com` | `MANAGER_DXC` | Aucun — `requiertMfa=false` |
+| DXC | `senior.dxc@orange.com` | `MANAGER_SENIOR_DXC` | Aucun — `requiertMfa=false` |
+| DXC | `dxc@orange.com` | `DXC` | TOTP (secret neuf) |
 
 Trois chaînes complètes vérifiées en direct (login + code TOTP réel) : `RESPONSABLE_DF → MANAGER_DF → MANAGER_SENIOR_DF → DF → FRA` (clôture de Phase 9), `RESPONSABLE_DOBB → MANAGER_DOBB → MANAGER_SENIOR_DOBB → DOBB` et `RESPONSABLE_DXC → MANAGER_DXC → MANAGER_SENIOR_DXC → DXC` — les trois suivent la même convention générique de nommage (`RESPONSABLE_<CIRCUIT>`/`MANAGER_<CIRCUIT>`/`MANAGER_SENIOR_<CIRCUIT>`/`<CIRCUIT>`), lue en base (`etape_regle`) avant toute création, pas supposée par analogie — **aucune des chaînes DOBB/DXC ne référence l'un des 9 rôles manquants du catalogue** (cf. `docs/design/DIVERGENCES.md`, « 34 rôles vs 25 seedés », nuance ajoutée à cette occasion). `jean.kouassi` élargi à `ADMIN_PGD` pour AdminScreen/AuditSecuriteScreen sans perdre `INITIATEUR_DOBB` (NouvelleDemandeScreen/MesDemandesScreen). LDAP : `docker/openldap/seed.ldif` (14 utilisateurs + 15 groupes `GG-DGR-*` ajoutés au total, même mécanique que `jean.kouassi`/`GG-DGR-INITIATEUR-DOBB` déjà documentée dans `docker/openldap/README.md`) — reproductible sur un conteneur LDAP reconstruit, pas seulement écrit à la main dans le conteneur courant.
 
@@ -622,6 +624,22 @@ Trois chaînes complètes vérifiées en direct (login + code TOTP réel) : `RES
 - `responsable.df`/`manager.df`/`senior.df` : réactivation sans conséquence, aucune donnée métier (`Controle`/`Demande`/`Delegation`) n'y était rattachée ; rôle resynchronisé à l'unique rôle attendu dès la première connexion de ce chantier.
 - `fra.controleur` : la ligne réactivée porte un **vrai** enregistrement `Controle` (le contrôle FRA réel du dossier `DF-2026-AF5715`, 2026-07-25 16:25) — **et ce n'est pas un oubli de nettoyage isolé, c'est structurel** : `controle.controleur_id` porte `ON DELETE RESTRICT` (pas `CASCADE`), donc supprimer cette ligne `Utilisateur` aurait échoué tant que ce `Controle` existe. Une suppression complète de cette identité n'a jamais été possible sans supprimer d'abord une trace d'audit réelle — chose que ce projet ne fait jamais (cf. immuabilité de `JOURNAL_AUDIT`, même principe appliqué ici à `Controle`). Secret TOTP et rôle sont désormais corrects (écrasés par des valeurs neuves), mais la ligne elle-même — et son historique du 25/07 — reste la même qu'en Phase 9.
 - Aucune des quatre réactivations n'a de conséquence pratique sur l'usage de ce socle aujourd'hui — signalé pour qu'une future tentative de « nettoyage complet » ne soit pas surprise par une violation de contrainte de clé étrangère sur `fra.controleur`, ou par une hypothèse silencieuse de fraîcheur sur les trois autres.
+
+### Migration de domaine `orange.ci` → `orange.com` (18/08/2026)
+
+Suite directe de la confirmation métier du domaine réel (cf. « API AD réelle » ci-dessus) — décision explicite : **basculer tout le socle dev/test**, pas seulement les fichiers de production déjà corrigés dans un premier temps. `orange.ci` reste utilisé nulle part comme domaine réel après ce chantier ; seule la distinction structurelle « CI » = Côte d'Ivoire (nom de l'entité, `TOTP_ISSUER`, `LDAP_ORGANISATION` — inchangés, ce ne sont pas des domaines) survit.
+
+**Périmètre traité** : structure DN LDAP (`docker-compose.override.yml` — `LDAP_DOMAIN: pgd.orange.com` —, `docker/openldap/seed.ldif`, `docker/openldap/README.md`, `apps/api/test/ldap-provider.integration.spec.ts` — `BASE_DN`/`LDAP_DOMAIN`, jamais `LDAP_ORGANISATION` qui reste « PGD Orange CI Test »), `.env`/`.env.example`/`apps/api/test/setup-env.ts`/`apps/worker/test/setup-env.ts` (`LDAP_BIND_DN`/`LDAP_BASE_DN`/`LDAP_USER_DOMAIN`), `packages/config/src/env.schema.ts` (défaut Zod), `docker-compose.yml` (défaut `LDAP_USER_DOMAIN`), 34 fichiers de test (`apps/api/test/*.spec.ts`, `apps/worker/test/*.spec.ts`) où `@orange.ci` n'est qu'une chaîne de fixture arbitraire (aucune dépendance à la structure DN réelle — remplacement mécanique, vérifié un par un avant le remplacement pour écarter tout fichier qui construirait lui-même un annuaire LDAP réel), UI (`LoginScreen.tsx` — suffixe auto-complété et affiché —, `AuditSecuriteScreen.tsx`, `AnnuaireRechercheModal.tsx` — placeholders et message d'erreur), `packages/contracts/src/admin-utilisateur.ts` (message d'erreur d'exemple + commentaire, qui affirmait à tort que le choix du domaine restait une question ouverte), scripts (`bootstrap-premier-admin.ts`, `exemple-comptes.json`, `enrolement-lot-v1-tmp.ts` — commentaire d'exemple).
+
+**Ce qui n'a délibérément PAS été touché** : les sections narratives de ce fichier qui décrivent des vérifications déjà effectuées sous `@orange.ci` (Phase 9, R24, l'essai de bout en bout de clôture, etc.) — les réécrire en `@orange.com` fabriquerait un historique de vérifications qui n'ont jamais eu lieu sous ce domaine, alors que la règle déjà posée ailleurs dans ce fichier (« le silence de la maquette n'est pas une décision de conception ») a son miroir ici : un historique n'est pas un état courant, corriger un fait métier ne réécrit pas le passé. `docs/*.md` (PRD, spécifications, dossiers de réalisation) et `docs/design/` (export maquette figé) sont aussi restés hors périmètre — ce chantier porte l'infrastructure dev/test exécutable, pas les livrables documentaires historiques.
+
+**Incident trouvé en cours de route, pas anticipé — récidive de la « disparition du socle d'identités » déjà documentée (17/08/2026, section dédiée ci-dessus).** Avant de migrer les identifiants Postgres des 15 identités persistantes, vérification de leur état réel (au lieu de supposer la reconstruction du 17/08 encore en place) : `SELECT identifiant_ad FROM utilisateur` ne renvoyait que les 7 fixtures orphelines déjà connues (`test.*@orange.ci`, 0 `MembreRole`) — les 15 lignes reconstruites le 17/08 n'existaient plus. Même signature exacte que l'incident déjà documenté : `role`=35 (référentiels intacts), `utilisateur`=7, `membre_role`=0, `demande`=0, `controle`=0, `journal_audit`/`journal_securite` intacts et plus élevés qu'au 17/08 (4549/1299 contre 4209/1153 — le temps a continué de s'écouler, l'écriture d'audit n'est pas affectée). Cause non réinvestiguée ici — hors périmètre de ce chantier, déjà signalé comme suivi séparément par la personne pilotant le projet ; ne pas rouvrir cette enquête à chaque nouvelle occurrence sans mandat explicite.
+
+**Reconstruit directement sous `@orange.com`**, avec les deux scripts opérationnels permanents déjà construits pour l'onboarding V1 (`enrolement-comptes.ts` + `lib/enrolement.ts`) plutôt qu'un nouveau script jetable ad hoc — preuve pratique que ces scripts servent au-delà de leur motivation initiale. Fichier JSON des 15 entrées écrit dans le scratchpad de session (jamais dans le dépôt), `mfaMethode` omis partout (défaut `TOTP` du script, cohérent avec la posture actée le 18/08/2026 pour la bascule d'urgence — même si 9 des 15 rôles n'exigent aucun second facteur et n'exercent donc jamais ce secret). `fra.controleur` : aucune précaution particulière requise pour la re-création — la ligne `Controle` historique du 25/07 (`DF-2026-AF5715`) a disparu avec la ligne `Utilisateur` cette fois (`controle`=0 confirmé), donc aucune contrainte `ON DELETE RESTRICT` à contourner ; la nouvelle ligne est une création authentiquement neuve, pas une réactivation.
+
+**Vérifié en direct, dans les deux sens, sous le nouveau domaine** : conteneur `openldap` recréé (`docker compose up -d --force-recreate openldap`, arbre DN entièrement dépendant de `LDAP_DOMAIN` à la création du conteneur — pas de volume persistant à purger séparément) puis reseedé (`docker/openldap/seed.ldif` mis à jour, 32 entrées `ldapadd` sous `dc=pgd,dc=orange,dc=com`) ; conteneurs `api`/`worker` recréés pour reprendre le nouveau `.env`. `responsable.df@orange.com` (rôle `RESPONSABLE_DF`, `requiertMfa=false`) → `POST /api/auth/login` → `200`, session directe sans défi MFA. `dobb@orange.com` (rôle `DOBB`, `requiertMfa=true`) → `login` → `requiresMfa:true, methode:"TOTP"` → code TOTP réel généré à partir du secret déchiffré en base (script jetable, supprimé après usage) → `POST /api/auth/mfa/verify` → `200` → `GET /api/auth/session` confirme `roles:["DOBB"]`. Les deux preuves couvrent exactement les deux familles de la table (`requiertMfa=false` direct, `requiertMfa=true` avec TOTP réel) sous le nouveau domaine, bind LDAP réel compris.
+
+Sweep complet revérifié après le chantier (hôte, `worker` arrêté pour la déterminisme de `si-service`, `--maxWorkers=4` pour la flakiness Node 24 déjà documentée) : `apps/api` 39/39 suites, 234/234 tests (dont `ldap-provider.integration.spec.ts` contre le nouvel arbre DN) ; e2e 7/7, 20/20 ; `apps/worker` 7/7, 25/25 — zéro régression. `pnpm lint`/`pnpm typecheck`/`pnpm build` verts sur les 13 packages/apps.
 
 ---
 

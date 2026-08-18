@@ -16,8 +16,8 @@ describe("NotificationsService", () => {
 
   beforeAll(async () => {
     const [destinataire, autre] = await Promise.all([
-      prisma.utilisateur.create({ data: { identifiantAd: `test.notif-svc-${suffixe}@orange.ci`, nom: "Destinataire Test" } }),
-      prisma.utilisateur.create({ data: { identifiantAd: `test.notif-svc-autre-${suffixe}@orange.ci`, nom: "Autre Destinataire" } })
+      prisma.utilisateur.create({ data: { identifiantAd: `test.notif-svc-${suffixe}@orange.com`, nom: "Destinataire Test" } }),
+      prisma.utilisateur.create({ data: { identifiantAd: `test.notif-svc-autre-${suffixe}@orange.com`, nom: "Autre Destinataire" } })
     ]);
     destinataireId = destinataire.id;
     autreDestinataireId = autre.id;

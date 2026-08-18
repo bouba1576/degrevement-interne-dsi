@@ -33,9 +33,9 @@ describe("CorbeilleRoleGuard — R4 (retrofit Phase 8)", () => {
 
   beforeAll(async () => {
     const [membre, horsRole, delegataire] = await Promise.all([
-      prisma.utilisateur.create({ data: { identifiantAd: `test.corbeille-membre-${suffixe}@orange.ci`, nom: "Agent Membre" } }),
-      prisma.utilisateur.create({ data: { identifiantAd: `test.corbeille-hors-${suffixe}@orange.ci`, nom: "Agent Hors Rôle" } }),
-      prisma.utilisateur.create({ data: { identifiantAd: `test.corbeille-delegataire-${suffixe}@orange.ci`, nom: "Agent Délégataire" } })
+      prisma.utilisateur.create({ data: { identifiantAd: `test.corbeille-membre-${suffixe}@orange.com`, nom: "Agent Membre" } }),
+      prisma.utilisateur.create({ data: { identifiantAd: `test.corbeille-hors-${suffixe}@orange.com`, nom: "Agent Hors Rôle" } }),
+      prisma.utilisateur.create({ data: { identifiantAd: `test.corbeille-delegataire-${suffixe}@orange.com`, nom: "Agent Délégataire" } })
     ]);
     agentMembreId = membre.id;
     agentHorsRoleId = horsRole.id;

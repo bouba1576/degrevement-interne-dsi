@@ -28,8 +28,8 @@ describe("NotificationService (docs/06 §? , PGD-073)", () => {
     snapshotErreurSi = await prisma.parametreGlobal.findUnique({ where: { cle: "destinataire_notification_erreur_si" } });
 
     const [membre, initiateur] = await Promise.all([
-      prisma.utilisateur.create({ data: { identifiantAd: `test.notif-membre-${suffixe}@orange.ci`, nom: "Membre Test Notif" } }),
-      prisma.utilisateur.create({ data: { identifiantAd: `test.notif-init-${suffixe}@orange.ci`, nom: "Initiateur Test Notif" } })
+      prisma.utilisateur.create({ data: { identifiantAd: `test.notif-membre-${suffixe}@orange.com`, nom: "Membre Test Notif" } }),
+      prisma.utilisateur.create({ data: { identifiantAd: `test.notif-init-${suffixe}@orange.com`, nom: "Initiateur Test Notif" } })
     ]);
     membreId = membre.id;
     initiateurId = initiateur.id;

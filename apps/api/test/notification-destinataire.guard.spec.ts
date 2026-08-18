@@ -28,8 +28,8 @@ describe("NotificationDestinataireGuard (Phase 9.2 — GET /api/notifications)",
 
   beforeAll(async () => {
     const [destinataire, tiers] = await Promise.all([
-      prisma.utilisateur.create({ data: { identifiantAd: `test.notif-destinataire-${suffixe}@orange.ci`, nom: "Destinataire Test" } }),
-      prisma.utilisateur.create({ data: { identifiantAd: `test.notif-tiers-${suffixe}@orange.ci`, nom: "Tiers Test" } })
+      prisma.utilisateur.create({ data: { identifiantAd: `test.notif-destinataire-${suffixe}@orange.com`, nom: "Destinataire Test" } }),
+      prisma.utilisateur.create({ data: { identifiantAd: `test.notif-tiers-${suffixe}@orange.com`, nom: "Tiers Test" } })
     ]);
     destinataireId = destinataire.id;
     tiersId = tiers.id;

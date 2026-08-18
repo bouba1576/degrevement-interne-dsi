@@ -10,7 +10,7 @@ import { demarrerAppE2e, cookieSession, type AppE2e } from "./helpers/e2e-app";
 // entre DF et FRA (R2, « au-delà des seuils, terminaison DF puis DGA/DG »),
 // vérifié en base avant d'écrire ce test, pas supposé.
 //
-// dga.dg@orange.ci (socle d'identités persistantes) vient d'être ajouté et
+// dga.dg@orange.com (socle d'identités persistantes) vient d'être ajouté et
 // n'avait jamais été exercé de bout en bout avant ce test — fichier séparé
 // de df-circuit-palier1.e2e-spec.ts pour la même raison que le reste de
 // cette phase : si ce cas précis casse, on le sait sans ambiguïté.
@@ -38,7 +38,7 @@ describe("E2E — circuit DF (Wholesale), palier 3 (>50M), parcours complet en H
 
   async function creerActeur(libelle: string, roles: string[]) {
     const utilisateur = await prisma.utilisateur.create({
-      data: { identifiantAd: `e2e.df.p3.${libelle}-${suffixe}@orange.ci`, nom: `E2E DF P3 ${libelle}` }
+      data: { identifiantAd: `e2e.df.p3.${libelle}-${suffixe}@orange.com`, nom: `E2E DF P3 ${libelle}` }
     });
     utilisateurIds.push(utilisateur.id);
     const cookie = await cookieSession(e2e.sessionService, { id: utilisateur.id, identifiantAd: utilisateur.identifiantAd, roles });
