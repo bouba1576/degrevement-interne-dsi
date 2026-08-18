@@ -19,3 +19,8 @@ coverage/
 .DS_Store
 packages/database/prisma/generated/
 .claude/settings.local.json
+# Même discipline que .env.* ci-dessus : apps/api/scripts/enrolement-comptes.ts
+# lit un fichier JSON contenant des identifiants AD réels — jamais destiné à
+# être commité, contrairement à exemple-comptes.json (données fictives).
+apps/api/scripts/*.json
+!apps/api/scripts/exemple-comptes.json

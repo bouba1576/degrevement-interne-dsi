@@ -195,24 +195,33 @@ d'administration « Utilisateurs » (qui sert normalement à pré-enregistrer un
 compte) est lui-même une route protégée par `ADMIN_PGD` : personne ne peut
 s'y connecter pour créer le tout premier compte.
 
-Il n'existe aujourd'hui **aucune route ni aucun seed** pour ce cas précis. Le
-premier compte `ADMIN_PGD` doit être créé par une opération directe en base
-(script ponctuel, jamais commité — même discipline que les scripts jetables
-déjà documentés dans `CLAUDE.md`) :
+Il n'existe aujourd'hui aucune route ni aucun seed pour ce cas précis.
+`apps/api/scripts/bootstrap-premier-admin.ts` — script opérationnel
+**permanent** (pas un jetable "-tmp", à conserver dans le dépôt) — comble ce
+trou : mêmes contraintes que le pré-enregistrement normal (identifiantAd réel
+de l'AD cible, mêmes validations Zod que l'API — `preEnregistrerUtilisateurRequeteSchema`,
+`@pgd/contracts`), même mécanisme d'enrôlement TOTP que
+`MfaService.demarrerEnrolementTotp` si DUO n'est pas encore disponible
+(cf. §8).
 
-```ts
-// Script ponctuel — création du tout premier ADMIN_PGD. Mêmes contraintes
-// que le pré-enregistrement normal (identifiantAd réel de l'AD cible), même
-// mécanisme d'enrôlement TOTP que MfaService.demarrerEnrolementTotp si DUO
-// n'est pas encore disponible (cf. §8).
-const admin = await prisma.utilisateur.create({
-  data: { identifiantAd: "<identifiant_ad_reel>", nom: "<nom>", mfaMethode: "DUO" /* ou TOTP, cf. §8 */ }
-});
-await prisma.membreRole.create({ data: { utilisateurId: admin.id, roleCode: "ADMIN_PGD" } });
+```bash
+pnpm --filter @pgd/api exec ts-node --compiler-options '{"module":"commonjs"}' \
+  scripts/bootstrap-premier-admin.ts \
+  --identifiant <identifiant_ad_reel> \
+  --nom "<nom>" \
+  --mfa DUO \
+  # --mfa TOTP --qr-dir <chemin_hors_du_depot>   si DUO indisponible, cf. §8
 ```
 
+Le script refuse tout `--qr-dir` situé à l'intérieur du dépôt (garde-fou
+`verifierRepertoireHorsDepot`, `scripts/lib/enrolement.ts`) — un secret TOTP
+en clair ne doit jamais pouvoir se retrouver dans un `git add` par erreur.
+S'il n'y a rien à faire (le compte existe déjà), le script le dit
+explicitement plutôt que d'échouer silencieusement.
+
 Une fois ce premier compte créé, tout pré-enregistrement suivant peut passer
-par l'écran d'administration normal (recherche annuaire ou saisie manuelle).
+par l'écran d'administration normal (recherche annuaire ou saisie manuelle)
+ou par `apps/api/scripts/enrolement-comptes.ts` pour un lot — cf. §8.
 
 ---
 
@@ -261,10 +270,27 @@ Situation déjà rencontrée et documentée dans `CLAUDE.md`, section
 « Déploiement V1 — bascule MFA d'urgence + pré-enregistrement sans annuaire » :
 si DUO n'est pas configuré au moment du déploiement, basculer
 `Utilisateur.mfaMethode` à `TOTP` (changement de données, jamais un
-contournement de code) et enrôler chaque compte via le même mécanisme que le
-socle de test (`otplib` + QR individuel par personne, jamais un fichier
-groupé). Se référer à cette section pour le détail complet et le script de
-lot déjà écrit pour ce scénario — ne pas le réécrire.
+contournement de code) et enrôler chaque compte en TOTP — même mécanisme que
+le socle de test (`otplib` + chiffrement AES-256-GCM identique à
+`TotpProvider`/`chiffrerSecretTotp` + QR individuel par personne, jamais un
+fichier groupé).
+
+Deux scripts opérationnels **permanents** couvrent ce besoin (`apps/api/scripts/`,
+partagent la même logique via `scripts/lib/enrolement.ts`) :
+
+- `bootstrap-premier-admin.ts` — le tout premier compte (§5.3).
+- `enrolement-comptes.ts` — un lot de comptes à partir d'un fichier JSON
+  (`--fichier <chemin.json> --qr-dir <chemin_hors_du_depot>`, format décrit
+  par `apps/api/scripts/exemple-comptes.json`). Chaque `directionLibelle`/
+  `serviceLibelle`/`sousFluxLibelle` doit correspondre exactement à un
+  libellé déjà seedé — le script échoue explicitement sinon, ligne par
+  ligne, sans jamais créer de référentiel à la volée. `mfaMethode` est
+  paramétrable par personne dans le JSON (`"DUO"` ou `"TOTP"`, défaut
+  `TOTP`) — reste utilisable tel quel une fois DUO revenu, pas seulement
+  pendant la fenêtre de repli.
+
+Le fichier JSON d'entrée contenant les identifiants réels **ne doit jamais
+être commité** — seul `exemple-comptes.json` (données fictives) l'est.
 
 ---
 
