@@ -20,6 +20,22 @@ RUN pnpm install --frozen-lockfile
 
 FROM deps AS build
 COPY . .
+# NEXT_PUBLIC_API_URL — DOIT être fourni ICI, au build, jamais seulement au
+# lancement du conteneur. Next.js inline chaque variable NEXT_PUBLIC_* dans
+# le bundle CLIENT au moment de `next build` (apps/web/lib/api.ts:116,
+# process.env.NEXT_PUBLIC_API_URL) ; passé ce stage, la valeur est figée dans
+# les fichiers statiques produits — un `environment:`/`--env-file` au
+# lancement du conteneur (docker-compose.prod.yml, .env.prod.example) n'a
+# PLUS AUCUN EFFET, l'image tourne déjà avec le bundle déjà compilé. Sans cet
+# ARG, le build retombe silencieusement sur le défaut codé en dur
+# ("http://localhost:3000"), cassant tout déploiement derrière une URL
+# publique différente — trouvé en construisant docker-compose.prod.yml
+# (CLAUDE.md, chantier prod). À transmettre via
+# `docker build --build-arg NEXT_PUBLIC_API_URL=https://... -f apps/web/Dockerfile .`
+# dans le pipeline qui construit et pousse l'image vers le registre — pas
+# une variable à renseigner dans .env.prod.
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 # --filter @pgd/web... (suffixe) — même correctif que apps/api/Dockerfile.
 # @pgd/contracts était bien construit par l'ancienne commande (dépendance
 # directe), mais @pgd/ui (design system, dépendance directe elle aussi) ne

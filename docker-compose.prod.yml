@@ -18,18 +18,20 @@
 # Usage :
 #   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
 #
-# LIMITE CONNUE, non traitée dans ce fichier — NEXT_PUBLIC_API_URL (apps/web) :
-# Next.js inline cette variable dans le bundle CLIENT au moment du `next
-# build`, jamais relue à l'exécution du conteneur (apps/web/lib/api.ts:116,
-# `process.env.NEXT_PUBLIC_API_URL` évalué au build). apps/web/Dockerfile ne
-# déclare aujourd'hui aucun `ARG` pour la recevoir pendant le stage `build` —
-# la définir ici en `environment:` n'aurait donc aucun effet sur le bundle
-# déjà construit, qui retombe silencieusement sur le défaut codé en dur
-# ("http://localhost:3000"). Nécessite d'ajouter `ARG NEXT_PUBLIC_API_URL` +
-# `ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL` avant `RUN ... build` dans
-# apps/web/Dockerfile, puis de le passer via `--build-arg` au moment de
-# construire l'image — hors périmètre de ce fichier compose, à traiter avant
-# tout déploiement réel derrière une URL publique.
+# NEXT_PUBLIC_API_URL (apps/web) — NE FIGURE PAS dans `environment:`
+# ci-dessous, volontairement. Next.js inline cette variable dans le bundle
+# CLIENT au moment du `next build` (apps/web/lib/api.ts:116), jamais relue à
+# l'exécution du conteneur — `apps/web/Dockerfile` déclare désormais
+# `ARG NEXT_PUBLIC_API_URL` dans le stage `build`, mais CE FICHIER compose ne
+# construit jamais d'image (`image:`, pas `build:`) : il ne peut donc jamais
+# influencer cette valeur, quoi qu'on écrive ici. Elle doit être fournie au
+# moment où l'image est réellement construite (le pipeline qui la pousse vers
+# le registre, hors de ce dépôt), via :
+#   docker build --build-arg NEXT_PUBLIC_API_URL=https://pgd.orange.ci \
+#     -f apps/web/Dockerfile -t <registre>/pgd-web:<tag> .
+# L'ajouter en `environment:` ici serait sans effet et laisserait croire à
+# tort que ce fichier peut la corriger après coup — cf. .env.prod.example
+# pour la même mise en garde côté variables d'environnement.
 
 services:
   api:
