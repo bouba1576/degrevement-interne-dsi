@@ -1,0 +1,121 @@
+# docker-compose.prod.yml — déploiement production/recette.
+#
+# Distinct de docker-compose.yml (base dev, fusionné avec
+# docker-compose.override.yml en local — build inline, target `deps`, bind
+# mounts, Postgres/Redis/RabbitMQ auto-hébergés pour un poste de dev isolé).
+# Ici :
+#   - AUCUN service Postgres/Redis/RabbitMQ auto-hébergé — connexions
+#     externes uniquement, tant que l'hébergement de ces trois services n'est
+#     pas confirmé (cf. .env.prod.example).
+#   - AUCUN `build:` — les trois images sont déjà construites (Dockerfiles
+#     corrigés : node:24-slim, .dockerignore réparé, HEALTHCHECK intégré) et
+#     référencées par tag, jamais reconstruites sur l'hôte de déploiement.
+#   - AUCUNE valeur en dur, secret ou non — tout vient de .env.prod (jamais
+#     commité, cf. .env.prod.example) via ${VARIABLE}. Même discipline que
+#     celle appliquée après l'incident de rotation JWT/REFRESH_TOKEN/TOTP
+#     (cf. CLAUDE.md, section « Incident — secrets exposés »).
+#
+# Usage :
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+#
+# LIMITE CONNUE, non traitée dans ce fichier — NEXT_PUBLIC_API_URL (apps/web) :
+# Next.js inline cette variable dans le bundle CLIENT au moment du `next
+# build`, jamais relue à l'exécution du conteneur (apps/web/lib/api.ts:116,
+# `process.env.NEXT_PUBLIC_API_URL` évalué au build). apps/web/Dockerfile ne
+# déclare aujourd'hui aucun `ARG` pour la recevoir pendant le stage `build` —
+# la définir ici en `environment:` n'aurait donc aucun effet sur le bundle
+# déjà construit, qui retombe silencieusement sur le défaut codé en dur
+# ("http://localhost:3000"). Nécessite d'ajouter `ARG NEXT_PUBLIC_API_URL` +
+# `ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL` avant `RUN ... build` dans
+# apps/web/Dockerfile, puis de le passer via `--build-arg` au moment de
+# construire l'image — hors périmètre de ce fichier compose, à traiter avant
+# tout déploiement réel derrière une URL publique.
+
+services:
+  api:
+    image: ${DOCKER_REGISTRY:?DOCKER_REGISTRY doit être défini dans .env.prod}/pgd-api:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      API_PORT: 3000
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL doit être défini dans .env.prod}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL doit être défini dans .env.prod}
+      RABBITMQ_HOST: ${RABBITMQ_HOST:?RABBITMQ_HOST doit être défini dans .env.prod}
+      RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+      RABBITMQ_MANAGEMENT_PORT: ${RABBITMQ_MANAGEMENT_PORT:-15672}
+      RABBITMQ_USER: ${RABBITMQ_USER:?RABBITMQ_USER doit être défini dans .env.prod}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD doit être défini dans .env.prod}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/pgd}
+      CORS_ORIGIN: ${CORS_ORIGIN:?CORS_ORIGIN doit être défini dans .env.prod (URL publique de apps/web)}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET doit être défini dans .env.prod}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET:?REFRESH_TOKEN_SECRET doit être défini dans .env.prod}
+      REFRESH_TOKEN_EXPIRES_IN: ${REFRESH_TOKEN_EXPIRES_IN:-7d}
+      SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-pgd_session}
+      REFRESH_COOKIE_NAME: ${REFRESH_COOKIE_NAME:-pgd_refresh}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      # Prod : AD réel Orange CI (LDAPS attendu). Aucun conteneur openldap ici
+      # — celui de docker-compose.override.yml est strictement dev.
+      LDAP_URL: ${LDAP_URL:?LDAP_URL doit être défini dans .env.prod}
+      LDAP_BIND_DN: ${LDAP_BIND_DN:?LDAP_BIND_DN doit être défini dans .env.prod}
+      LDAP_BIND_PASSWORD: ${LDAP_BIND_PASSWORD:?LDAP_BIND_PASSWORD doit être défini dans .env.prod}
+      LDAP_BASE_DN: ${LDAP_BASE_DN:?LDAP_BASE_DN doit être défini dans .env.prod}
+      LDAP_USER_DOMAIN: ${LDAP_USER_DOMAIN:-orange.ci}
+      DUO_CLIENT_ID: ${DUO_CLIENT_ID:?DUO_CLIENT_ID doit être défini dans .env.prod}
+      DUO_CLIENT_SECRET: ${DUO_CLIENT_SECRET:?DUO_CLIENT_SECRET doit être défini dans .env.prod}
+      DUO_API_HOST: ${DUO_API_HOST:?DUO_API_HOST doit être défini dans .env.prod}
+      DUO_REDIRECT_URI: ${DUO_REDIRECT_URI:?DUO_REDIRECT_URI doit être défini dans .env.prod}
+      TOTP_ISSUER: ${TOTP_ISSUER:-PGD Orange CI}
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:?TOTP_ENCRYPTION_KEY doit être défini dans .env.prod}
+      RATE_LIMIT_LOGIN_MAX_TENTATIVES: ${RATE_LIMIT_LOGIN_MAX_TENTATIVES:-5}
+      RATE_LIMIT_LOGIN_FENETRE_SECONDES: ${RATE_LIMIT_LOGIN_FENETRE_SECONDES:-300}
+      RATE_LIMIT_LOGIN_VERROUILLAGE_SECONDES: ${RATE_LIMIT_LOGIN_VERROUILLAGE_SECONDES:-900}
+      GED_STORAGE_PATH: ${GED_STORAGE_PATH:-/tmp/pgd-ged}
+      GED_MAX_TAILLE_OCTETS: ${GED_MAX_TAILLE_OCTETS:-10485760}
+      TACHE_VERROU_TTL_SECONDES: ${TACHE_VERROU_TTL_SECONDES:-1800}
+    ports:
+      - "${API_PORT:-3000}:3000"
+
+  worker:
+    image: ${DOCKER_REGISTRY:?DOCKER_REGISTRY doit être défini dans .env.prod}/pgd-worker:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      WORKER_HEALTH_PORT: 3002
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL doit être défini dans .env.prod}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL doit être défini dans .env.prod}
+      # packages/config expose un schéma Zod partagé par toutes les apps
+      # (Phase 1, choix documenté dans docker-compose.yml) — loadEnv()
+      # échoue sans ces variables même si apps/worker ne les utilise pas
+      # réellement (session/AD/MFA n'existent pas côté worker).
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET doit être défini dans .env.prod}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET:?REFRESH_TOKEN_SECRET doit être défini dans .env.prod}
+      REFRESH_TOKEN_EXPIRES_IN: ${REFRESH_TOKEN_EXPIRES_IN:-7d}
+      LDAP_URL: ${LDAP_URL:?LDAP_URL doit être défini dans .env.prod}
+      LDAP_BIND_DN: ${LDAP_BIND_DN:?LDAP_BIND_DN doit être défini dans .env.prod}
+      LDAP_BIND_PASSWORD: ${LDAP_BIND_PASSWORD:?LDAP_BIND_PASSWORD doit être défini dans .env.prod}
+      LDAP_BASE_DN: ${LDAP_BASE_DN:?LDAP_BASE_DN doit être défini dans .env.prod}
+      DUO_CLIENT_ID: ${DUO_CLIENT_ID:?DUO_CLIENT_ID doit être défini dans .env.prod}
+      DUO_CLIENT_SECRET: ${DUO_CLIENT_SECRET:?DUO_CLIENT_SECRET doit être défini dans .env.prod}
+      DUO_API_HOST: ${DUO_API_HOST:?DUO_API_HOST doit être défini dans .env.prod}
+      DUO_REDIRECT_URI: ${DUO_REDIRECT_URI:?DUO_REDIRECT_URI doit être défini dans .env.prod}
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:?TOTP_ENCRYPTION_KEY doit être défini dans .env.prod}
+      RABBITMQ_HOST: ${RABBITMQ_HOST:?RABBITMQ_HOST doit être défini dans .env.prod}
+      RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+      RABBITMQ_MANAGEMENT_PORT: ${RABBITMQ_MANAGEMENT_PORT:-15672}
+      RABBITMQ_USER: ${RABBITMQ_USER:?RABBITMQ_USER doit être défini dans .env.prod}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD doit être défini dans .env.prod}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/pgd}
+    ports:
+      - "${WORKER_HEALTH_PORT:-3002}:3002"
+
+  web:
+    image: ${DOCKER_REGISTRY:?DOCKER_REGISTRY doit être défini dans .env.prod}/pgd-web:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    ports:
+      - "${WEB_PORT:-3001}:3001"
+    depends_on:
+      - api
