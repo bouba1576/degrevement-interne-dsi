@@ -1,45 +1,51 @@
-# docker-compose.prod.yml — déploiement production/recette, variante
-# REGISTRE (images déjà construites et poussées vers un registre). Variante
-# alternative sans dépendance à un registre : docker-compose.prod.build.yml
-# (build directement sur l'hôte de déploiement depuis les Dockerfiles) —
-# choisir l'un des deux, jamais les deux en même temps sur le même hôte.
+# docker-compose.prod.build.yml — déploiement production/recette, VARIANTE
+# « build sur l'hôte de déploiement ».
 #
-# Distinct de docker-compose.yml (base dev, fusionné avec
-# docker-compose.override.yml en local — build inline, target `deps`, bind
-# mounts, Postgres/Redis/RabbitMQ auto-hébergés pour un poste de dev isolé).
-# Ici :
-#   - AUCUN service Postgres/Redis/RabbitMQ auto-hébergé — connexions
-#     externes uniquement, tant que l'hébergement de ces trois services n'est
-#     pas confirmé (cf. .env.prod.example).
-#   - AUCUN `build:` — les trois images sont déjà construites (Dockerfiles
-#     corrigés : node:24-slim, .dockerignore réparé, HEALTHCHECK intégré) et
-#     référencées par tag, jamais reconstruites sur l'hôte de déploiement.
-#   - AUCUNE valeur en dur, secret ou non — tout vient de .env.prod (jamais
-#     commité, cf. .env.prod.example) via ${VARIABLE}. Même discipline que
-#     celle appliquée après l'incident de rotation JWT/REFRESH_TOKEN/TOTP
-#     (cf. CLAUDE.md, section « Incident — secrets exposés »).
+# Alternative à docker-compose.prod.yml (qui référence des images déjà
+# construites et poussées vers un registre — DOCKER_REGISTRY, question
+# ouverte non confirmée dans ce dépôt, cf. .env.prod.example). Ici, à
+# l'inverse :
+#   - `build:` sur les trois services — reconstruits directement sur l'hôte
+#     de déploiement depuis les Dockerfiles corrigés (node:24-slim,
+#     .dockerignore réparé, HEALTHCHECK intégré), jamais d'`image:`/tag de
+#     registre.
+#   - AUCUN service Postgres/Redis/RabbitMQ auto-hébergé — même choix que
+#     docker-compose.prod.yml, connexions externes uniquement.
+#   - AUCUNE valeur en dur — tout vient de .env.prod (jamais commité) via
+#     ${VARIABLE}, même discipline que docker-compose.prod.yml.
+#
+# Prérequis propre à CETTE variante, absent de la variante registre : le
+# CODE SOURCE complet doit être présent sur l'hôte de déploiement (le champ
+# `context: .` a besoin des Dockerfiles ET de tout ce qu'ils COPYent — pas
+# seulement d'un artefact déjà construit). En pratique : `git clone`/`git
+# pull` de ce dépôt sur l'hôte avant `up`, puis rejouer à chaque nouvelle
+# version — sensiblement plus lourd qu'un `docker pull` d'image déjà prête,
+# et le premier build (~2 min par service constaté en vérification locale)
+# se reproduit sur l'hôte de prod à chaque déploiement, pas une seule fois
+# en amont dans un pipeline CI.
 #
 # Usage :
-#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+#   git clone <ce dépôt> /opt/pgd && cd /opt/pgd
+#   docker compose -f docker-compose.prod.build.yml --env-file .env.prod up -d --build
 #
-# NEXT_PUBLIC_API_URL (apps/web) — NE FIGURE PAS dans `environment:`
-# ci-dessous, volontairement. Next.js inline cette variable dans le bundle
-# CLIENT au moment du `next build` (apps/web/lib/api.ts:116), jamais relue à
-# l'exécution du conteneur — `apps/web/Dockerfile` déclare désormais
-# `ARG NEXT_PUBLIC_API_URL` dans le stage `build`, mais CE FICHIER compose ne
-# construit jamais d'image (`image:`, pas `build:`) : il ne peut donc jamais
-# influencer cette valeur, quoi qu'on écrive ici. Elle doit être fournie au
-# moment où l'image est réellement construite (le pipeline qui la pousse vers
-# le registre, hors de ce dépôt), via :
-#   docker build --build-arg NEXT_PUBLIC_API_URL=https://pgd.orange.ci \
-#     -f apps/web/Dockerfile -t <registre>/pgd-web:<tag> .
-# L'ajouter en `environment:` ici serait sans effet et laisserait croire à
-# tort que ce fichier peut la corriger après coup — cf. .env.prod.example
-# pour la même mise en garde côté variables d'environnement.
+# `--build` force la reconstruction même si des images du même nom existent
+# déjà localement (sinon `up` réutiliserait une image locale périmée après
+# un `git pull`).
+#
+# NEXT_PUBLIC_API_URL (apps/web) — DIFFÉRENCE IMPORTANTE avec
+# docker-compose.prod.yml : ici, ce fichier construit réellement l'image, il
+# PEUT donc et DOIT transmettre cette variable via `build.args` (Compose la
+# passe alors en `--build-arg` à `docker build`, exactement comme
+# apps/web/Dockerfile l'attend — `ARG NEXT_PUBLIC_API_URL`). Contrairement à
+# la variante registre, la renseigner dans .env.prod a ici un effet réel —
+# cf. .env.prod.example pour la note qui distingue les deux fichiers sur ce
+# point précis.
 
 services:
   api:
-    image: ${DOCKER_REGISTRY:?DOCKER_REGISTRY doit être défini dans .env.prod}/pgd-api:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -83,7 +89,9 @@ services:
       - "${API_PORT:-3000}:3000"
 
   worker:
-    image: ${DOCKER_REGISTRY:?DOCKER_REGISTRY doit être défini dans .env.prod}/pgd-worker:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -117,7 +125,15 @@ services:
       - "${WORKER_HEALTH_PORT:-3002}:3002"
 
   web:
-    image: ${DOCKER_REGISTRY:?DOCKER_REGISTRY doit être défini dans .env.prod}/pgd-web:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      # Seul service des trois où `build.args` a un effet réel côté
+      # application — cf. note en tête de fichier. `:?` volontaire : un
+      # oubli silencieux ici reproduirait exactement le défaut déjà trouvé
+      # et corrigé (retour au "http://localhost:3000" codé en dur).
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL doit être défini dans .env.prod pour cette variante (URL publique de pgd-api)}
     restart: unless-stopped
     environment:
       NODE_ENV: production

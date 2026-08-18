@@ -56,9 +56,30 @@ ce fichier compose : PostgreSQL 16, Redis 7, RabbitMQ 3 (management).
 
 ## 2. Construire et pousser les trois images
 
-**Ne pas construire sur le serveur de déploiement** — `docker-compose.prod.yml`
-n'a pas de directive `build:`, il attend des images déjà poussées vers un
-registre.
+**Deux fichiers compose, deux façons de fournir les images — choisir l'un
+des deux, jamais les deux sur le même hôte :**
+
+| | `docker-compose.prod.yml` | `docker-compose.prod.build.yml` |
+|---|---|---|
+| Source de l'image | Registre (`DOCKER_REGISTRY`/`IMAGE_TAG`, §4) | `build:` local depuis les Dockerfiles |
+| Prérequis sur l'hôte | Le fichier compose + `.env.prod` seuls | Le dépôt complet (`git clone`/`pull` — `build.context: .` a besoin des Dockerfiles et de tout ce qu'ils `COPY`) |
+| `NEXT_PUBLIC_API_URL` | Fournie au pipeline de build externe, jamais dans `.env.prod` (§ ci-dessous) | Fournie dans `.env.prod` — ce fichier construit l'image lui-même |
+| Temps de déploiement | `docker pull` (rapide) | Rebuild complet à chaque déploiement (~2 min/service, constaté en vérification) |
+| Dépendance au registre Nexus (§0, point non confirmé) | Oui | Non — contourne entièrement cette question ouverte |
+
+Cette section (§2) décrit la variante **registre**. Pour la variante
+**build local**, cf. l'en-tête de `docker-compose.prod.build.yml` (même
+niveau de détail) et lancer simplement :
+
+```bash
+git clone <ce dépôt> /opt/pgd && cd /opt/pgd
+docker compose -f docker-compose.prod.build.yml --env-file .env.prod up -d --build
+```
+
+Le reste de cette section (§2) ne s'applique qu'à la variante registre —
+**ne pas construire sur le serveur de déploiement** dans ce cas :
+`docker-compose.prod.yml` n'a pas de directive `build:`, il attend des
+images déjà poussées vers un registre.
 
 ```bash
 # apps/api et apps/worker n'ont aucun ARG de build — inchangé.
@@ -318,7 +339,9 @@ Le fichier JSON d'entrée contenant les identifiants réels **ne doit jamais
 
 À obtenir/trancher avant un déploiement réel, pas devinés ici :
 
-1. Registre Docker réel et pipeline qui y pousse les images (§2).
+1. Registre Docker réel et pipeline qui y pousse les images (§2) — **sans
+   objet si `docker-compose.prod.build.yml` est retenu** (build local,
+   aucun registre requis).
 2. Hébergement réel de PostgreSQL/Redis/RabbitMQ (§3).
 3. Nature exacte de l'intégration AD réelle (bind LDAP vs endpoint REST,
    cf. §4 et `CLAUDE.md` « API AD réelle ») — un écart ici invaliderait
