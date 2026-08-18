@@ -993,6 +993,46 @@ Suite du chantier de remédiation sécurité (Gitleaks/rotation de secrets déj�
 
 Sweep complet final : `apps/api` 39/39 suites, 234/234 tests ; e2e 7/7, 20/20 ; `apps/worker` 7/7, 25/25 — zéro régression.
 
+### Fuite `.env`/`.dockerignore` — portée réelle, vérifiée sur l'historique Git, pas supposée
+
+Question posée explicitement après la clôture du chantier ci-dessus : le correctif `.dockerignore` a-t-il seulement corrigé un défaut latent, ou une image contenant le vrai `.env` a-t-elle réellement pu être construite et poussée pendant la fenêtre d'exposition ? Trois points, dans l'ordre où ils ont été posés.
+
+**1. Contenu exact de l'ancien `.dockerignore`, pas un motif contourné.** `git log -p --follow -- .dockerignore` : le fichier a été créé au commit `b7de46a7` (22/07/2026 17:35, le même commit de scaffold qui portait aussi les secrets aujourd'hui rotés — cf. section précédente) avec neuf lignes, **aucune ne mentionnant `.env` sous quelque forme que ce soit** :
+```
+node_modules
+**/node_modules
+.pnpm-store
+.turbo
+**/dist
+**/.next
+.git
+.claude
+docs/design
+```
+Ce n'est donc pas un motif d'exclusion existant contourné par un `COPY` plus permissif — `.env` était **structurellement absent** de la liste, du tout premier commit qui a introduit ce fichier jusqu'au correctif `1c91455` (17/08/2026 16:18), soit **26 jours**, pendant lesquels `COPY . .` (présent dans les trois Dockerfiles depuis leur création, même commit `b7de46a7`) n'avait aucune raison de ne pas embarquer `.env`.
+
+**2. Recoupement avec la question déjà ouverte « quel processus construit réellement les images Nexus ? » — pas résolu, mais borné plus précisément qu'avant.**
+
+Chronologie exacte des quatre commits qui touchent `.dockerignore`/les trois `Dockerfile` (`git log --format="%h|%ad|%s" --date=iso`) :
+
+| Commit | Date (UTC) | Effet sur la fuite |
+|---|---|---|
+| `b7de46a7` | 22/07/2026 17:35:52 | Création de `COPY . .` (les trois Dockerfiles) **et** de `.dockerignore` sans `.env` — les deux conditions de la fuite réunies dès ce commit |
+| `5e184fd` | 17/08/2026 10:46:34 | Corrige le bug `--filter` qui empêchait `docker build --target runtime` de **réussir ne serait-ce qu'une fois** avec ces Dockerfiles (cf. section « Sécurité — vulnérabilités CRITICAL des images Docker » ci-dessus : « les trois Dockerfiles ne construisaient jamais réellement l'image de production… `docker build --target runtime` échouait avec 343 erreurs TS7006 »). `.env` toujours pas exclu à ce stade. |
+| `b6911f9` | 17/08/2026 12:07:40 | Migration Node 20→24, sans effet sur ce point |
+| `1c91455` | 17/08/2026 16:18:42 | `.dockerignore` corrigé — `.env` exclu |
+
+Cela **resserre** la fenêtre où un build réussi via **ces Dockerfiles précisément** aurait pu embarquer `.env` réel : entre `5e184fd` (10:46) et `1c91455` (16:18) le même jour, soit environ **5h30**, puisqu'avant `5e184fd` le build échouait systématiquement (confirmé, pas supposé — c'est la même investigation déjà documentée pour le correctif Trivy). **Cela ne ferme pas la question, ça la précise** : rien n'indique qu'un build ait été *déclenché* dans cette fenêtre de 5h30, ni avant.
+
+**Le tag cité (`degrevement-dev-api:dev-8688740c`) ne correspond à aucun commit de ce dépôt.** Recherche explicite : `git log --all --format="%H" | grep -i 8688740c` — aucun résultat, ni en préfixe de hash complet ni en fragment. Ce tag n'est référencé nulle part ailleurs dans ce dépôt non plus (recherche `8688740c` sur tout `CLAUDE.md`/`docs/`, négative). Il provient donc d'une observation externe (un scan Trivy réel sur une image déjà poussée) à laquelle je n'ai pas accès depuis cette session — impossible de dater sa construction, impossible de savoir quel `.dockerignore`/quel Dockerfile était actif au moment où elle a été produite, impossible de savoir si elle a même été construite depuis ce dépôt.
+
+**3. Réponse honnête, pas une supposition d'innocuité.** Je ne peux pas déterminer depuis ce dépôt si une image contenant le `.env` réel a été construite et poussée vers Nexus. Trois raisons cumulatives, pas une seule :
+- La question « quel pipeline construit réellement les images Nexus ? » reste ouverte depuis le chantier Trivy précédent (cf. section dédiée ci-dessus) — sans savoir *qui* construit, je ne peux pas savoir *quand* ni *avec quel `.dockerignore`*.
+- Même en supposant que ce pipeline utilise ces Dockerfiles tels quels, une fenêtre réelle de ~5h30 (`5e184fd` → `1c91455`, 17/08 10:46-16:18) existait où un build aurait réussi ET embarqué `.env` — rien dans ce dépôt ne dit si un build a eu lieu pendant cette fenêtre précise.
+- Le tag `dev-8688740c` cité ne se rattache à aucun repère de ce dépôt (commit, date, branche) — je ne peux ni le dater ni l'exclure de cette fenêtre.
+
+**Action, pas une clôture prématurée.** Si ce tag (ou tout autre déjà poussé vers Nexus entre le 22/07 et le 17/08 16:18) est accessible, l'action de vérification directe est : extraire ses couches (`docker save` + inspection, ou `docker run --rm <tag> sh -c "find / -iname '.env' -exec cat {} \;"` sur une copie isolée, jamais sur un environnement partagé) et chercher un fichier `.env` réel dedans — pas quelque chose que cette session peut faire sans accès à ce registre. Si un tel `.env` est trouvé dans une image encore accessible (même retirée de production), les trois secrets qu'il contiendrait sont potentiellement déjà exposés au-delà du dépôt Git — au même titre que l'historique Git déjà traité, mais via un canal de diffusion différent (registre d'images, pas `git clone`) qui n'a pas encore été audité. Hors périmètre de cette session faute d'accès ; à transmettre à la personne pilotant le projet.
+
 ---
 
 ## Commandes
