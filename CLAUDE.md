@@ -1057,6 +1057,42 @@ Les deux identités (LDAP + lignes `Utilisateur`/`MembreRole`) et les deux QR de
 
 ---
 
+## Outillage de déploiement production (18/08/2026)
+
+Chantier distinct du déploiement V1 ci-dessus (celui-ci porte l'**outillage**, pas une mise en production précise) : `docker-compose.prod.yml`, `docker-compose.prod.build.yml`, `.env.prod.example`, `docs/13_Guide_Deploiement_Production.md`, deux scripts opérationnels permanents. Kubernetes explicitement hors périmètre, en attente de précisions.
+
+**Deux fichiers compose, deux variantes, jamais les deux sur le même hôte** :
+- `docker-compose.prod.yml` — images déjà construites, référencées par tag (`${DOCKER_REGISTRY}/pgd-{api,worker,web}:${IMAGE_TAG}`), aucun `build:`. Le registre réel reste une question ouverte non confirmée dans ce dépôt (cf. section Trivy ci-dessus).
+- `docker-compose.prod.build.yml` — `build:` local sur les trois Dockerfiles, aucune dépendance à un registre, mais exige le dépôt complet sur l'hôte de déploiement (`build.context: .`) et refait le build à chaque déploiement plutôt qu'un simple `docker pull`.
+
+Aucun des deux ne fournit Postgres/Redis/RabbitMQ (hébergement externe, non confirmé) ni de valeur en dur : tout secret/URL sans défaut sûr utilise `${VAR:?message}` — échec explicite au démarrage si absent, vérifié dans les deux sens via `docker compose config`.
+
+**Bug réel trouvé et corrigé, pas cosmétique — `NEXT_PUBLIC_API_URL`.** Next.js inline cette variable dans le bundle **client** au moment de `next build` (`apps/web/lib/api.ts:116`), jamais relue à l'exécution du conteneur. `apps/web/Dockerfile` ne déclarait aucun `ARG` pour la recevoir — la définir en `environment:`/`.env.prod` n'aurait donc jamais eu d'effet, l'image retombant silencieusement sur `http://localhost:3000` codé en dur, sans erreur visible avant la première tentative de connexion d'un utilisateur réel derrière une URL publique différente. Corrigé : `ARG NEXT_PUBLIC_API_URL` + `ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL` avant `RUN ... build` dans `apps/web/Dockerfile`.
+
+**Conséquence directe sur le statut de cette variable, différente selon le fichier compose** — point qui aurait pu recréer la même confusion si non documenté explicitement (`.env.prod.example`) :
+- `docker-compose.prod.yml` (registre) : `NEXT_PUBLIC_API_URL` ne doit **jamais** figurer dans `.env.prod` — ce fichier ne construit rien, la variable doit être fournie au pipeline externe qui construit et pousse l'image (`docker build --build-arg`), hors de ce dépôt.
+- `docker-compose.prod.build.yml` (build local) : `NEXT_PUBLIC_API_URL` **doit** figurer dans `.env.prod` — ce fichier construit réellement l'image et la transmet via `services.web.build.args`.
+
+**Vérifié en conditions réelles, deux fois, jusqu'au bundle compilé — pas seulement que le build réussit** :
+1. `docker build --build-arg NEXT_PUBLIC_API_URL=https://pgd-verif-build-arg.example.ci --target build ...` (chemin `docker-compose.prod.yml`) : `grep` dans `.next/static` confirme la présence littérale de l'URL (`let av="https://pgd-verif-build-arg.example.ci"`), `localhost:3000` totalement absent — éliminé par tree-shaking une fois la valeur définie au build, pas seulement contourné.
+2. `docker compose -f docker-compose.prod.build.yml --env-file ... build web` (chemin `docker-compose.prod.build.yml`, le vrai pipeline Compose, pas un `docker build` manuel) : même résultat — la valeur transmise via `.env.prod`/`build.args` se retrouve bien dans le bundle. Images de vérification supprimées après chaque contrôle.
+
+**Deux vrais trous `.gitignore` trouvés en rédigeant le guide, corrigés, pas seulement documentés** : `.env.prod` n'était pas exclu (seuls `.env`/`.env.local` l'étaient) — même classe de faille que l'incident `.dockerignore` déjà documenté ci-dessus. Motif générique `.env.*` + exceptions explicites (`!.env.example`, `!.env.prod.example`), vérifié dans les deux sens via `git check-ignore`. Même geste appliqué préventivement à `apps/api/scripts/*.json` (sauf `exemple-comptes.json`) une fois les deux scripts d'enrôlement écrits — un fichier de comptes réels ne doit jamais pouvoir être committé par erreur.
+
+**`docs/13_Guide_Deploiement_Production.md`** — document opérationnel (pas un livrable BMAD), écrit à partir de l'état réel du dépôt. Deux trouvailles réelles en le rédigeant, pas de simples remarques :
+- `pnpm db:seed` insère les référentiels réels **et** un jeu de données de démonstration fictif (`seedDemo()`) dans le même script, sans option pour les séparer — jamais approprié en production tel quel. Non corrigé à ce jour (à traiter avant la première mise en production réelle).
+- **Aucun chemin ne permet de créer le tout premier compte `ADMIN_PGD`** : `RbacResolutionService` (Temps 2) refuse toute connexion sans `MembreRole` préexistant, et l'écran d'administration qui sert normalement à pré-enregistrer un compte est lui-même protégé par `ADMIN_PGD` — chicken-and-egg. Comblé par `bootstrap-premier-admin.ts` (ci-dessous), pas seulement constaté.
+
+**Deux scripts opérationnels PERMANENTS** (`apps/api/scripts/`, à la différence des scripts `-tmp` jetables déjà documentés partout ailleurs dans ce fichier — ceux-ci restent dans le dépôt et sont réutilisables) :
+- `bootstrap-premier-admin.ts` — crée le tout premier `ADMIN_PGD`.
+- `enrolement-comptes.ts` — enrôle un lot depuis un fichier JSON (`exemple-comptes.json` documente le format, données fictives, seul fichier `.json` de ce dossier committé).
+
+Les deux partagent `scripts/lib/enrolement.ts` : réutilise **directement** `chiffrerSecretTotp` (import depuis `apps/api/src/.../totp-secret-crypto.ts`, jamais une réimplémentation) et `preEnregistrerUtilisateurRequeteSchema` (`@pgd/contracts`, mêmes validations que l'API réelle) — une seule source de vérité pour le chiffrement et la forme de l'identifiant AD. `verifierRepertoireHorsDepot` refuse tout `--qr-dir` situé à l'intérieur du dépôt, vérifiée avant toute connexion DB (échec rapide) et testée dans les deux sens. Les deux scripts compilent et s'exécutent correctement jusqu'à l'étape base de données ; l'enrôlement réel de bout en bout (écriture + QR + connexion) reste à faire une fois de vraies données disponibles — pas simulé ici, pas prétendu vérifié au-delà de ce qui l'a réellement été.
+
+**Incident rencontré pendant la vérification, sans rapport avec le code de ce dépôt — Docker Desktop dont le moteur a cessé de répondre.** En plein milieu du build de vérification `NEXT_PUBLIC_API_URL`, `docker images`/`docker ps`/`docker version` se sont mis à renvoyer `500 Internal Server Error` de façon systématique, y compris sur l'appel le plus trivial (`/version`) — le client Docker (CLI) répondait normalement, seul le serveur (`dockerDesktopLinuxEngine`) était en cause. Cause non déterminée (pas de piste dans ce dépôt à investiguer — poste de développement, pas une infrastructure partagée). Résolu par un redémarrage de Docker Desktop fait par la personne pilotant le projet ; les quatre conteneurs de dev (api/worker/web/openldap) sont repartis normalement ensuite, aucune perte de données côté Postgres constatée après coup. Mentionné ici uniquement comme point de repère si le symptôme (« 500 sur absolument tout appel Docker, y compris `version` ») se reproduit un jour sur ce poste — pas un correctif, juste une reconnaissance de motif.
+
+---
+
 ## Commandes
 
 ```bash
