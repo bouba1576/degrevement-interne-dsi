@@ -24,7 +24,7 @@ export class CorbeilleRoleGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<RequeteAuthentifiee>();
-    const tacheId = request.params?.id;
+    const tacheId = typeof request.params?.id === "string" ? request.params.id : undefined;
     const utilisateur = request.utilisateur;
     if (!tacheId || !utilisateur) return true;
 

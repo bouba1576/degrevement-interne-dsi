@@ -22,7 +22,7 @@ export class DelegationContextGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<RequeteAvecDelegation>();
-    const tacheId = request.params?.id;
+    const tacheId = typeof request.params?.id === "string" ? request.params.id : undefined;
     const utilisateur = request.utilisateur;
     if (!tacheId || !utilisateur) return true;
 

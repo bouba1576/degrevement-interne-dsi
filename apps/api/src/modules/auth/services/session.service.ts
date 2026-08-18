@@ -4,6 +4,14 @@ import { randomUUID } from "node:crypto";
 import { loadEnv } from "@pgd/config";
 import { CacheService } from "../../../infra/redis/cache.service";
 
+// @nestjs/jwt 11 type `expiresIn` en `StringValue` (type de `ms`, non
+// importable ici — dépendance transitive, jamais hoistée par pnpm) plutôt
+// qu'un `string` large. `JWT_EXPIRES_IN`/`REFRESH_TOKEN_EXPIRES_IN`
+// (packages/config, Zod `z.string()`) sont toujours de cette forme exacte en
+// pratique (`.env.example`, CLAUDE.md — "15m"/"7d") : une assertion locale,
+// pas un import fragile d'un type de dépendance transitive.
+type DureeJwt = `${number}${"s" | "m" | "h" | "d"}`;
+
 // sousFluxId (14/08/2026, CLAUDE.md « Sous-flux — référentiel SF-PGD-109 ») —
 // porté en session exactement comme `roles` : figé à la connexion, jamais
 // résolu à la lecture de GET /api/auth/session ni à `rafraichir()` (qui
@@ -142,11 +150,11 @@ export class SessionService {
         sousFluxId: utilisateur.sousFluxId ?? null,
         jti
       } satisfies AccessPayload,
-      { secret: env.JWT_SECRET, expiresIn: env.JWT_EXPIRES_IN }
+      { secret: env.JWT_SECRET, expiresIn: env.JWT_EXPIRES_IN as DureeJwt }
     );
     const refreshToken = this.jwt.sign({ sub: utilisateur.id, jti } satisfies RefreshPayload, {
       secret: env.REFRESH_TOKEN_SECRET,
-      expiresIn: env.REFRESH_TOKEN_EXPIRES_IN
+      expiresIn: env.REFRESH_TOKEN_EXPIRES_IN as DureeJwt
     });
     return { accessToken, refreshToken };
   }

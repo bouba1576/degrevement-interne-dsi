@@ -17,7 +17,7 @@ export class NotificationDestinataireGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<RequeteAuthentifiee>();
-    const notificationId = request.params?.id;
+    const notificationId = typeof request.params?.id === "string" ? request.params.id : undefined;
     const utilisateur = request.utilisateur;
     if (!notificationId || !utilisateur) return true;
 
