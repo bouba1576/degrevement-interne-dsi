@@ -66,7 +66,13 @@ services:
       LDAP_BIND_DN: ${LDAP_BIND_DN:?LDAP_BIND_DN doit être défini dans .env.prod}
       LDAP_BIND_PASSWORD: ${LDAP_BIND_PASSWORD:?LDAP_BIND_PASSWORD doit être défini dans .env.prod}
       LDAP_BASE_DN: ${LDAP_BASE_DN:?LDAP_BASE_DN doit être défini dans .env.prod}
-      LDAP_USER_DOMAIN: ${LDAP_USER_DOMAIN:-orange.ci}
+      # orange.com confirmé (18/08/2026) comme le domaine réel de l'AD Orange
+      # CI — orange.ci reste le domaine du seul socle de test dev (OpenLDAP
+      # éphémère), jamais celui de la production. Variable actuellement non
+      # lue par le code applicatif (LDAP_USER_DOMAIN absent de apps/*/src et
+      # packages/*, vérifié par recherche) — conservée pour cohérence avec
+      # packages/config/src/env.schema.ts, pas pour un usage réel aujourd'hui.
+      LDAP_USER_DOMAIN: ${LDAP_USER_DOMAIN:-orange.com}
       DUO_CLIENT_ID: ${DUO_CLIENT_ID:?DUO_CLIENT_ID doit être défini dans .env.prod}
       DUO_CLIENT_SECRET: ${DUO_CLIENT_SECRET:?DUO_CLIENT_SECRET doit être défini dans .env.prod}
       DUO_API_HOST: ${DUO_API_HOST:?DUO_API_HOST doit être défini dans .env.prod}
