@@ -6,6 +6,14 @@ coverage/
 *.log
 .env
 .env.local
+# Trouvé absent le 18/08/2026 (rédaction du guide de déploiement prod) :
+# seuls .env/.env.local étaient exclus — .env.prod (et tout futur .env.*)
+# aurait pu être committé par erreur, même classe de faille que l'incident
+# .dockerignore déjà documenté dans CLAUDE.md. Motif générique + exceptions
+# explicites sur les fichiers d'exemple, jamais l'inverse.
+.env.*
+!.env.example
+!.env.prod.example
 .turbo/
 *.tsbuildinfo
 .DS_Store
