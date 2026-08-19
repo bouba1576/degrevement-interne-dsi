@@ -1,16 +1,27 @@
 # docker-compose.prod.build.yml — déploiement production/recette, VARIANTE
 # « build sur l'hôte de déploiement ».
 #
+# ⚠ CE FICHIER N'A PAS REÇU LA RÉVISION DU 19/08/2026 (architecture serveur
+# unique, Postgres/Redis/RabbitMQ auto-hébergés) — contrairement à
+# docker-compose.prod.yml, qui héberge désormais ces trois services
+# lui-même. Ce fichier suppose ENCORE un hébergement externe qui n'a jamais
+# été confirmé et qui n'existe pas : lancé tel quel, un déploiement ne
+# trouvera ces trois services nulle part. Ne pas le prendre pour
+# équivalent à docker-compose.prod.yml « juste sans registre » — cf.
+# CLAUDE.md, « Outillage de déploiement production », pour le détail. À
+# réviser symétriquement avant tout usage réel sur la même architecture.
+#
 # Alternative à docker-compose.prod.yml (qui référence des images déjà
-# construites et poussées vers un registre — DOCKER_REGISTRY, question
-# ouverte non confirmée dans ce dépôt, cf. .env.prod.example). Ici, à
-# l'inverse :
+# construites et poussées vers un registre — DOCKER_REGISTRY, dépendance
+# externe en attente côté DevOps, cf. CLAUDE.md « Dépendances externes en
+# attente »). Ici, à l'inverse :
 #   - `build:` sur les trois services — reconstruits directement sur l'hôte
 #     de déploiement depuis les Dockerfiles corrigés (node:24-slim,
 #     .dockerignore réparé, HEALTHCHECK intégré), jamais d'`image:`/tag de
 #     registre.
-#   - AUCUN service Postgres/Redis/RabbitMQ auto-hébergé — même choix que
-#     docker-compose.prod.yml, connexions externes uniquement.
+#   - AUCUN service Postgres/Redis/RabbitMQ auto-hébergé — hypothèse
+#     d'hébergement externe désormais abandonnée pour docker-compose.prod.yml
+#     (cf. avertissement ci-dessus), pas encore révisée ici.
 #   - AUCUNE valeur en dur — tout vient de .env.prod (jamais commité) via
 #     ${VARIABLE}, même discipline que docker-compose.prod.yml.
 #

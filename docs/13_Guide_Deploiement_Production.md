@@ -9,6 +9,16 @@ marqués explicitement comme tels plutôt que devinés.
 **Kubernetes n'est pas couvert ici** — ce guide décrit un déploiement Docker
 Compose sur un serveur unique (`docker-compose.prod.yml`).
 
+> **Note (19/08/2026) — le §3 ci-dessous décrit une architecture différente
+> de celle retenue.** Il présuppose PostgreSQL/Redis/RabbitMQ hébergés en
+> externe ; l'architecture réelle confirmée héberge ces trois services sur
+> le même serveur unique que les applications, directement dans
+> `docker-compose.prod.yml` (services `postgres`/`redis`/`rabbitmq`, volumes
+> nommés pour la persistance). Le diagramme du §0 et le §3 n'ont pas été
+> réécrits en conséquence — cf. `CLAUDE.md`, section « `docker-compose.prod.yml`
+> — Postgres/Redis/RabbitMQ auto-hébergés » pour l'architecture à jour,
+> avant de suivre les instructions plus bas dans ce document.
+
 ---
 
 ## 0. Vue d'ensemble
