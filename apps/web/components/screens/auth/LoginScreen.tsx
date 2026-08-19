@@ -43,10 +43,13 @@ export function LoginScreen({ onConnecte }: LoginScreenProps) {
     setErreur(null);
     setChargement(true);
     try {
-      const identifiantComplet = identifiantAd.includes("@")
-        ? identifiantAd
-        : `${identifiantAd.trim()}@orange.com`;
-      const reponse = await login({ identifiantAd: identifiantComplet, motDePasse });
+      // Deux formats coexistent légitimement (e-mail pour le socle de test
+      // dev, identifiant AD brut pour un compte réel — cf. CLAUDE.md,
+      // « identifiantAd = username brut, pas une adresse e-mail »). Le client
+      // ne devine ni ne transforme jamais : la saisie part telle quelle,
+      // deviner le format reviendrait à réintroduire exactement le bug déjà
+      // trouvé et corrigé (complétion silencieuse `@orange.com`).
+      const reponse = await login({ identifiantAd: identifiantAd.trim(), motDePasse });
       if (!reponse.requiresMfa) {
         onConnecte();
         return;
@@ -168,13 +171,10 @@ export function LoginScreen({ onConnecte }: LoginScreenProps) {
                   <input
                     value={identifiantAd}
                     onChange={(e) => setIdentifiantAd(e.target.value)}
-                    placeholder="prenom.nom"
+                    placeholder="identifiant AD"
                     autoFocus
-                    className="w-full rounded border border-gris300 py-2 pl-9 pr-24 text-14 font-normal"
+                    className="w-full rounded border border-gris300 py-2 pl-9 pr-3 text-14 font-normal"
                   />
-                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-13 text-gris500">
-                    @orange.com
-                  </span>
                 </div>
               </label>
               <label className="mb-4 flex flex-col gap-1 text-13 font-bold text-gris800">
