@@ -4,16 +4,36 @@
 # (build directement sur l'hôte de déploiement depuis les Dockerfiles) —
 # choisir l'un des deux, jamais les deux en même temps sur le même hôte.
 #
+# Architecture réelle confirmée (19/08/2026, remplace l'hypothèse initiale
+# d'hébergement externe) : serveur local UNIQUE qui héberge à la fois
+# Postgres/Redis/RabbitMQ ET les trois applications (api/web/worker) — pas de
+# service managé séparé. Les trois services d'infrastructure sont donc
+# définis ci-dessous, avec volumes nommés pour la persistance (Postgres et
+# RabbitMQ en particulier : perdre ces données au redémarrage d'un conteneur
+# serait inacceptable sur un vrai déploiement — Redis reste volontairement
+# plus léger, cf. CLAUDE.md règle non négociable 4 : « Redis est un reflet
+# volatil intégralement reconstructible », un volume lui est tout de même
+# donné par cohérence avec le profil dev, pas par nécessité).
+#
 # Distinct de docker-compose.yml (base dev, fusionné avec
 # docker-compose.override.yml en local — build inline, target `deps`, bind
-# mounts, Postgres/Redis/RabbitMQ auto-hébergés pour un poste de dev isolé).
-# Ici :
-#   - AUCUN service Postgres/Redis/RabbitMQ auto-hébergé — connexions
-#     externes uniquement, tant que l'hébergement de ces trois services n'est
-#     pas confirmé (cf. .env.prod.example).
-#   - AUCUN `build:` — les trois images sont déjà construites (Dockerfiles
-#     corrigés : node:24-slim, .dockerignore réparé, HEALTHCHECK intégré) et
-#     référencées par tag, jamais reconstruites sur l'hôte de déploiement.
+# mounts). Ici :
+#   - Postgres/Redis/RabbitMQ auto-hébergés sur CE MÊME serveur, réseau Docker
+#     interne uniquement pour les apps (DATABASE_URL/REDIS_URL/RABBITMQ_HOST
+#     construits en dur vers les noms de service ci-dessous, plus besoin de
+#     les fournir dans .env.prod) — jamais exposés au réseau externe ; seuls
+#     Postgres (admin/backup) et la console RabbitMQ (supervision) sont
+#     publiés, et seulement sur 127.0.0.1 (accès par tunnel SSH depuis
+#     l'hôte, jamais directement depuis le réseau).
+#   - AUCUN `build:` sur api/web/worker — les trois images sont déjà
+#     construites (Dockerfiles corrigés : node:24-slim, .dockerignore
+#     réparé, HEALTHCHECK intégré) et référencées par tag, jamais
+#     reconstruites sur l'hôte de déploiement. DOCKER_REGISTRY dépend d'un
+#     Nexus interne pas encore prêt côté DevOps au moment où ce fichier est
+#     révisé (cf. CLAUDE.md, « Dépendances externes en attente ») — ce
+#     fichier reste correct et prêt, son usage attend cette dépendance
+#     externe, pas l'inverse. docker-compose.prod.build.yml reste l'option
+#     immédiatement utilisable sans registre le temps que Nexus arrive.
 #   - AUCUNE valeur en dur, secret ou non — tout vient de .env.prod (jamais
 #     commité, cf. .env.prod.example) via ${VARIABLE}. Même discipline que
 #     celle appliquée après l'incident de rotation JWT/REFRESH_TOKEN/TOTP
@@ -38,17 +58,85 @@
 # pour la même mise en garde côté variables d'environnement.
 
 services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER doit être défini dans .env.prod}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD doit être défini dans .env.prod}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB doit être défini dans .env.prod}
+    volumes:
+      - pgd_prod_postgres_data:/var/lib/postgresql/data
+    # 127.0.0.1 uniquement — admin/backup via tunnel SSH sur l'hôte, jamais
+    # exposé au réseau. Les apps atteignent ce service par son nom Docker
+    # (`postgres`), ce port publié ne leur sert à rien.
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - pgd_prod_redis_data:/data
+    # Aucun port publié — cache/verrous internes uniquement (CLAUDE.md règle
+    # 4, reconstructible), aucun besoin d'accès admin distinct de `docker
+    # compose exec redis redis-cli` depuis l'hôte.
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?RABBITMQ_USER doit être défini dans .env.prod}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD doit être défini dans .env.prod}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-/pgd}
+      RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE:?RABBITMQ_ERLANG_COOKIE doit être défini dans .env.prod}
+    volumes:
+      - pgd_prod_rabbitmq_data:/var/lib/rabbitmq
+    # Console de supervision (15672) en 127.0.0.1 uniquement — tunnel SSH
+    # pour y accéder, jamais exposée directement. Le port AMQP (5672) n'est
+    # publié nulle part : les apps l'atteignent par le réseau Docker interne.
+    ports:
+      - "127.0.0.1:15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
   api:
     image: ${DOCKER_REGISTRY:?DOCKER_REGISTRY doit être défini dans .env.prod}/pgd-api:${IMAGE_TAG:-latest}
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     environment:
       NODE_ENV: production
       API_PORT: 3000
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL doit être défini dans .env.prod}
-      REDIS_URL: ${REDIS_URL:?REDIS_URL doit être défini dans .env.prod}
-      RABBITMQ_HOST: ${RABBITMQ_HOST:?RABBITMQ_HOST doit être défini dans .env.prod}
-      RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
-      RABBITMQ_MANAGEMENT_PORT: ${RABBITMQ_MANAGEMENT_PORT:-15672}
+      # Postgres/Redis/RabbitMQ auto-hébergés ci-dessus, sur ce même serveur
+      # — noms de service Docker, jamais un hôte externe. DATABASE_URL n'est
+      # plus une variable fournie dans .env.prod (elle l'était quand
+      # l'hébergement était externe) : construite ici depuis les identifiants
+      # Postgres, seule source de vérité désormais.
+      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER doit être défini dans .env.prod}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD doit être défini dans .env.prod}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB doit être défini dans .env.prod}?schema=public
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_MANAGEMENT_PORT: 15672
       RABBITMQ_USER: ${RABBITMQ_USER:?RABBITMQ_USER doit être défini dans .env.prod}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD doit être défini dans .env.prod}
       RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/pgd}
@@ -60,8 +148,9 @@ services:
       SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-pgd_session}
       REFRESH_COOKIE_NAME: ${REFRESH_COOKIE_NAME:-pgd_refresh}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
-      # Prod : AD réel Orange CI (LDAPS attendu). Aucun conteneur openldap ici
-      # — celui de docker-compose.override.yml est strictement dev.
+      # Prod : AD réel Orange CI (LDAPS attendu si LDAP_PROVIDER=ldap).
+      # Aucun conteneur openldap ici — celui de docker-compose.override.yml
+      # est strictement dev.
       LDAP_URL: ${LDAP_URL:?LDAP_URL doit être défini dans .env.prod}
       LDAP_BIND_DN: ${LDAP_BIND_DN:?LDAP_BIND_DN doit être défini dans .env.prod}
       LDAP_BIND_PASSWORD: ${LDAP_BIND_PASSWORD:?LDAP_BIND_PASSWORD doit être défini dans .env.prod}
@@ -75,8 +164,8 @@ services:
       LDAP_USER_DOMAIN: ${LDAP_USER_DOMAIN:-orange.com}
       # AdApiProvider (SF-PGD-001, 19/08/2026) — coexistence avec LdapProvider
       # ci-dessus, jamais un remplacement. LDAP_PROVIDER=ad-api requiert
-      # AD_API_URL ; cf. .env.prod.example pour le contrat détaillé et la
-      # revérification encore en attente depuis le réseau interne.
+      # AD_API_URL ; contrat et premier login réel confirmés, cf. CLAUDE.md
+      # « Intégration réelle de l'API AD ».
       LDAP_PROVIDER: ${LDAP_PROVIDER:-ldap}
       AD_API_URL: ${AD_API_URL:-}
       AD_API_TIMEOUT_MS: ${AD_API_TIMEOUT_MS:-5000}
@@ -98,11 +187,18 @@ services:
   worker:
     image: ${DOCKER_REGISTRY:?DOCKER_REGISTRY doit être défini dans .env.prod}/pgd-worker:${IMAGE_TAG:-latest}
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     environment:
       NODE_ENV: production
       WORKER_HEALTH_PORT: 3002
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL doit être défini dans .env.prod}
-      REDIS_URL: ${REDIS_URL:?REDIS_URL doit être défini dans .env.prod}
+      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER doit être défini dans .env.prod}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD doit être défini dans .env.prod}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB doit être défini dans .env.prod}?schema=public
+      REDIS_URL: redis://redis:6379
       # packages/config expose un schéma Zod partagé par toutes les apps
       # (Phase 1, choix documenté dans docker-compose.yml) — loadEnv()
       # échoue sans ces variables même si apps/worker ne les utilise pas
@@ -120,9 +216,9 @@ services:
       DUO_API_HOST: ${DUO_API_HOST:?DUO_API_HOST doit être défini dans .env.prod}
       DUO_REDIRECT_URI: ${DUO_REDIRECT_URI:?DUO_REDIRECT_URI doit être défini dans .env.prod}
       TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:?TOTP_ENCRYPTION_KEY doit être défini dans .env.prod}
-      RABBITMQ_HOST: ${RABBITMQ_HOST:?RABBITMQ_HOST doit être défini dans .env.prod}
-      RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
-      RABBITMQ_MANAGEMENT_PORT: ${RABBITMQ_MANAGEMENT_PORT:-15672}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_MANAGEMENT_PORT: 15672
       RABBITMQ_USER: ${RABBITMQ_USER:?RABBITMQ_USER doit être défini dans .env.prod}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD doit être défini dans .env.prod}
       RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/pgd}
@@ -138,3 +234,8 @@ services:
       - "${WEB_PORT:-3001}:3001"
     depends_on:
       - api
+
+volumes:
+  pgd_prod_postgres_data:
+  pgd_prod_redis_data:
+  pgd_prod_rabbitmq_data:
