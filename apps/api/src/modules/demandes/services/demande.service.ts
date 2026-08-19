@@ -37,6 +37,14 @@ export class DemandeService {
       dto.responsabiliteServiceAutre
     );
 
+    // Montant à ajuster HT saisi directement au niveau du dossier (Priorité 2,
+    // 19/08/2026) — remplace l'agrégation de lignes retenues (R18, abandonnée,
+    // cf. CLAUDE.md). Même moteur de taxes que le reste de l'application
+    // (MontantService.calculer), jamais un calcul dupliqué. montantHt absent
+    // → dossier créé à 0, comme avant ce chantier (un brouillon peut exister
+    // sans montant tant qu'il n'est pas soumis).
+    const montants = this.montant.calculer(dto.montantHt ?? 0, taux);
+
     const demande = await this.prisma.$transaction(async (tx) => {
       const cree = await this.creerAvecReferenceUnique(tx, {
         circuit: dto.circuit,
@@ -44,6 +52,7 @@ export class DemandeService {
         sousFlux: dto.sousFlux,
         nomClient: dto.nomClient,
         compteClient: dto.compteClient,
+        numeroCase: dto.numeroCase,
         agentInitiateur: dto.agentInitiateur,
         matriculeInitiateur: dto.matriculeInitiateur,
         agentSaisie: dto.agentSaisie,
@@ -56,9 +65,13 @@ export class DemandeService {
         debutPeriodeContestee: dto.debutPeriodeContestee ? new Date(dto.debutPeriodeContestee) : undefined,
         finPeriodeContestee: dto.finPeriodeContestee ? new Date(dto.finPeriodeContestee) : undefined,
         periodeContesteeJours: this.calculerJoursContestes(dto.debutPeriodeContestee, dto.finPeriodeContestee),
-        recurrentMensuel: dto.recurrentMensuel ?? false,
+        recurrentMensuel: dto.recurrentMensuel ?? 0,
         champsCircuit: (dto.champsCircuit ?? {}) as Prisma.InputJsonValue,
         dateDemande: dto.dateDemande ? new Date(dto.dateDemande) : undefined,
+        montantHt: montants.montantHt,
+        montantTsc: montants.montantTsc,
+        montantTva: montants.montantTva,
+        montantTtc: montants.montantTtc,
         tauxTsc: taux.tauxTsc,
         tauxTva: taux.tauxTva,
         tscActive: taux.tscActive,
@@ -79,7 +92,7 @@ export class DemandeService {
       await this.historique.enregistrer(
         {
           demandeId: cree.id,
-          montants: { montantHt: 0, montantTsc: 0, montantTva: 0, montantTtc: 0 },
+          montants,
           tauxTsc: taux.tauxTsc,
           tauxTva: taux.tauxTva,
           origine: "CREATION",
@@ -269,47 +282,81 @@ export class DemandeService {
       dto.responsabiliteServiceAutre ?? (existante.responsabiliteServiceAutre ?? undefined)
     );
 
-    const demande = await this.prisma.demande.update({
-      where: { id },
-      data: {
-        dateDemande: dto.dateDemande ? new Date(dto.dateDemande) : undefined,
-        sousFlux: dto.sousFlux,
-        nomClient: dto.nomClient,
-        compteClient: dto.compteClient,
-        agentInitiateur: dto.agentInitiateur,
-        matriculeInitiateur: dto.matriculeInitiateur,
-        agentSaisie: dto.agentSaisie,
-        localisation: dto.localisation,
-        canalRemontee: dto.canalRemontee,
-        dateReceptionBo: dto.dateReceptionBo ? new Date(dto.dateReceptionBo) : undefined,
-        dateReceptionOci: dto.dateReceptionOci ? new Date(dto.dateReceptionOci) : undefined,
-        formuleAbonnement: dto.formuleAbonnement,
-        numeroAppel: dto.numeroAppel,
-        debutPeriodeContestee: dto.debutPeriodeContestee ? new Date(dto.debutPeriodeContestee) : undefined,
-        finPeriodeContestee: dto.finPeriodeContestee ? new Date(dto.finPeriodeContestee) : undefined,
-        periodeContesteeJours:
-          dto.debutPeriodeContestee || dto.finPeriodeContestee
-            ? this.calculerJoursContestes(
-                dto.debutPeriodeContestee ?? existante.debutPeriodeContestee?.toISOString(),
-                dto.finPeriodeContestee ?? existante.finPeriodeContestee?.toISOString()
-              )
-            : undefined,
-        recurrentMensuel: dto.recurrentMensuel,
-        champsCircuit: dto.champsCircuit as Prisma.InputJsonValue | undefined,
-        libelle: dto.libelle,
-        motifId: dto.motifId,
-        universFmiCode: dto.universFmiCode,
-        facteurCode: dto.facteurCode,
-        directionRespId: dto.directionRespId,
-        serviceRespId,
-        agentResponsable: dto.agentResponsable,
-        commentaire: dto.commentaire,
-        responsabiliteServiceAutre
-      },
-      include: { lignes: true, pieces: true }
+    // Montant à ajuster HT modifiable (Priorité 2, 19/08/2026) — même moteur
+    // de taxes que la création/le panneau Taxes (MontantService.calculer),
+    // et même traçabilité R23/R25 (HISTORIQUE_MONTANT, origine=MODIFICATION,
+    // acteur réel) que toute autre écriture affectant les montants. Absent
+    // du dto → aucun recalcul, les montants existants restent inchangés.
+    const montants =
+      dto.montantHt !== undefined
+        ? this.montant.calculer(dto.montantHt, this.montant.tauxDepuisDemande(existante))
+        : null;
+
+    const demande = await this.prisma.$transaction(async (tx) => {
+      const maj = await tx.demande.update({
+        where: { id },
+        data: {
+          dateDemande: dto.dateDemande ? new Date(dto.dateDemande) : undefined,
+          sousFlux: dto.sousFlux,
+          nomClient: dto.nomClient,
+          compteClient: dto.compteClient,
+          numeroCase: dto.numeroCase,
+          agentInitiateur: dto.agentInitiateur,
+          matriculeInitiateur: dto.matriculeInitiateur,
+          agentSaisie: dto.agentSaisie,
+          localisation: dto.localisation,
+          canalRemontee: dto.canalRemontee,
+          dateReceptionBo: dto.dateReceptionBo ? new Date(dto.dateReceptionBo) : undefined,
+          dateReceptionOci: dto.dateReceptionOci ? new Date(dto.dateReceptionOci) : undefined,
+          formuleAbonnement: dto.formuleAbonnement,
+          numeroAppel: dto.numeroAppel,
+          debutPeriodeContestee: dto.debutPeriodeContestee ? new Date(dto.debutPeriodeContestee) : undefined,
+          finPeriodeContestee: dto.finPeriodeContestee ? new Date(dto.finPeriodeContestee) : undefined,
+          periodeContesteeJours:
+            dto.debutPeriodeContestee || dto.finPeriodeContestee
+              ? this.calculerJoursContestes(
+                  dto.debutPeriodeContestee ?? existante.debutPeriodeContestee?.toISOString(),
+                  dto.finPeriodeContestee ?? existante.finPeriodeContestee?.toISOString()
+                )
+              : undefined,
+          recurrentMensuel: dto.recurrentMensuel,
+          champsCircuit: dto.champsCircuit as Prisma.InputJsonValue | undefined,
+          libelle: dto.libelle,
+          motifId: dto.motifId,
+          universFmiCode: dto.universFmiCode,
+          facteurCode: dto.facteurCode,
+          directionRespId: dto.directionRespId,
+          serviceRespId,
+          agentResponsable: dto.agentResponsable,
+          commentaire: dto.commentaire,
+          responsabiliteServiceAutre,
+          ...(montants && {
+            montantHt: montants.montantHt,
+            montantTsc: montants.montantTsc,
+            montantTva: montants.montantTva,
+            montantTtc: montants.montantTtc
+          })
+        },
+        include: { lignes: true, pieces: true }
+      });
+
+      if (montants) {
+        await this.historique.enregistrer(
+          {
+            demandeId: id,
+            montants,
+            tauxTsc: Number(existante.tauxTsc),
+            tauxTva: Number(existante.tauxTva),
+            origine: "MODIFICATION",
+            acteurId
+          },
+          tx
+        );
+      }
+
+      return maj;
     });
 
-    void acteurId; // le re-routage (4.7) journalisera l'acteur ; simple modification de champs ici.
     return this.versDetail(demande);
   }
 
@@ -386,6 +433,7 @@ export class DemandeService {
       sousFlux: d.sousFlux,
       nomClient: d.nomClient,
       compteClient: d.compteClient,
+      numeroCase: d.numeroCase,
       agentInitiateur: d.agentInitiateur,
       matriculeInitiateur: d.matriculeInitiateur,
       agentSaisie: d.agentSaisie,
@@ -398,7 +446,7 @@ export class DemandeService {
       debutPeriodeContestee: d.debutPeriodeContestee ? d.debutPeriodeContestee.toISOString().slice(0, 10) : null,
       finPeriodeContestee: d.finPeriodeContestee ? d.finPeriodeContestee.toISOString().slice(0, 10) : null,
       periodeContesteeJours: d.periodeContesteeJours,
-      recurrentMensuel: d.recurrentMensuel,
+      recurrentMensuel: Number(d.recurrentMensuel),
       champsCircuit: d.champsCircuit as Record<string, unknown>,
       montantHt: Number(d.montantHt),
       montantTsc: Number(d.montantTsc),

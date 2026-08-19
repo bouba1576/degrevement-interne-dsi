@@ -17,10 +17,13 @@ import { HistoriqueMontantService } from "../src/modules/demandes/services/histo
 import { GedStubAdapter } from "../src/modules/demandes/providers/ged-stub.adapter";
 
 // Intégration réelle contre Postgres ET Redis — soumission transactionnelle
-// complète (PGD-036) : R13/R14/R15/R17, sélection de palier (cache Redis
-// compris depuis la Phase 5), instanciation de la chaîne, SLA première étape,
-// journal d'audit. Aucun mock de requête.
-describe("DemandeWorkflowService.soumettre — R13/R14/R15/R17 + instanciation", () => {
+// complète (PGD-036) : R13/R14, sélection de palier (cache Redis compris
+// depuis la Phase 5), instanciation de la chaîne, SLA première étape,
+// journal d'audit. Aucun mock de requête. R15/R17 abandonnées (Priorité 2,
+// 19/08/2026, cf. CLAUDE.md) — plus testées ici, cf.
+// demande-montant-libre.integration.spec.ts pour le nouveau chemin
+// (montantHt direct, aucune ligne).
+describe("DemandeWorkflowService.soumettre — R13/R14 + instanciation", () => {
   const prisma = new PrismaService();
   const redis = new Redis(loadEnv().REDIS_URL);
   const cache = new CacheService(redis);
@@ -38,9 +41,7 @@ describe("DemandeWorkflowService.soumettre — R13/R14/R15/R17 + instanciation",
 
   let compteId: string;
   let ligneActiveId: string;
-  let ligneResilieeId: string;
   let formuleActiveId: string;
-  let formuleResilieeId: string;
   let motifId: string;
   let pieceAfferenteId: string;
   const suffixe = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -79,14 +80,6 @@ describe("DemandeWorkflowService.soumettre — R13/R14/R15/R17 + instanciation",
     });
     formuleActiveId = formuleActive.id;
     await prisma.ligne.update({ where: { id: ligneActiveId }, data: { formuleCouranteId: formuleActiveId } });
-
-    const ligneResiliee = await prisma.ligne.create({ data: { compteId, nd: `ND-RESILIE-${suffixe}`, statut: "RESILIE" } });
-    ligneResilieeId = ligneResiliee.id;
-    const formuleResiliee = await prisma.formule.create({
-      data: { ligneId: ligneResilieeId, libelle: "Formule résiliée", recurrentMensuelHt: 15000, dateDebut: new Date("2025-01-01"), courante: true }
-    });
-    formuleResilieeId = formuleResiliee.id;
-    await prisma.ligne.update({ where: { id: ligneResilieeId }, data: { formuleCouranteId: formuleResiliee.id } });
   });
 
   afterEach(async () => {
@@ -96,7 +89,7 @@ describe("DemandeWorkflowService.soumettre — R13/R14/R15/R17 + instanciation",
     await prisma.demandeLigne.deleteMany({ where: { demande: { compteClient: compteId } } });
     await prisma.pieceJointe.deleteMany({ where: { demande: { compteClient: compteId } } });
     await prisma.demande.deleteMany({ where: { compteClient: compteId } });
-    await prisma.formule.deleteMany({ where: { ligneId: { in: [ligneActiveId, ligneResilieeId] } } });
+    await prisma.formule.deleteMany({ where: { ligneId: ligneActiveId } });
     await prisma.ligne.deleteMany({ where: { compteId } });
     await prisma.compteClient.delete({ where: { id: compteId } });
   });
@@ -114,17 +107,41 @@ describe("DemandeWorkflowService.soumettre — R13/R14/R15/R17 + instanciation",
     return detail.demande.id;
   }
 
-  it("R14 + R17 — rejette une soumission sans commentaire et sans ligne retenue", async () => {
+  it("R14 — rejette une soumission sans commentaire", async () => {
     const demandeId = await creerDemandeBrouillon();
     await expect(workflow.soumettre(demandeId, acteur)).rejects.toMatchObject({
       response: {
         code: "REGLE_METIER_VIOLEE",
-        details: expect.arrayContaining([
-          expect.objectContaining({ code: "R14_COMMENTAIRE_REQUIS" }),
-          expect.objectContaining({ code: "R17_FORMULE_REQUISE" })
-        ])
+        details: expect.arrayContaining([expect.objectContaining({ code: "R14_COMMENTAIRE_REQUIS" })])
       }
     });
+  });
+
+  // R17/R15 abandonnées (Priorité 2, 19/08/2026) — un dossier sans aucune
+  // ligne, montant fourni directement, n'est plus rejeté pour cette raison.
+  // Preuve négative : demande.lignes reste vide tout du long, jamais
+  // peuplée, et la soumission n'échoue pas pour ce motif (elle échoue encore
+  // sur R14/SOUS_FLUX_REQUIS/R13, non liés aux lignes — testés séparément).
+  it("R17/R15 — une soumission sans aucune ligne n'est plus rejetée pour ce motif (montant direct)", async () => {
+    const detail = await demandeService.creer(
+      { circuit: "DOBB", nomClient: "Client Test", compteClient: compteId, motifId, sousFlux: "Réclamation B2B", montantHt: 25000 },
+      acteur.id
+    );
+    const demandeId = detail.demande.id;
+    expect(detail.lignes).toHaveLength(0);
+    await demandeService.modifier(demandeId, { commentaire: "Montant direct, aucune ligne." }, acteur.id);
+    await piece.ajouter(
+      demandeId,
+      { originalname: "facture.pdf", mimetype: "application/pdf", size: 100, buffer: Buffer.from("test") },
+      pieceAfferenteId
+    );
+
+    const reponse = await workflow.soumettre(demandeId, acteur);
+    expect(reponse.statut).toBe("SOUMIS");
+
+    const demandeApres = await prisma.demande.findUniqueOrThrow({ where: { id: demandeId } });
+    expect(await prisma.demandeLigne.count({ where: { demandeId } })).toBe(0);
+    expect(Number(demandeApres.montantHt)).toBe(25000);
   });
 
   it("SOUS_FLUX_REQUIS — rejette une soumission sans sous-flux (obligatoire à la soumission, pas à la création)", async () => {
@@ -166,28 +183,6 @@ describe("DemandeWorkflowService.soumettre — R13/R14/R15/R17 + instanciation",
       response: {
         code: "REGLE_METIER_VIOLEE",
         details: expect.arrayContaining([expect.objectContaining({ code: "R13_PIECES_MANQUANTES" })])
-      }
-    });
-  });
-
-  it("R15 — bloque une ligne RESILIE sous la politique BLOQUANT (défaut)", async () => {
-    const demandeId = await creerDemandeBrouillon();
-    await demandeService.modifier(demandeId, { commentaire: "Correction sur ligne résiliée." }, acteur.id);
-    await demandeLigneService.definirLignes(
-      demandeId,
-      { lignes: [{ ligneId: ligneResilieeId, formuleId: formuleResilieeId, recurrent: 15000, montantHtLigne: 15000 }] },
-      acteur.id
-    );
-    await piece.ajouter(
-      demandeId,
-      { originalname: "facture.pdf", mimetype: "application/pdf", size: 100, buffer: Buffer.from("test") },
-      pieceAfferenteId
-    );
-
-    await expect(workflow.soumettre(demandeId, acteur)).rejects.toMatchObject({
-      response: {
-        code: "REGLE_METIER_VIOLEE",
-        details: expect.arrayContaining([expect.objectContaining({ code: "R15_LIGNE_RESILIEE" })])
       }
     });
   });

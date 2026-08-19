@@ -671,10 +671,18 @@ model Demande {
   dateReceptionOci       DateTime?         @map("date_reception_oci") @db.Date
   formuleAbonnement      String?           @map("formule_abonnement")
   numeroAppel            String?           @map("numero_appel")
+  // Recherche client (Priorité 2, 19/08/2026) — clé secondaire facultative,
+  // purement indicative (JadePort en attente d'arbitrage, cf. CLAUDE.md) :
+  // préremplit nom/compte au même titre que compteClient, jamais une FK.
+  numeroCase             String?           @map("numero_case")
   debutPeriodeContestee  DateTime?         @map("debut_periode_contestee") @db.Date
   finPeriodeContestee    DateTime?         @map("fin_periode_contestee") @db.Date
   periodeContesteeJours  Int?              @map("periode_contestee_jours")
-  recurrentMensuel       Boolean           @default(false) @map("recurrent_mensuel")
+  // Montant (FCFA), pas un indicateur booléen — décision Priorité 2
+  // (19/08/2026) : la maquette (screens1.jsx) montre un montant récurrent
+  // mensuel HT, jamais une simple case à cocher. Migration de type sur une
+  // colonne déjà seedée par défaut à false/0 — aucune donnée réelle à migrer.
+  recurrentMensuel       Decimal           @default(0) @map("recurrent_mensuel") @db.Decimal(15, 2)
   champsCircuit          Json              @default("{}") @map("champs_circuit")
   montantHt              Decimal           @default(0) @map("montant_ht") @db.Decimal(15, 2)
   montantTsc             Decimal           @default(0) @map("montant_tsc") @db.Decimal(15, 2)

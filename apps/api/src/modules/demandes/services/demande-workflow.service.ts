@@ -37,7 +37,7 @@ export class DemandeWorkflowService {
   // contrôles → sélection du palier → instanciation de la chaîne → SLA
   // première étape → journal d'audit.
   async soumettre(demandeId: string, acteur: ActeurAudit): Promise<SoumissionReponse> {
-    const demande = await this.prisma.demande.findUnique({ where: { id: demandeId }, include: { lignes: true } });
+    const demande = await this.prisma.demande.findUnique({ where: { id: demandeId } });
     if (!demande) {
       throw new NotFoundException({ code: "DEMANDE_INTROUVABLE", message: "Demande introuvable." });
     }
@@ -63,33 +63,14 @@ export class DemandeWorkflowService {
       erreurs.push({ code: "SOUS_FLUX_REQUIS", message: "Le sous-flux est obligatoire à la soumission." });
     }
 
-    if (demande.lignes.length === 0) {
-      erreurs.push({ code: "R17_FORMULE_REQUISE", message: "Aucune ligne retenue avec formule sélectionnée." });
-    }
-
-    const ligneResiliee = demande.lignes.some((l) => l.statutLigne === "RESILIE");
-    if (ligneResiliee) {
-      const politique = await this.prisma.parametreGlobal.findUniqueOrThrow({
-        where: { cle: "politique_ligne_resiliee" }
-      });
-      const mode = (politique.valeur as { mode?: string }).mode;
-
-      if (mode === "BLOQUANT") {
-        erreurs.push({
-          code: "R15_LIGNE_RESILIEE",
-          message: "Au moins une ligne retenue est résiliée — soumission bloquée par la politique en vigueur."
-        });
-      } else if (mode === "JUSTIFICATION_RENFORCEE") {
-        const nbPieces = await this.prisma.pieceJointe.count({ where: { demandeId } });
-        const commentaireOk = !!demande.commentaire && demande.commentaire.trim() !== "";
-        if (!commentaireOk || nbPieces === 0) {
-          erreurs.push({
-            code: "R15_JUSTIFICATION_REQUISE",
-            message: "Ligne résiliée : commentaire et au moins une pièce jointe requis (justification renforcée)."
-          });
-        }
-      }
-    }
+    // R17 (formule requise par ligne retenue) et R15 (ligne résiliée →
+    // bloquée/justification renforcée) abandonnées — décision métier
+    // confirmée après consultation des directions (Priorité 2, 19/08/2026,
+    // cf. CLAUDE.md « Fiches d'ajustement — abandon du rattachement à une
+    // ligne réelle »). demande.lignes est structurellement toujours vide
+    // pour un dossier créé sous le nouveau flux (montant/formule en saisie
+    // libre) ; le statut d'une ligne au moment d'un dégrèvement n'est plus
+    // vérifié par le système, entièrement laissé au jugement de l'agent.
 
     const piecesManquantes = await this.pieceService.piecesManquantes(demandeId);
     if (piecesManquantes.length > 0) {

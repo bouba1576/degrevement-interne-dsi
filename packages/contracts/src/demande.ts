@@ -25,6 +25,10 @@ export const creerDemandeRequeteSchema = z.object({
   sousFlux: z.string().optional(),
   nomClient: z.string().min(1, "Le nom du client est requis"),
   compteClient: z.string().optional(),
+  // Recherche client par n° de case (Priorité 2, 19/08/2026) — clé
+  // secondaire facultative, purement indicative, jamais une FK (cf.
+  // schema.prisma).
+  numeroCase: z.string().optional(),
   agentInitiateur: z.string().optional(),
   matriculeInitiateur: z.string().optional(),
   agentSaisie: z.string().optional(),
@@ -36,7 +40,9 @@ export const creerDemandeRequeteSchema = z.object({
   numeroAppel: z.string().optional(),
   debutPeriodeContestee: z.string().optional(),
   finPeriodeContestee: z.string().optional(),
-  recurrentMensuel: z.boolean().optional(),
+  // Montant (FCFA), pas un booléen — décision Priorité 2 (19/08/2026),
+  // aligné sur la maquette (screens1.jsx, "Montant récurrent mensuel (HT)").
+  recurrentMensuel: z.number().nonnegative().optional(),
   libelle: z.string().optional(),
   motifId: z.string().uuid().optional(),
   universFmiCode: z.string().optional(),
@@ -49,6 +55,11 @@ export const creerDemandeRequeteSchema = z.object({
   responsabiliteServiceAutre: z.string().optional(),
   agentResponsable: z.string().optional(),
   commentaire: z.string().optional(),
+  // Montant à ajuster HT, saisie libre au niveau du dossier — remplace
+  // l'agrégation de lignes retenues (R18, abandonnée, cf. CLAUDE.md
+  // « Fiches d'ajustement — abandon du rattachement à une ligne réelle »).
+  // R8 (plancher 0) : nonnegative(), jamais négatif.
+  montantHt: z.number().nonnegative().optional(),
   champsCircuit: z.record(z.string(), z.unknown()).optional()
 });
 export type CreerDemandeRequete = z.infer<typeof creerDemandeRequeteSchema>;
@@ -110,6 +121,7 @@ export const demandeSchema = z.object({
   sousFlux: z.string().nullable(),
   nomClient: z.string(),
   compteClient: z.string().nullable(),
+  numeroCase: z.string().nullable(),
   agentInitiateur: z.string().nullable(),
   matriculeInitiateur: z.string().nullable(),
   agentSaisie: z.string().nullable(),
@@ -122,7 +134,7 @@ export const demandeSchema = z.object({
   debutPeriodeContestee: z.string().nullable(),
   finPeriodeContestee: z.string().nullable(),
   periodeContesteeJours: z.number().nullable(),
-  recurrentMensuel: z.boolean(),
+  recurrentMensuel: z.number(),
   champsCircuit: z.record(z.string(), z.unknown()),
   montantHt: z.number(),
   montantTsc: z.number(),
