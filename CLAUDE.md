@@ -408,6 +408,25 @@ Réponse succès (forme confirmée) :
 
 **Script de vérification isolé, écrit mais jamais exécuté avec succès (hôte injoignable)** : scratchpad de session, jamais commité, jamais dans `apps/` — POST paramétré par variables d'environnement (`AD_TEST_URI`/`AD_TEST_USERNAME`/`AD_TEST_PASSWORD`, aucun identifiant en dur), affiche la réponse brute (statut HTTP, en-têtes, corps, tentative de parse JSON) sans aucune logique d'interprétation. À exécuter depuis un poste sur le réseau interne, avec de vrais identifiants de test, avant d'écrire une seule ligne d'intégration réelle dans `LdapProvider`.
 
+### Joignabilité de l'API AD réelle — changement constaté (19/08/2026)
+
+Le 12/08/2026 (section ci-dessus), `192.168.31.78:8080` était injoignable depuis cet environnement de développement (timeout TCP, pas de route). Le 19/08/2026, ce n'est plus le cas : le conteneur `api` de ce dépôt atteint réellement cet hôte.
+
+**Constaté, pas supposé** : sonde directe depuis l'intérieur du conteneur `api` (`node -e`, `fetch()` avec des identifiants vides — même forme que `AdApiProvider.estDisponible()`, aucun identifiant réel en jeu) vers `http://192.168.31.78:8080/ci.orange.ldap/rs-interface/authenticate` → réponse HTTP réelle reçue, pas un timeout :
+```json
+{"code":"MethodArgumentNotValidException","status":400,"message":"Bad Request",
+ "timestamp":"2026-08-19T11:17:07.408",
+ "invalidParameters":[{"parameter":"password","message":"must not be blank"},
+                       {"parameter":"username","message":"must not be blank"}]}
+```
+Troisième forme réelle d'échec observée (après `IncorrectLoginOrPassword` le même jour) — distincte : ici la requête elle-même est rejetée comme malformée (validation côté fournisseur sur des champs vides), pas les identifiants. `GET /api/health/ready` confirme `ad:true` de façon cohérente avec cette sonde, pas de façon isolée.
+
+**Cause non investiguée, délibérément** : rien dans ce dépôt n'explique ce changement (VPN, règle réseau, changement de topologie côté hôte de développement) — non nécessaire pour ce qui est documenté ici, et deviner serait exactement le genre d'affirmation non vérifiée que ce fichier évite ailleurs. Simple constat daté : injoignable le 12/08, joignable le 19/08, depuis le conteneur `api` de ce dépôt.
+
+**Ce que ça ne change pas** : aucune authentification réelle avec de vrais identifiants n'a encore été tentée depuis cet environnement — voir la section dédiée à la bascule `LDAP_PROVIDER=ad-api` du 19/08/2026 pour l'état de cette vérification précise, distincte de la simple joignabilité réseau constatée ici.
+
+Verrouillé par test — `apps/api/test/ad-api-provider.spec.ts`, describe « forme réelle observée de l'API AD (400 MethodArgumentNotValidException) » : corps exact, refus fermé prouvé, `codeEchec`/`messageEchec` capturés (`"MethodArgumentNotValidException"`/`"Bad Request"`).
+
 ### `identifiantAd` = username brut, pas une adresse e-mail — confirmé et corrigé (19/08/2026)
 
 Confirmé directement par la personne pilotant le projet : l'API AD réelle (section ci-dessus) authentifie sur le **`username`** soumis tel quel dans `{ "username": "", "password": "" }`, jamais une adresse e-mail — cohérent avec le nom même du champ, jamais remarqué comme un signal avant cette confirmation explicite.
@@ -453,7 +472,7 @@ Suite directe de la section précédente : l'intégration réelle qui manquait (
 
 **`estDisponible()`** — décision de conception assumée, pas dans le contrat documenté littéralement : aucun endpoint de santé n'existe pour cette API, et sonder avec de vrais identifiants consommerait un compte réel pour de faux. Sonde donc la seule chose vérifiable sans identifiants réels — que l'API réponde HTTP (quel que soit son verdict) au contrat documenté plutôt que de timeout/refuser la connexion — un signal de joignabilité réseau pour `/api/health/ready`, jamais une validation d'identifiants.
 
-**Vérification — serveur HTTP simulé, pas le vrai système (hôte injoignable depuis cet environnement).** `apps/api/test/ad-api-provider.spec.ts` (18 tests) : un serveur `node:http` local reproduit exactement la forme documentée du succès, plus chaque cas non documenté que la règle d'échec fermé doit couvrir — statut 401/500, `check` absent, `check` booléen `false`/`true`, `check: "false"`, corps vide, corps JSON malformé, corps JSON valide mais non-objet, délai dépassé (timeout). Chaque cas aboutit à un `null` prouvé par assertion, pas supposé. `apps/api/test/ad-api-provider-erreur-reseau.spec.ts` (2 tests, fichier séparé) : `AD_API_URL` pointé sur un port injoignable dès le premier appel du fichier — nécessaire car `loadEnv()` (`packages/config`) mémoïse au premier appel *par registre de modules Jest*, donc par fichier ; changer `AD_API_URL` après le premier test d'un même fichier n'a aucun effet, seul un fichier séparé (nouveau registre) le permet.
+**Vérification — serveur HTTP simulé, pas le vrai système (hôte injoignable depuis cet environnement au moment de ce chantier — cf. section « Joignabilité de l'API AD réelle » plus bas pour l'évolution de ce point précis).** `apps/api/test/ad-api-provider.spec.ts` (21 tests, état au 19/08/2026) : un serveur `node:http` local reproduit exactement la forme documentée du succès, plus chaque cas non documenté que la règle d'échec fermé doit couvrir — statut 401/500, `check` absent, `check` booléen `false`/`true`, `check: "false"`, corps vide, corps JSON malformé, corps JSON valide mais non-objet, délai dépassé (timeout), plus les trois formes d'échec réelles observées ce même jour (`IncorrectLoginOrPassword`, `MethodArgumentNotValidException` — cf. sections dédiées). Chaque cas aboutit à un `null` (puis `{statut:"ECHEC"}` après le passage au type discriminé, cf. section dédiée) prouvé par assertion, pas supposé. `apps/api/test/ad-api-provider-erreur-reseau.spec.ts` (2 tests, fichier séparé) : `AD_API_URL` pointé sur un port injoignable dès le premier appel du fichier — nécessaire car `loadEnv()` (`packages/config`) mémoïse au premier appel *par registre de modules Jest*, donc par fichier ; changer `AD_API_URL` après le premier test d'un même fichier n'a aucun effet, seul un fichier séparé (nouveau registre) le permet.
 
 **Preuve que les tests mordent réellement, pas une hypothèse** : la comparaison centrale (`donnees.check !== "true"`) temporairement inversée (`===`) → 10 des 18 tests de `ad-api-provider.spec.ts` échouent précisément sur les cas qu'ils sont censés couvrir (y compris le cas `check: true` booléen, qui aurait alors accordé l'accès) ; réversion → 20/20 verts (les deux fichiers). Sweep complet revérifié après correctif : `apps/api` 41/41 suites, 254/254 tests ; e2e 7/7, 20/20 ; `pnpm lint`/`pnpm typecheck`/`pnpm build` verts sur les 13 packages/apps ; conteneur `api` redémarré et `GET /api/health/ready` confirme `ad:true` en conditions réelles (LDAP_PROVIDER par défaut, LdapProvider/OpenLDAP dev toujours fonctionnel après le rebranchement par token).
 

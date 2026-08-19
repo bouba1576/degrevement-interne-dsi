@@ -121,6 +121,35 @@ describe("AdApiProvider (serveur HTTP simulé, contrat API AD réelle)", () => {
     });
   });
 
+  // Troisième forme réelle observée (19/08/2026, requête sonde à vide
+  // envoyée directement à l'hôte réel depuis le conteneur api — cf.
+  // CLAUDE.md « Joignabilité de l'API AD réelle »), corps exact, pas une
+  // approximation. Distincte d'IncorrectLoginOrPassword : ici la requête
+  // elle-même est rejetée comme malformée (validation Spring côté
+  // fournisseur, à en juger par le nom de la classe), pas les identifiants
+  // — même verdict d'échec fermé attendu malgré la nature différente.
+  it("ÉCHEC FERMÉ — forme réelle observée de l'API AD (400 MethodArgumentNotValidException), code/message capturés", async () => {
+    prochaine = {
+      statut: 400,
+      corps: JSON.stringify({
+        code: "MethodArgumentNotValidException",
+        status: 400,
+        message: "Bad Request",
+        timestamp: "2026-08-19T11:17:07.408",
+        invalidParameters: [
+          { parameter: "password", message: "must not be blank" },
+          { parameter: "username", message: "must not be blank" }
+        ]
+      })
+    };
+    const resultat = await provider.authentifier("", "");
+    expect(resultat).toEqual({
+      statut: "ECHEC",
+      codeEchec: "MethodArgumentNotValidException",
+      messageEchec: "Bad Request"
+    });
+  });
+
   it("ÉCHEC FERMÉ — champ check absent du corps", async () => {
     prochaine = { statut: 200, corps: JSON.stringify({ nom: "X", prenom: "Y" }) };
     const resultat = await provider.authentifier("x", "x");
