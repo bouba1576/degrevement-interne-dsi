@@ -6,6 +6,7 @@ import { Badge, Icon, Money } from "@pgd/ui";
 import type {
   CircuitVue,
   CompteClient,
+  CreerDemandeRequete,
   DemandeDetail,
   DirectionResponsabiliteVue,
   EnumAssietteTva,
@@ -23,7 +24,6 @@ import type {
 import {
   ApiError,
   creerDemande,
-  definirLignes,
   erreurRegleMetierSchema,
   listerCircuitsReferentiel,
   listerDirectionsReferentiel,
@@ -32,14 +32,13 @@ import {
   listerMotifsActifs,
   listerSousFluxReferentiel,
   listerUniversFmi,
+  modifierDemande,
   modifierTaxes,
   obtenirParametresCalculReferentiel,
   soumettreDemande,
   type ErreurRegleMetier
 } from "@/lib/api";
 import { RechercheCompte } from "./RechercheCompte";
-import { RechercheNd } from "./RechercheNd";
-import { SelecteurLignes, montantLigneParDefaut, montantLigneValide, type LigneLocale } from "./SelecteurLignes";
 import { ApercuRoutage } from "./ApercuRoutage";
 import { PiecesTab } from "../dossier-detail/PiecesTab";
 
@@ -77,14 +76,14 @@ function circuitParDefaut(roles: string[]): EnumCircuit {
   return "DXC";
 }
 
-// Carte « Mémo Wholesale » (Phase 10.6, étape E, DF uniquement) — aucun de
-// ces champs n'a de colonne dédiée dans creerDemandeRequeteSchema (vérifié,
-// zéro occurrence de memoDe/memoA/memoObjectif/memoContexte/memoObservation
-// dans packages/contracts/src/demande.ts). Persistés via `champsCircuit`
-// (sac JSON, demande.service.ts:60/300/404 — prévu explicitement pour « les
-// champs_circuit non promus en colonnes »). Le stockage non typé côté
-// serveur n'est pas une raison de saisir sans garantie : ce schéma est la
-// SEULE validation de forme sur ces champs avant l'envoi.
+// Carte « Mémo Wholesale » (DF uniquement) — aucun de ces champs n'a de
+// colonne dédiée dans creerDemandeRequeteSchema (vérifié, zéro occurrence de
+// memoDe/memoA/memoObjectif/memoContexte/memoObservation dans packages/
+// contracts/src/demande.ts). Persistés via `champsCircuit` (sac JSON,
+// demande.service.ts — prévu explicitement pour « les champs_circuit non
+// promus en colonnes »). Le stockage non typé côté serveur n'est pas une
+// raison de saisir sans garantie : ce schéma est la SEULE validation de
+// forme sur ces champs avant l'envoi.
 const champsCircuitDfSchema = z.object({
   memoDe: z.string().trim().optional(),
   memoA: z.string().trim().optional(),
@@ -108,22 +107,22 @@ const champsCircuitDfSchema = z.object({
 });
 type ChampsCircuitDf = z.infer<typeof champsCircuitDfSchema>;
 
+// Carte « B2B » (DOBB uniquement) — même principe que champsCircuitDfSchema :
+// ni descriptifContestation ni pointContact n'ont de colonne dédiée
+// (screens1.jsx:378/386), tous deux facultatifs dans la maquette (pas de
+// `req`). pointContact reste un texte libre plutôt qu'un nouveau référentiel
+// admin (décision Priorité 2, 19/08/2026) — cohérent avec le traitement de
+// descriptifContestation, jamais construits comme colonnes dédiées.
+const champsCircuitDobbSchema = z.object({
+  descriptifContestation: z.string().trim().optional(),
+  pointContact: z.string().trim().optional()
+});
+type ChampsCircuitDobb = z.infer<typeof champsCircuitDobbSchema>;
+
 export interface NouvelleDemandeScreenProps {
   utilisateur: SessionUtilisateur;
 }
 
-// Pas de POST /api/demandes au premier écran du formulaire : trouvé en
-// vérification live (Phase 9.2) qu'un BROUILLON créé ainsi pollue la famille
-// KPI « reçus » (RECUS_VOLUME/RECUS_MONTANT_*, aucun filtre de statut côté
-// KpiEngineService — vérifié, et volontaire : kpi-engine.integration.spec.ts
-// l'exige) et qu'il n'existe AUCUN moyen réel de le supprimer (`abandonner()`
-// exclut explicitement BROUILLON — DEMANDE_NON_ELIGIBLE, vérifié en direct).
-// Un BROUILLON créé puis jamais retouché est donc permanent. Repousser la
-// création au premier "Enregistrer les lignes" (au lieu du formulaire
-// minimal) réduit fortement — sans rien changer côté serveur — le nombre de
-// brouillons orphelins : fermer l'onglet avant d'avoir défini une seule
-// ligne ne laisse plus aucune trace. La suppression réelle d'un brouillon
-// reste une question ouverte (CLAUDE.md), pas résolue ici.
 // Date du jour au format YYYY-MM-DD (fuseau local, pas UTC) — valeur par
 // défaut d'un <input type="date">, jamais toISOString().slice(0,10) qui
 // bascule sur UTC et peut afficher la veille selon l'heure/le fuseau.
@@ -133,6 +132,21 @@ function dateDuJourLocale(): string {
   const jour = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${mois}-${jour}`;
 }
+
+// Délai du debounce de sauvegarde silencieuse (Priorité 2, option B — cf.
+// CLAUDE.md et l'échange de conception dédié) — vérifié en conditions
+// réelles avant d'être figé, pas réutilisé par défaut sans y penser :
+// 500 ms (même valeur que le panneau Taxes, PATCH .../taxes) reste
+// approprié même avec ~20 champs debouncés ensemble plutôt que ~6, parce
+// que TOUS les champs partagent UN SEUL minuteur (un seul setTimeout,
+// remis à zéro par chaque frappe/changement, quel que soit le champ
+// touché) — le nombre de champs n'affecte donc jamais la fréquence des
+// appels réseau, seule la cadence de saisie de l'utilisateur le fait,
+// exactement comme pour le panneau Taxes. Vérifié en direct (Priorité 2,
+// clôture) : remplissage de 8 champs à un rythme humain normal (avec des
+// pauses entre champs dépassant 500 ms) → exactement 1 création puis 1
+// PATCH consolidé par pause réelle, jamais un appel par champ.
+const DELAI_SAUVEGARDE_MS = 500;
 
 interface TaxesEdition {
   tscActive: boolean;
@@ -148,31 +162,14 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
   const [circuit, setCircuit] = useState<EnumCircuit>(() => circuitParDefaut(utilisateur.roles));
   const [nomClient, setNomClient] = useState("");
   const [commentaire, setCommentaire] = useState("");
-  // Inventaire champ par champ (Phase 10.6sexies) — "Date de demande" éditable
-  // de la maquette, requise ; pré-remplie à aujourd'hui, modifiable avant la
-  // création du dossier (creerDemandeRequeteSchema.dateDemande, optionnel côté
-  // serveur — défaut now() si absent). "Date de saisie" (creeLe) est distincte,
-  // immuable, affichée en lecture seule une fois le dossier créé.
   const [dateDemande, setDateDemande] = useState(dateDuJourLocale);
-  // PGD-032/SF-PGD-330 — jusqu'à l'étape C/D (Phase 10.6), aucun endpoint ne
-  // listait les services référentiels réels : seul le chemin "Autre" (texte
-  // libre) était actionnable. `GET /api/referentiels/directions` (Phase A)
-  // ouvre désormais un vrai select ci-dessous ; "Autre" reste pour le cas non
-  // référencé, les deux sont mutuellement exclusifs (choisir l'un vide
-  // l'autre — le serveur l'impose déjà via `normaliserServiceResponsable`,
-  // repris ici côté UI pour ne jamais donner l'impression que les deux sont
-  // actifs à la fois). Vérifié en direct (Phase 9.2) : décocher puis recocher
-  // "Autre" rouvre un champ vide, pas la valeur précédente.
+  // PGD-032/SF-PGD-330 — "Autre" (texte libre) reste mutuellement exclusif
+  // avec un service référentiel réel, imposé par le serveur
+  // (normaliserServiceResponsable) et repris ici côté UI.
   const [serviceAutreActif, setServiceAutreActif] = useState(false);
   const [responsabiliteServiceAutre, setResponsabiliteServiceAutre] = useState("");
 
-  // Carte « Identification » (Phase 10.6, étape B) — champs communs aux trois
-  // circuits, tous déjà présents dans creerDemandeRequeteSchema (packages/
-  // contracts/src/demande.ts), aucun n'était câblé avant ce tour. Aucune
-  // validation conditionnelle par circuit côté serveur (vérifié — le schéma
-  // ne porte ni .refine() ni .superRefine(), chaque champ est .optional()
-  // uniformément) : rien à reproduire ici au-delà de ce que le schéma exige
-  // déjà (seul nomClient est requis, inchangé).
+  // Carte « Identification » — champs communs aux trois circuits.
   const [agentInitiateur, setAgentInitiateur] = useState(utilisateur.nom);
   const [matriculeInitiateur, setMatriculeInitiateur] = useState("");
   const [agentSaisie, setAgentSaisie] = useState(utilisateur.nom);
@@ -203,25 +200,20 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
     void listerMotifsActifs(circuit).then(setMotifs);
   }, [circuit]);
 
-  // LIBELLE (docs/10 remarques DOBB #3 / DXC #16, Phase 10.6ter) — même
-  // mécanique que Motif : référentiel réel scopé au circuit, jamais un
-  // tableau codé en dur (règle non négociable 1 / R11, cf. CLAUDE.md
-  // « Configurabilité complète »). DF exclu côté API (aucun libellé seedé
-  // pour ce circuit — son formulaire utilise « Objet », un texte libre).
+  // LIBELLE (docs/10 remarques DOBB #3 / DXC #16) — même mécanique que
+  // Motif : référentiel réel scopé au circuit, jamais un tableau codé en
+  // dur (R11). DF exclu côté API (aucun libellé seedé pour ce circuit — son
+  // formulaire utilise « Objet », un texte libre).
   useEffect(() => {
     setLibelle("");
     setLibellesAjustement(null);
     void listerLibellesAjustementActifs(circuit).then(setLibellesAjustement);
   }, [circuit]);
 
-  // Sous-flux (14/08/2026, champ sousFluxId sur Utilisateur) — même mécanique
-  // que motifs/libellés : référentiel réel scopé au circuit, jamais un
-  // tableau codé en dur. Préremplissage depuis le profil de session
-  // (utilisateur.sousFluxId, JWT — jamais résolu à la lecture, cf. CLAUDE.md
-  // « cohérence plutôt que fraîcheur ») uniquement si l'entrée référentielle
-  // correspond au circuit actuellement sélectionné ; sinon aucune
-  // présélection, l'initiateur choisit manuellement. Reste éditable dans
-  // tous les cas — un préremplissage n'est jamais une valeur figée.
+  // Sous-flux — même mécanique que motifs/libellés : référentiel réel scopé
+  // au circuit. Préremplissage depuis le profil de session
+  // (utilisateur.sousFluxId, JWT) uniquement si l'entrée référentielle
+  // correspond au circuit sélectionné ; reste éditable dans tous les cas.
   useEffect(() => {
     setSousFlux("");
     setSousFluxOptions(null);
@@ -234,16 +226,23 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
 
   const motifSelectionne = motifs?.find((m) => m.id === motifId) ?? null;
 
-  // Carte « DOBB/DXC » (Phase 10.6, étape C/D) — champs partagés par les deux
-  // circuits (compteClient/formuleAbonnement/recurrentMensuel/direction+
-  // service), plus les champs propres à DOBB seul (localisation/canalRemontee/
-  // dates réception/numeroAppel). DF exclu : sa maquette ne montre aucun de
-  // ces champs (mémo distinct, cf. « E », question ouverte séparée) — pas de
-  // règle serveur qui les interdise pour DF, mais aucune source ne les y
-  // montre non plus, donc pas construits pour DF ici.
+  // Carte « DOBB/DXC » — champs partagés par les deux circuits
+  // (compteClient/numeroCase/formuleAbonnement/recurrentMensuel/direction+
+  // service), plus les champs propres à DOBB seul. DF exclu : sa maquette ne
+  // montre aucun de ces champs (mémo distinct, carte séparée plus bas).
   const [compteClient, setCompteClient] = useState("");
+  // Recherche client secondaire (Priorité 2, 19/08/2026, décision métier) —
+  // remplace la recherche par ND. Purement indicative pour la préremplissage
+  // (nom/compte) : aucune recherche RÉELLE par ce champ n'est câblée ici
+  // (RechercheCompte reste scopé compte/nom, cf. son propre commentaire) —
+  // la clé "recherche par numéro de case" reste bloquée par le même vide
+  // JadePort déjà documenté (CLAUDE.md § Questions ouvertes), pas résolu par
+  // ce chantier. Le champ lui-même (stockage/affichage) est réel.
+  const [numeroCase, setNumeroCase] = useState("");
   const [formuleAbonnement, setFormuleAbonnement] = useState("");
-  const [recurrentMensuel, setRecurrentMensuel] = useState(false);
+  // Montant (FCFA), pas un booléen (Priorité 2, 19/08/2026, décision métier)
+  // — aligné sur la maquette (screens1.jsx, "Montant récurrent mensuel (HT)").
+  const [recurrentMensuel, setRecurrentMensuel] = useState("");
   const [directionRespId, setDirectionRespId] = useState("");
   const [serviceRespId, setServiceRespId] = useState("");
   const [localisation, setLocalisation] = useState<EnumLocalisation | "">("");
@@ -251,6 +250,15 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
   const [dateReceptionBo, setDateReceptionBo] = useState("");
   const [dateReceptionOci, setDateReceptionOci] = useState("");
   const [numeroAppel, setNumeroAppel] = useState("");
+  // DOBB uniquement (screens1.jsx:378/383-386) — champsCircuitDobbSchema
+  // pour descriptifContestation/pointContact, colonnes réelles existantes
+  // pour les deux dates de période contestée (periodeContesteeJours reste
+  // calculé serveur, jamais une saisie manuelle — décision déjà actée).
+  const [descriptifContestation, setDescriptifContestation] = useState("");
+  const [debutPeriodeContestee, setDebutPeriodeContestee] = useState("");
+  const [finPeriodeContestee, setFinPeriodeContestee] = useState("");
+  const [pointContact, setPointContact] = useState("");
+  const [agentResponsable, setAgentResponsable] = useState("");
 
   const [directions, setDirections] = useState<DirectionResponsabiliteVue[] | null>(null);
 
@@ -259,11 +267,9 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
     void listerDirectionsReferentiel().then(setDirections);
   }, []);
 
-  // Inventaire champ par champ (Phase 10.6sexies) — badge de code process
-  // ("PO2_B-17", etc.) sur la carte Identification, absent avant ce tour.
-  // Circuit.processCode est déjà une donnée admin réelle (AdminCircuitsController,
-  // ModifierCircuitRequete.processCode) : jamais un tableau codé en dur ici,
-  // même principe de configurabilité complète que le reste de l'écran.
+  // Badge de code process ("PO2_B-17", etc.) sur la carte Identification —
+  // Circuit.processCode est une donnée admin réelle (AdminCircuitsController),
+  // jamais un tableau codé en dur.
   const [circuits, setCircuits] = useState<CircuitVue[] | null>(null);
   useEffect(() => {
     void listerCircuitsReferentiel().then(setCircuits);
@@ -272,8 +278,8 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
 
   const directionSelectionnee = directions?.find((d) => d.id === directionRespId) ?? null;
 
-  // Carte « Mémo Wholesale » (Phase 10.6, étape E) — DF uniquement, cf.
-  // champsCircuitDfSchema ci-dessus pour la validation avant envoi.
+  // Carte « Mémo Wholesale » — DF uniquement, cf. champsCircuitDfSchema
+  // ci-dessus pour la validation avant envoi.
   const [memoDe, setMemoDe] = useState(utilisateur.nom);
   const [memoA, setMemoA] = useState("Service Fraude & Revenue Assurance");
   const [memoObjectif, setMemoObjectif] = useState("Soumettre l'ajustement au contrôle FRA");
@@ -281,10 +287,16 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
   const [memoObservation, setMemoObservation] = useState("");
   const [montantXof, setMontantXof] = useState("");
 
+  // Carte « Montant à ajuster » — Priorité 2 (19/08/2026, décision métier
+  // confirmée) : remplace RechercheNd/SelecteurLignes/Lignes retenues,
+  // saisie libre au niveau du dossier plutôt que dérivée d'une somme de
+  // lignes (R18 abandonnée, cf. CLAUDE.md « Fiches d'ajustement — abandon
+  // du rattachement à une ligne réelle »).
+  const [montantHt, setMontantHt] = useState("");
+
   // « Taxes appliquées » (panneau latéral) — lecture seule, jamais un
-  // override : point 2 de la décomposition, cf. commit dédié
-  // (GET /api/referentiels/parametres-calcul/:circuit, projection à 4
-  // champs). Rechargé à chaque changement de circuit, indépendant de
+  // override : GET /api/referentiels/parametres-calcul/:circuit, projection
+  // à 4 champs. Rechargé à chaque changement de circuit, indépendant de
   // `demande` (une donnée de circuit, pas de dossier).
   const [parametresCalcul, setParametresCalcul] = useState<ParametresCalculPublicVue | null>(null);
   useEffect(() => {
@@ -316,18 +328,29 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
     if (id) toggleServiceAutre(false);
   }
 
+  function toggleServiceAutre(actif: boolean) {
+    setServiceAutreActif(actif);
+    // "masqué ET vidé" (PGD-032) : une valeur résiduelle non visible qui
+    // partirait quand même à la sauvegarde serait invisible à l'œil, donc on
+    // la vide ici, pas seulement en CSS.
+    if (!actif) setResponsabiliteServiceAutre("");
+    else setServiceRespId("");
+  }
+
   const [demande, setDemande] = useState<DemandeDetail | null>(null);
-  const [lignesLocales, setLignesLocales] = useState<LigneLocale[]>([]);
-  const [enregistrement, setEnregistrement] = useState(false);
-  const [erreurEnregistrement, setErreurEnregistrement] = useState<string | null>(null);
+  const demandeRef = useRef<DemandeDetail | null>(null);
+  useEffect(() => {
+    demandeRef.current = demande;
+  }, [demande]);
+
+  const [sauvegardeEnCours, setSauvegardeEnCours] = useState(false);
+  const [erreurSauvegarde, setErreurSauvegarde] = useState<string | null>(null);
 
   // Mécanisme entièrement automatique (règle permanente CLAUDE.md
-  // « mécanismes d'interaction contraignants », plus aucun bouton manuel
-  // nulle part sur ce panneau) — l'aperçu de routage se relance à chaque
-  // sauvegarde réussie qui touche un champ pertinent au routage (lignes,
-  // taxes), y compris la toute première fois que le panneau apparaît (cf.
-  // ApercuRoutage.tsx). Compteur opaque : tout incrément relance
-  // previsualiser() côté enfant.
+  // « mécanismes d'interaction contraignants ») — l'aperçu de routage se
+  // relance à chaque sauvegarde réussie, y compris la toute première fois
+  // que le panneau apparaît (cf. ApercuRoutage.tsx). Compteur opaque : tout
+  // incrément relance previsualiser() côté enfant.
   const [apercuDeclencheur, setApercuDeclencheur] = useState(0);
 
   const [soumissionEnCours, setSoumissionEnCours] = useState(false);
@@ -335,31 +358,15 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
   const [erreursSoumission, setErreursSoumission] = useState<ErreurRegleMetier[] | null>(null);
   const [erreurSoumissionUnique, setErreurSoumissionUnique] = useState<string | null>(null);
 
-  // Panneau « Taxes appliquées » (Phase 10.6septies, confirmation métier
-  // docs/10 DOBB #1/#2/#6) — interactif dès qu'un dossier existe, câblé sur
-  // PATCH /api/demandes/{id}/taxes (DemandeWorkflowService.modifierTaxes, R25).
-  // Resynchronisé depuis le serveur à chaque changement d'objet `demande`
-  // (création initiale, ré-enregistrement de lignes, sauvegarde des taxes
-  // elle-même) — jamais pendant la frappe, `demande` ne change que sur ces
-  // trois événements explicites, aucun risque d'écraser une saisie en cours.
+  // Panneau « Taxes appliquées » — interactif dès qu'un dossier existe,
+  // câblé sur PATCH /api/demandes/{id}/taxes (DemandeWorkflowService.
+  // modifierTaxes, R25). Resynchronisé depuis le serveur à chaque
+  // changement d'objet `demande` — jamais pendant la frappe.
   const [taxesEdition, setTaxesEdition] = useState<TaxesEdition | null>(null);
   const [enregistrementTaxes, setEnregistrementTaxes] = useState(false);
   const [erreurTaxes, setErreurTaxes] = useState<string | null>(null);
 
-  // Refs toujours à jour au moment où le debounce se déclenche (règle
-  // permanente CLAUDE.md « mécanismes d'interaction contraignants » — plus
-  // de bouton manuel, cf. plus bas) : un `setTimeout` planifié depuis un
-  // gestionnaire d'événement capture les fermetures (closures) de CE
-  // rendu-là, qui deviennent périmées dès le rendu suivant. Lire depuis un
-  // ref au moment où le timeout se déclenche, plutôt que depuis l'état React
-  // fermé à la planification, garantit que la sauvegarde porte toujours sur
-  // la dernière valeur réellement saisie, pas sur un instantané obsolète.
   const taxesEditionRef = useRef<TaxesEdition | null>(null);
-  const demandeRef = useRef<DemandeDetail | null>(null);
-  useEffect(() => {
-    demandeRef.current = demande;
-  }, [demande]);
-
   const debounceTaxesRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
     () => () => {
@@ -392,13 +399,8 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
   // avant d'être ajoutée ici plutôt que supposée. tauxTsc/tauxTva viennent du
   // DOSSIER (demande.demande, figés à sa création/dernier recalcul), jamais
   // de ParametresCalculPublicVue (le défaut COURANT du circuit, potentiellement
-  // différent). Purement illustratif tant que "Enregistrer" n'a pas été
-  // cliqué — les montants réellement appliqués restent demande.demande.montantTsc/Tva/Ttc.
-  //
-  // La saisie manuelle reste subordonnée à l'interrupteur "actif" — jamais un
-  // bypass (inventaire champ par champ, Phase 10.6septies clôture, vérifié
-  // contre docs/design/screens1.jsx:158-159) : taxe inactive → 0, même si un
-  // montant manuel est encore renseigné dans le champ.
+  // différent). Purement illustratif — les montants réellement appliqués
+  // restent demande.demande.montantTsc/Tva/Ttc.
   function previsualiserTaxes(e: TaxesEdition) {
     if (!demande) return { tsc: 0, tva: 0, ttc: 0, assietteAffichable: false };
     const ht = demande.demande.montantHt;
@@ -415,10 +417,6 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
       : e.tvaManuelle
         ? Math.max(0, Number(e.montantTvaManuel) || 0)
         : Math.max(0, Math.round(assiette * tauxTva * 100) / 100);
-    // Ligne "HT + TSC" affichée seulement quand l'ancienne règle est
-    // réellement en jeu (screens1.jsx:529 : f.applyTsc && f.applyTva &&
-    // f.tvaBase === "htTsc") — jamais en saisie manuelle de la TVA, où
-    // l'assiette n'entre plus dans le calcul affiché.
     const assietteAffichable = e.tscActive && e.tvaActive && e.assietteTva === "HT_TSC" && !e.tvaManuelle;
     return { tsc, tva, ttc: Math.max(0, ht + tsc + tva), assiette, assietteAffichable };
   }
@@ -448,31 +446,14 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
     }
   }
 
-  // Debounce (règle permanente CLAUDE.md « mécanismes d'interaction
-  // contraignants ») — l'écriture serveur (PATCH .../taxes, HISTORIQUE_MONTANT
-  // R25) reste réelle mais devient différée et regroupée : plusieurs
-  // bascules rapprochées (interrupteurs, assiette, saisie manuelle)
-  // produisent UNE SEULE requête — donc une seule entrée d'audit — portant
-  // sur l'état final après la dernière modification, jamais une par
-  // clic/frappe intermédiaire. L'aperçu client (`previsualiserTaxes`) reste
-  // instantané et purement local, aucun appel réseau : seule la
-  // persistance est différée, jamais l'affichage.
   function planifierSauvegardeTaxes() {
     if (debounceTaxesRef.current) clearTimeout(debounceTaxesRef.current);
     debounceTaxesRef.current = setTimeout(() => {
       debounceTaxesRef.current = null;
       void handleEnregistrerTaxes();
-    }, 500);
+    }, DELAI_SAUVEGARDE_MS);
   }
 
-  // Point de passage unique pour toute modification du panneau Taxes issue
-  // d'une interaction utilisateur — met à jour l'état ET le ref synchrone
-  // (jamais périmé au moment où le debounce se déclenche), puis planifie la
-  // sauvegarde. Ne jamais appeler `setTaxesEdition` directement depuis un
-  // gestionnaire d'interaction : seul l'effet de resynchronisation
-  // serveur ci-dessus a le droit de le faire — lui ne doit jamais planifier
-  // de sauvegarde, sous peine de boucle (sauvegarde → nouvelle `demande` →
-  // resynchronisation → nouvelle sauvegarde → …).
   function mettreAJourTaxes(updater: (s: TaxesEdition) => TaxesEdition) {
     setTaxesEdition((s) => {
       if (!s) return s;
@@ -483,119 +464,155 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
     planifierSauvegardeTaxes();
   }
 
-  // onBlur du champ « Montant HT » d'une ligne (résolution du mécanisme
-  // Prévisualiser, feu vert utilisateur) — ne sauvegarde QUE si le dossier
-  // existe déjà : avant la première sauvegarde explicite, créer le dossier
-  // silencieusement au blur reproduirait exactement le risque de brouillons
-  // orphelins déjà écarté par la décision de repousser la création au premier
-  // "Enregistrer les lignes" (cf. commentaire au-dessus du composant).
-  async function handleBlurMontantHt() {
-    if (!demande) return;
-    if (lignesLocales.length === 0 || !lignesLocales.every((l) => l.formule !== null && montantLigneValide(l.montant))) return;
-    await handleEnregistrerLignes();
+  // Construit le corps de la sauvegarde silencieuse (création ou
+  // modification, même forme — modifierDemandeRequeteSchema omet seulement
+  // `circuit`) à partir de l'état courant du formulaire. `champsCircuit`
+  // validé avant envoi (mêmes schémas que la validation de soumission
+  // d'avant ce chantier, jamais une réimplémentation).
+  function construirePayload(): { payload: CreerDemandeRequete; erreur: string | null } {
+    let champsCircuit: ChampsCircuitDf | ChampsCircuitDobb | undefined;
+    if (circuit === "DF") {
+      const validation = champsCircuitDfSchema.safeParse({ memoDe, memoA, memoObjectif, memoContexte, memoObservation, montantXof });
+      if (!validation.success) {
+        return { payload: null as never, erreur: validation.error.issues[0]?.message ?? "Champs du mémo invalides." };
+      }
+      champsCircuit = validation.data;
+    } else if (circuit === "DOBB") {
+      champsCircuit = champsCircuitDobbSchema.parse({ descriptifContestation, pointContact });
+    }
+
+    const payload: CreerDemandeRequete = {
+      circuit,
+      dateDemande: dateDemande || undefined,
+      nomClient: nomClient.trim(),
+      compteClient: compteClient.trim() || undefined,
+      numeroCase: numeroCase.trim() || undefined,
+      agentInitiateur: agentInitiateur.trim() || undefined,
+      matriculeInitiateur: matriculeInitiateur.trim() || undefined,
+      agentSaisie: agentSaisie.trim() || undefined,
+      sousFlux: sousFlux.trim() || undefined,
+      localisation: circuit === "DOBB" && localisation ? localisation : undefined,
+      canalRemontee: circuit === "DOBB" ? canalRemontee.trim() || undefined : undefined,
+      dateReceptionBo: circuit === "DOBB" ? dateReceptionBo || undefined : undefined,
+      dateReceptionOci: circuit === "DOBB" ? dateReceptionOci || undefined : undefined,
+      formuleAbonnement: circuit === "DOBB" || circuit === "DXC" ? formuleAbonnement.trim() || undefined : undefined,
+      numeroAppel: circuit === "DOBB" ? numeroAppel.trim() || undefined : undefined,
+      debutPeriodeContestee: circuit === "DOBB" ? debutPeriodeContestee || undefined : undefined,
+      finPeriodeContestee: circuit === "DOBB" ? finPeriodeContestee || undefined : undefined,
+      recurrentMensuel: (circuit === "DOBB" || circuit === "DXC") && recurrentMensuel ? Number(recurrentMensuel) : undefined,
+      libelle: libelle.trim() || undefined,
+      motifId: motifId || undefined,
+      universFmiCode: universFmiCode || undefined,
+      facteurCode: facteurCode || undefined,
+      directionRespId: directionRespId || undefined,
+      serviceRespId: serviceRespId || undefined,
+      responsabiliteServiceAutre: serviceAutreActif ? responsabiliteServiceAutre.trim() || undefined : undefined,
+      agentResponsable: agentResponsable.trim() || undefined,
+      commentaire: commentaire.trim() || undefined,
+      montantHt: montantHt ? Number(montantHt) : undefined,
+      champsCircuit: champsCircuit as Record<string, unknown> | undefined
+    };
+    return { payload, erreur: null };
   }
 
-  function toggleServiceAutre(actif: boolean) {
-    setServiceAutreActif(actif);
-    // "masqué ET vidé" (PGD-032) : une valeur résiduelle non visible qui
-    // partirait quand même à la soumission serait invisible à l'œil, visible
-    // seulement en mesurant — donc on la vide ici, pas seulement en CSS.
-    if (!actif) setResponsabiliteServiceAutre("");
-    // Mutuellement exclusif avec un service réel (étape C/D) — activer
-    // "Autre" invalide toute sélection réelle en cours, même logique que
-    // choisirServiceReel dans l'autre sens.
-    else setServiceRespId("");
-  }
-
-  const infosCompletes = nomClient.trim().length > 0 && commentaire.trim().length > 0;
-
-  async function handleEnregistrerLignes() {
-    if (lignesLocales.length === 0 || !lignesLocales.every((l) => l.formule !== null)) return;
-    if (!demande && !infosCompletes) {
-      setErreurEnregistrement("Nom du client et commentaire requis avant d'enregistrer des lignes.");
+  // Sauvegarde silencieuse (Priorité 2, option B) — crée le dossier au
+  // premier debounce une fois les champs minimaux remplis (nom client/
+  // opérateur + commentaire + montant, même principe que l'ancien
+  // infosCompletes), puis modifie le même dossier à chaque debounce
+  // suivant. Jamais de flux en deux temps visible : aucun bouton
+  // « Enregistrer », aucun champ verrouillé — seul le circuit reste figé une
+  // fois le dossier créé (modifierDemandeRequeteSchema omet `circuit`, le
+  // routage/segment en dépendent structurellement).
+  async function sauvegarderFormulaire() {
+    const { payload, erreur } = construirePayload();
+    if (erreur) {
+      setErreurSauvegarde(erreur);
       return;
     }
 
-    // Validation DF avant tout envoi — mirror des deux champs que la
-    // maquette elle-même traite comme requis (screens1.jsx:203-204,
-    // validate() : memoObjet et memoContexte). `libelle` reste .optional()
-    // côté serveur (aucune règle serveur nouvelle inventée ici) : ce n'est
-    // qu'un confort d'affichage avant de tenter la création, pas une
-    // garantie — la seule garantie réelle sur ce champ reste celle déjà en
-    // vigueur côté serveur (aucune, pour l'instant).
-    let champsCircuit: ChampsCircuitDf | undefined;
-    if (!demande && circuit === "DF") {
-      if (!libelle.trim()) {
-        setErreurEnregistrement("Objet requis (mémo DF).");
-        return;
-      }
-      const validation = champsCircuitDfSchema.safeParse({
-        memoDe, memoA, memoObjectif, memoContexte, memoObservation, montantXof
-      });
-      if (!validation.success) {
-        setErreurEnregistrement(validation.error.issues[0]?.message ?? "Champs du mémo invalides.");
-        return;
-      }
-      champsCircuit = validation.data;
+    const demandeActuelle = demandeRef.current;
+    if (!demandeActuelle && (!payload.nomClient || !payload.commentaire || !payload.montantHt)) {
+      // Champs minimaux pas encore réunis — aucun brouillon créé tant que ce
+      // n'est pas le cas (même garde-fou qu'avant ce chantier, cf. brouillons
+      // orphelins jamais supprimables).
+      return;
     }
 
-    setEnregistrement(true);
-    setErreurEnregistrement(null);
+    setSauvegardeEnCours(true);
+    setErreurSauvegarde(null);
     try {
-      let demandeActuelle = demande;
-      if (!demandeActuelle) {
-        demandeActuelle = await creerDemande({
-          circuit,
-          dateDemande: dateDemande || undefined,
-          nomClient: nomClient.trim(),
-          commentaire: commentaire.trim(),
-          responsabiliteServiceAutre:
-            (circuit === "DOBB" || circuit === "DXC" || circuit === "DF") && serviceAutreActif
-              ? responsabiliteServiceAutre.trim()
-              : undefined,
-          agentInitiateur: agentInitiateur.trim() || undefined,
-          matriculeInitiateur: matriculeInitiateur.trim() || undefined,
-          agentSaisie: agentSaisie.trim() || undefined,
-          sousFlux: sousFlux.trim() || undefined,
-          libelle: libelle.trim() || undefined,
-          motifId: motifId || undefined,
-          universFmiCode: universFmiCode || undefined,
-          facteurCode: facteurCode || undefined,
-          compteClient: compteClient.trim() || undefined,
-          formuleAbonnement: formuleAbonnement.trim() || undefined,
-          recurrentMensuel: (circuit === "DOBB" || circuit === "DXC") && recurrentMensuel ? true : undefined,
-          directionRespId: directionRespId || undefined,
-          serviceRespId: serviceRespId || undefined,
-          localisation: circuit === "DOBB" && localisation ? localisation : undefined,
-          canalRemontee: circuit === "DOBB" ? canalRemontee.trim() || undefined : undefined,
-          dateReceptionBo: circuit === "DOBB" ? dateReceptionBo || undefined : undefined,
-          dateReceptionOci: circuit === "DOBB" ? dateReceptionOci || undefined : undefined,
-          numeroAppel: circuit === "DOBB" ? numeroAppel.trim() || undefined : undefined,
-          champsCircuit: circuit === "DF" ? champsCircuit : undefined
-        });
-      }
-      const misAJour = await definirLignes(demandeActuelle.demande.id, {
-        lignes: lignesLocales.map((l) => ({
-          ligneId: l.contexte.ligne.id,
-          formuleId: l.formule!.formuleId,
-          recurrent: l.formule!.recurrent,
-          // Jamais de prorata calculé ici — le serveur (DemandeLigneService.
-          // definirLignes) fait foi sur le montant, que ce soit un
-          // montantHtLigne direct ou un calcul depuis les deux dates
-          // (SF-PGD-062, R11). Un seul des deux modes est envoyé par ligne.
-          ...(l.montant.mode === "periode"
-            ? { debutPeriodeContestee: l.montant.debutPeriodeContestee, finPeriodeContestee: l.montant.finPeriodeContestee }
-            : { montantHtLigne: Number(l.montant.montantHtLigne) })
-        }))
-      });
-      setDemande(misAJour);
+      const resultat = demandeActuelle
+        ? await modifierDemande(demandeActuelle.demande.id, payload)
+        : await creerDemande(payload);
+      setDemande(resultat);
       setApercuDeclencheur((n) => n + 1);
     } catch (e) {
-      setErreurEnregistrement(e instanceof ApiError ? e.message : "Erreur inattendue.");
+      setErreurSauvegarde(e instanceof ApiError ? e.message : "Erreur inattendue.");
     } finally {
-      setEnregistrement(false);
+      setSauvegardeEnCours(false);
     }
   }
+
+  const debounceFormulaireRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const premierRendu = useRef(true);
+  useEffect(() => {
+    // Rien à sauvegarder au tout premier rendu (formulaire vide) — même
+    // garde que le premier montage d'ApercuRoutage, robuste à React
+    // StrictMode (double-invocation des effets en dev).
+    if (premierRendu.current) {
+      premierRendu.current = false;
+      return;
+    }
+    if (debounceFormulaireRef.current) clearTimeout(debounceFormulaireRef.current);
+    debounceFormulaireRef.current = setTimeout(() => {
+      debounceFormulaireRef.current = null;
+      void sauvegarderFormulaire();
+    }, DELAI_SAUVEGARDE_MS);
+    return () => {
+      if (debounceFormulaireRef.current) clearTimeout(debounceFormulaireRef.current);
+    };
+    // Dépendances volontairement exhaustives, listées explicitement plutôt
+    // que dérivées d'un objet unique — chaque champ pertinent au formulaire
+    // déclenche le même debounce, jamais un `useCallback`/`sauvegarderFormulaire`
+    // qui obligerait à re-déclarer cette même liste ailleurs.
+  }, [
+    nomClient,
+    commentaire,
+    dateDemande,
+    agentInitiateur,
+    matriculeInitiateur,
+    agentSaisie,
+    sousFlux,
+    libelle,
+    motifId,
+    universFmiCode,
+    facteurCode,
+    compteClient,
+    numeroCase,
+    formuleAbonnement,
+    numeroAppel,
+    descriptifContestation,
+    debutPeriodeContestee,
+    finPeriodeContestee,
+    pointContact,
+    agentResponsable,
+    recurrentMensuel,
+    directionRespId,
+    serviceRespId,
+    serviceAutreActif,
+    responsabiliteServiceAutre,
+    localisation,
+    canalRemontee,
+    dateReceptionBo,
+    dateReceptionOci,
+    memoDe,
+    memoA,
+    memoObjectif,
+    memoContexte,
+    memoObservation,
+    montantXof,
+    montantHt
+  ]);
 
   async function handleSoumettre() {
     if (!demande) return;
@@ -632,576 +649,580 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
     );
   }
 
+  // Options de motif — référentiel réel scopé au circuit, jamais un tableau
+  // codé en dur.
+  const motifOptions = motifs?.map((m) => (
+    <option key={m.id} value={m.id}>
+      {m.libelle}
+    </option>
+  ));
+
   return (
     <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
       <div className="flex flex-col gap-4">
-      <div className="rounded-6 border border-gris200 bg-blanc p-5">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Icon nom="doc" taille={17} />
-            <h3 className="text-14 font-bold">
-              {demande ? `Brouillon réf. ${demande.demande.reference}` : "Nouvelle fiche d'ajustement"}
-            </h3>
-          </div>
-          <span className="rounded-full border border-gris200 bg-gris50 px-3 py-1 text-12 font-bold text-gris700">
-            {circuit} · {SEGMENT_PAR_CIRCUIT[circuit]}
-          </span>
-        </div>
-        {!demande && (
-          <p className="mb-3 text-12 text-gris600">
-            Rien n'est encore enregistré côté serveur — la demande n'est créée qu'au premier enregistrement de lignes.
-          </p>
-        )}
-
-        <label className="mb-1 block text-13 font-bold text-gris800">Circuit</label>
-        <select
-          className="mb-3 w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-          value={circuit}
-          onChange={(e) => setCircuit(e.target.value as EnumCircuit)}
-          disabled={!!demande}
-        >
-          {CIRCUITS.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-
-        <label className="mb-1 block text-13 font-bold text-gris800">
-          {circuit === "DF" ? "Opérateur" : "Nom du client"} <span className="text-rouge">*</span>
-        </label>
-        <input
-          className="mb-3 w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-          value={nomClient}
-          onChange={(e) => setNomClient(e.target.value)}
-          disabled={!!demande}
-        />
-
-        <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-13 font-bold text-gris800">Date de demande</label>
-            <input
-              className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-              type="date"
-              value={dateDemande}
-              onChange={(e) => setDateDemande(e.target.value)}
-              disabled={!!demande}
-            />
-          </div>
-          {/* Date de saisie (creeLe) — immuable, jamais acceptée en entrée
-              (creerDemandeRequeteSchema ne la porte pas). Visible seulement
-              une fois le dossier créé, puisqu'elle n'existe qu'à ce moment. */}
-          {demande && (
-            <div>
-              <label className="mb-1 block text-13 font-bold text-gris800">Date de saisie</label>
-              <p className="rounded border border-gris200 bg-gris50 px-3 py-2 text-13 text-gris700">
-                {new Date(demande.demande.creeLe).toLocaleDateString("fr-FR")}
-              </p>
+        <div className="rounded-6 border border-gris200 bg-blanc p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Icon nom="doc" taille={17} />
+              <h3 className="text-14 font-bold">
+                {demande ? `Brouillon réf. ${demande.demande.reference}` : "Nouvelle fiche d'ajustement"}
+              </h3>
+              {sauvegardeEnCours && <span className="text-12 font-semibold text-gris600">Enregistrement…</span>}
             </div>
-          )}
-        </div>
-
-        <label className="mb-1 block text-13 font-bold text-gris800">
-          Commentaire <span className="text-rouge">*</span>
-        </label>
-        <textarea
-          className="mb-1 w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-          style={{ minHeight: 56 }}
-          value={commentaire}
-          onChange={(e) => setCommentaire(e.target.value)}
-          disabled={!!demande}
-        />
-        <p className="text-12 text-gris600">Obligatoire à la soumission (R14).</p>
-      </div>
-
-      {/* Carte « Identification » (Phase 10.6, étape B) — communs aux trois
-          circuits, cf. commentaire d'état ci-dessus. Motif scopé au circuit
-          courant ; univers/facteur indépendants du circuit. */}
-      <div className="rounded-6 border border-gris200 bg-blanc p-5">
-        <div className="mb-3 flex items-center gap-2">
-          <Icon nom="building" taille={17} />
-          <h3 className="text-14 font-bold">Identification</h3>
-          {processCode && (
-            <span className="ml-auto">
-              <Badge ton="neutre">{processCode}</Badge>
+            <span className="rounded-full border border-gris200 bg-gris50 px-3 py-1 text-12 font-bold text-gris700">
+              {circuit} · {SEGMENT_PAR_CIRCUIT[circuit]}
             </span>
-          )}
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-13 font-bold text-gris800">Agent initiateur</label>
-            <input
-              className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-              value={agentInitiateur}
-              onChange={(e) => setAgentInitiateur(e.target.value)}
-              disabled={!!demande}
-            />
           </div>
-          <div>
-            <label className="mb-1 block text-13 font-bold text-gris800">Matricule / réf. agent initiateur</label>
-            <input
-              className="w-full rounded border border-gris300 px-3 py-2 text-13 font-mono disabled:opacity-60"
-              value={matriculeInitiateur}
-              onChange={(e) => setMatriculeInitiateur(e.target.value)}
-              placeholder="ex. M-2041"
-              disabled={!!demande}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-13 font-bold text-gris800">Agent de saisie</label>
-            <input
-              className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-              value={agentSaisie}
-              onChange={(e) => setAgentSaisie(e.target.value)}
-              disabled={!!demande}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-13 font-bold text-gris800">Sous-flux</label>
-            <select
-              className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-              value={sousFlux}
-              onChange={(e) => setSousFlux(e.target.value)}
-              disabled={!!demande || !sousFluxOptions}
-            >
-              <option value="">— Choisir —</option>
-              {sousFluxOptions?.map((s) => (
-                <option key={s.id} value={s.libelle}>
-                  {s.libelle}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-13 font-bold text-gris800">Motif</label>
-            <select
-              className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-              value={motifId}
-              onChange={(e) => setMotifId(e.target.value)}
-              disabled={!!demande || !motifs}
-            >
-              <option value="">— Choisir —</option>
-              {motifs?.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.libelle}
-                </option>
-              ))}
-            </select>
-            {/* R13 — pièces obligatoires du motif, affichées avant l'échec de
-                soumission plutôt que découvertes au 422 (donnée déjà
-                disponible via MotifVue.piecesAfferentes, Phase A). */}
-            {motifSelectionne && motifSelectionne.piecesAfferentes.some((p) => p.obligatoire) && (
-              <p className="mt-1 text-12 text-gris600">
-                Pièces obligatoires :{" "}
-                {motifSelectionne.piecesAfferentes
-                  .filter((p) => p.obligatoire)
-                  .map((p) => p.libelle)
-                  .join(", ")}
-              </p>
+          {erreurSauvegarde && <p className="mb-3 text-13 font-semibold text-rouge700">{erreurSauvegarde}</p>}
+
+          {/* Circuit — seul champ verrouillé une fois le dossier créé : le
+              segment/routage en dépendent structurellement
+              (modifierDemandeRequeteSchema omet circuit, jamais modifiable
+              après coup). Tous les autres champs restent éditables tout du
+              long, saisie sauvegardée en silence (option B). */}
+          <label className="mb-1 block text-13 font-bold text-gris800">Circuit</label>
+          <select
+            className="mb-3 w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
+            value={circuit}
+            onChange={(e) => setCircuit(e.target.value as EnumCircuit)}
+            disabled={!!demande}
+          >
+            {CIRCUITS.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+
+          <label className="mb-1 block text-13 font-bold text-gris800">
+            {circuit === "DF" ? "Opérateur" : "Nom du client"} <span className="text-rouge">*</span>
+          </label>
+          <input
+            className="mb-3 w-full rounded border border-gris300 px-3 py-2 text-13"
+            value={nomClient}
+            onChange={(e) => setNomClient(e.target.value)}
+          />
+
+          <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-13 font-bold text-gris800">
+                {circuit === "DF" ? "Date du mémo" : "Date de demande"}
+              </label>
+              <input
+                className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                type="date"
+                value={dateDemande}
+                onChange={(e) => setDateDemande(e.target.value)}
+              />
+            </div>
+            {/* Date de saisie (creeLe) — immuable, jamais acceptée en entrée
+                (creerDemandeRequeteSchema ne la porte pas). Visible seulement
+                une fois le dossier créé, puisqu'elle n'existe qu'à ce moment. */}
+            {demande && (
+              <div>
+                <label className="mb-1 block text-13 font-bold text-gris800">Date de saisie</label>
+                <p className="rounded border border-gris200 bg-gris50 px-3 py-2 text-13 text-gris700">
+                  {new Date(demande.demande.creeLe).toLocaleDateString("fr-FR")}
+                </p>
+              </div>
             )}
           </div>
-          <div>
-            <label className="mb-1 block text-13 font-bold text-gris800">
-              {circuit === "DF" ? (
-                <>
-                  Objet <span className="text-rouge">*</span>
-                </>
-              ) : (
-                "Libellé"
-              )}
-            </label>
-            {circuit === "DF" ? (
+        </div>
+
+        {/* Carte « Identification » — communs aux trois circuits. Motif
+            scopé au circuit courant ; univers/facteur indépendants du
+            circuit. */}
+        <div className="rounded-6 border border-gris200 bg-blanc p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <Icon nom="building" taille={17} />
+            <h3 className="text-14 font-bold">Identification</h3>
+            {processCode && (
+              <span className="ml-auto">
+                <Badge ton="neutre">{processCode}</Badge>
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-13 font-bold text-gris800">Agent initiateur</label>
               <input
-                className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-                value={libelle}
-                onChange={(e) => setLibelle(e.target.value)}
-                disabled={!!demande}
+                className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                value={agentInitiateur}
+                onChange={(e) => setAgentInitiateur(e.target.value)}
               />
-            ) : (
+            </div>
+            <div>
+              <label className="mb-1 block text-13 font-bold text-gris800">Matricule / réf. agent initiateur</label>
+              <input
+                className="w-full rounded border border-gris300 px-3 py-2 text-13 font-mono"
+                value={matriculeInitiateur}
+                onChange={(e) => setMatriculeInitiateur(e.target.value)}
+                placeholder="ex. M-2041"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-13 font-bold text-gris800">Agent de saisie</label>
+              <input
+                className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                value={agentSaisie}
+                onChange={(e) => setAgentSaisie(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-13 font-bold text-gris800">Sous-flux</label>
               <select
                 className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-                value={libelle}
-                onChange={(e) => setLibelle(e.target.value)}
-                disabled={!!demande || !libellesAjustement}
+                value={sousFlux}
+                onChange={(e) => setSousFlux(e.target.value)}
+                disabled={!sousFluxOptions}
               >
                 <option value="">— Choisir —</option>
-                {libellesAjustement?.map((l) => (
-                  <option key={l.id} value={l.libelle}>
-                    {l.libelle}
+                {sousFluxOptions?.map((s) => (
+                  <option key={s.id} value={s.libelle}>
+                    {s.libelle}
                   </option>
                 ))}
               </select>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Carte « DOBB/DXC » (Phase 10.6, étape C/D) — champs partagés par les
-          deux circuits + champs propres à DOBB seul, cf. commentaire d'état
-          ci-dessus. Absente pour DF (aucune source ne les y montre). */}
-      {(circuit === "DOBB" || circuit === "DXC") && (
-        <div className="rounded-6 border border-gris200 bg-blanc p-5">
-          <div className="mb-3 flex items-center gap-2">
-            <Icon nom="flow" taille={17} />
-            <h3 className="text-14 font-bold">{circuit === "DOBB" ? "Fiche d'ajustement B2B" : "Fiche d'ajustement B2C"}</h3>
-            <Badge ton={BADGE_FICHE_PAR_CIRCUIT[circuit].ton}>{BADGE_FICHE_PAR_CIRCUIT[circuit].texte}</Badge>
-          </div>
-
-          {!demande && (
-            <div className="mb-3">
-              <RechercheCompte onCompteTrouve={appliquerCompteTrouve} />
-              {/* DOBB (docs/10 #9) demande que la clé de recherche soit le N°
-                  de Case JADE plutôt que le N° de compte — deux clés
-                  différentes, même mécanisme. `numeroCase` n'existe nulle
-                  part dans le schéma (JadePort, en attente d'arbitrage) :
-                  recherche par N° de compte seulement pour l'instant, pas de
-                  recherche par case simulée. */}
-              {circuit === "DOBB" && (
+            </div>
+            <div>
+              <label className="mb-1 block text-13 font-bold text-gris800">Motif</label>
+              <select
+                className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
+                value={motifId}
+                onChange={(e) => setMotifId(e.target.value)}
+                disabled={!motifs}
+              >
+                <option value="">— Choisir —</option>
+                {motifOptions}
+              </select>
+              {/* R13 — pièces obligatoires du motif, affichées avant l'échec de
+                  soumission plutôt que découvertes au 422. */}
+              {motifSelectionne && motifSelectionne.piecesAfferentes.some((p) => p.obligatoire) && (
                 <p className="mt-1 text-12 text-gris600">
-                  Recherche par N° de compte pour l'instant — la recherche par N° de Case JADE viendra s'ajouter une fois
-                  ce champ construit.
+                  Pièces obligatoires :{" "}
+                  {motifSelectionne.piecesAfferentes
+                    .filter((p) => p.obligatoire)
+                    .map((p) => p.libelle)
+                    .join(", ")}
                 </p>
               )}
             </div>
-          )}
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-13 font-bold text-gris800">Compte client</label>
-              <input
-                className="w-full rounded border border-gris300 px-3 py-2 text-13 font-mono disabled:opacity-60"
-                value={compteClient}
-                onChange={(e) => setCompteClient(e.target.value)}
-                placeholder={circuit === "DOBB" ? "ex. B2B-880142" : "ex. B2C-4471902"}
-                disabled={!!demande}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-13 font-bold text-gris800">
-                {circuit === "DOBB" ? "Formule d'abonnement" : "Formule Internet"}
-              </label>
-              <input
-                className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-                value={formuleAbonnement}
-                onChange={(e) => setFormuleAbonnement(e.target.value)}
-                disabled={!!demande}
-              />
-            </div>
-
-            {circuit === "DOBB" && (
-              <>
-                <div>
-                  <label className="mb-1 block text-13 font-bold text-gris800">Numéro d'appel</label>
-                  <input
-                    className="w-full rounded border border-gris300 px-3 py-2 text-13"
-                    value={numeroAppel}
-                    onChange={(e) => setNumeroAppel(e.target.value)}
-                    placeholder="ex. 27 22 00 00 00"
-                    disabled={!!demande}
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-13 font-bold text-gris800">Localisation</label>
-                  <select
-                    className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-                    value={localisation}
-                    onChange={(e) => setLocalisation(e.target.value as EnumLocalisation | "")}
-                    disabled={!!demande}
-                  >
-                    <option value="">— Choisir —</option>
-                    <option value="NATIONAL">National</option>
-                    <option value="INTERNATIONAL">International</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-13 font-bold text-gris800">Canal de remontée</label>
-                  <input
-                    className="w-full rounded border border-gris300 px-3 py-2 text-13"
-                    value={canalRemontee}
-                    onChange={(e) => setCanalRemontee(e.target.value)}
-                    disabled={!!demande}
-                  />
-                </div>
-                <div />
-                <div>
-                  <label className="mb-1 block text-13 font-bold text-gris800">Date réception BO</label>
-                  <input
-                    className="w-full rounded border border-gris300 px-3 py-2 text-13"
-                    type="date"
-                    value={dateReceptionBo}
-                    onChange={(e) => setDateReceptionBo(e.target.value)}
-                    disabled={!!demande}
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-13 font-bold text-gris800">Date réception OCI</label>
-                  <input
-                    className="w-full rounded border border-gris300 px-3 py-2 text-13"
-                    type="date"
-                    value={dateReceptionOci}
-                    onChange={(e) => setDateReceptionOci(e.target.value)}
-                    disabled={!!demande}
-                  />
-                </div>
-              </>
-            )}
-
-            <div>
-              <label className="flex items-center gap-2 text-13 font-bold text-gris800">
+              <label className="mb-1 block text-13 font-bold text-gris800">{circuit === "DF" ? "Objet" : "Libellé"}</label>
+              {circuit === "DF" ? (
                 <input
-                  type="checkbox"
-                  checked={recurrentMensuel}
-                  onChange={(e) => setRecurrentMensuel(e.target.checked)}
-                  disabled={!!demande}
+                  className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                  value={libelle}
+                  onChange={(e) => setLibelle(e.target.value)}
                 />
-                Montant récurrent mensuel
-              </label>
+              ) : (
+                <select
+                  className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
+                  value={libelle}
+                  onChange={(e) => setLibelle(e.target.value)}
+                  disabled={!libellesAjustement}
+                >
+                  <option value="">— Choisir —</option>
+                  {libellesAjustement?.map((l) => (
+                    <option key={l.id} value={l.libelle}>
+                      {l.libelle}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
-            <div />
-
-            <ResponsabiliteFields
-              directions={directions}
-              directionRespId={directionRespId}
-              choisirDirection={choisirDirection}
-              directionSelectionnee={directionSelectionnee}
-              serviceRespId={serviceRespId}
-              choisirServiceReel={choisirServiceReel}
-              serviceAutreActif={serviceAutreActif}
-              toggleServiceAutre={toggleServiceAutre}
-              responsabiliteServiceAutre={responsabiliteServiceAutre}
-              setResponsabiliteServiceAutre={setResponsabiliteServiceAutre}
-              disabled={!!demande}
-            />
           </div>
         </div>
-      )}
 
-      {/* Carte « Mémo Wholesale » (Phase 10.6, étape E) — DF uniquement.
-          Compte/référence et Responsabilité direction+service réutilisent
-          les mêmes champs/état que la carte DOBB/DXC ci-dessus (compteClient/
-          directionRespId/serviceRespId existent déjà, seule leur visibilité
-          était limitée à DOBB/DXC) ; le reste (De/À/Objectif/Contexte/
-          Observation/Montant) n'a pas de colonne dédiée et passe par
-          champsCircuit — cf. champsCircuitDfSchema plus haut. */}
-      {circuit === "DF" && (
+        {/* Carte « DOBB/DXC » — champs partagés par les deux circuits +
+            champs propres à DOBB seul. Absente pour DF (aucune source ne les
+            y montre). */}
+        {(circuit === "DOBB" || circuit === "DXC") && (
+          <div className="rounded-6 border border-gris200 bg-blanc p-5">
+            <div className="mb-3 flex items-center gap-2">
+              <Icon nom="flow" taille={17} />
+              <h3 className="text-14 font-bold">{circuit === "DOBB" ? "Fiche d'ajustement B2B" : "Fiche d'ajustement B2C"}</h3>
+              <Badge ton={BADGE_FICHE_PAR_CIRCUIT[circuit].ton}>{BADGE_FICHE_PAR_CIRCUIT[circuit].texte}</Badge>
+            </div>
+
+            <div className="mb-3">
+              <RechercheCompte onCompteTrouve={appliquerCompteTrouve} />
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-13 font-bold text-gris800">Compte client</label>
+                <input
+                  className="w-full rounded border border-gris300 px-3 py-2 text-13 font-mono"
+                  value={compteClient}
+                  onChange={(e) => setCompteClient(e.target.value)}
+                  placeholder={circuit === "DOBB" ? "ex. B2B-880142" : "ex. B2C-4471902"}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-13 font-bold text-gris800">Numéro Case (JADE)</label>
+                <input
+                  className="w-full rounded border border-gris300 px-3 py-2 text-13 font-mono"
+                  value={numeroCase}
+                  onChange={(e) => setNumeroCase(e.target.value)}
+                  placeholder="ex. CASE-100231"
+                />
+                <p className="mt-1 text-12 text-gris600">Facultatif — à titre indicatif.</p>
+              </div>
+              <div>
+                <label className="mb-1 block text-13 font-bold text-gris800">
+                  {circuit === "DOBB" ? "Formule d'abonnement" : "Formule Internet"}
+                </label>
+                <input
+                  className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                  value={formuleAbonnement}
+                  onChange={(e) => setFormuleAbonnement(e.target.value)}
+                />
+              </div>
+
+              {circuit === "DOBB" && (
+                <>
+                  <div>
+                    <label className="mb-1 block text-13 font-bold text-gris800">Numéro d'appel</label>
+                    <input
+                      className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                      value={numeroAppel}
+                      onChange={(e) => setNumeroAppel(e.target.value)}
+                      placeholder="ex. 27 22 00 00 00"
+                    />
+                  </div>
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <label className="mb-1 block text-13 font-bold text-gris800">Descriptif de la contestation</label>
+                    <textarea
+                      className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                      style={{ minHeight: 60 }}
+                      value={descriptifContestation}
+                      onChange={(e) => setDescriptifContestation(e.target.value)}
+                      placeholder="Détail du cas contesté…"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-13 font-bold text-gris800">Localisation</label>
+                    <select
+                      className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                      value={localisation}
+                      onChange={(e) => setLocalisation(e.target.value as EnumLocalisation | "")}
+                    >
+                      <option value="">— Choisir —</option>
+                      <option value="NATIONAL">National</option>
+                      <option value="INTERNATIONAL">International</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-13 font-bold text-gris800">Début période contestée</label>
+                    <input
+                      className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                      type="date"
+                      value={debutPeriodeContestee}
+                      onChange={(e) => setDebutPeriodeContestee(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-13 font-bold text-gris800">Fin période contestée</label>
+                    <input
+                      className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                      type="date"
+                      value={finPeriodeContestee}
+                      onChange={(e) => setFinPeriodeContestee(e.target.value)}
+                    />
+                  </div>
+                  {/* Point de contact — champsCircuit, pas de nouveau
+                      référentiel admin (décision Priorité 2, 19/08/2026),
+                      cohérent avec descriptifContestation ci-dessus. */}
+                  <div>
+                    <label className="mb-1 block text-13 font-bold text-gris800">Point de contact</label>
+                    <input
+                      className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                      value={pointContact}
+                      onChange={(e) => setPointContact(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-13 font-bold text-gris800">Canal de remontée</label>
+                    <input
+                      className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                      value={canalRemontee}
+                      onChange={(e) => setCanalRemontee(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-13 font-bold text-gris800">Date réception BO</label>
+                    <input
+                      className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                      type="date"
+                      value={dateReceptionBo}
+                      onChange={(e) => setDateReceptionBo(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-13 font-bold text-gris800">Date réception OCI</label>
+                    <input
+                      className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                      type="date"
+                      value={dateReceptionOci}
+                      onChange={(e) => setDateReceptionOci(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-13 font-bold text-gris800">Agent responsable</label>
+                    <input
+                      className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                      value={agentResponsable}
+                      onChange={(e) => setAgentResponsable(e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
+
+              <div>
+                <label className="mb-1 block text-13 font-bold text-gris800">Montant récurrent mensuel (HT)</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    className="w-full rounded border border-gris300 px-3 py-2 text-13 font-mono"
+                    type="number"
+                    min="0"
+                    value={recurrentMensuel}
+                    onChange={(e) => setRecurrentMensuel(e.target.value)}
+                    placeholder="0"
+                  />
+                  <span className="text-12 text-gris600">FCFA</span>
+                </div>
+                <p className="mt-1 text-12 text-gris600">Laisser à 0 si non récurrent.</p>
+              </div>
+
+              <ResponsabiliteFields
+                directions={directions}
+                directionRespId={directionRespId}
+                choisirDirection={choisirDirection}
+                directionSelectionnee={directionSelectionnee}
+                serviceRespId={serviceRespId}
+                choisirServiceReel={choisirServiceReel}
+                serviceAutreActif={serviceAutreActif}
+                toggleServiceAutre={toggleServiceAutre}
+                responsabiliteServiceAutre={responsabiliteServiceAutre}
+                setResponsabiliteServiceAutre={setResponsabiliteServiceAutre}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Carte « Mémo Wholesale » — DF uniquement. Compte/référence et
+            Responsabilité direction+service réutilisent les mêmes champs/état
+            que la carte DOBB/DXC ci-dessus ; le reste (De/À/Objectif/
+            Contexte/Observation/Montant) passe par champsCircuit — cf.
+            champsCircuitDfSchema plus haut. */}
+        {circuit === "DF" && (
+          <div className="rounded-6 border border-gris200 bg-blanc p-5">
+            <div className="mb-3 flex items-center gap-2">
+              <Icon nom="doc" taille={17} />
+              <h3 className="text-14 font-bold">Mémo d'ajustement Wholesale</h3>
+              <Badge ton={BADGE_FICHE_PAR_CIRCUIT.DF.ton}>{BADGE_FICHE_PAR_CIRCUIT.DF.texte}</Badge>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-13 font-bold text-gris800">De (émetteur)</label>
+                <input
+                  className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                  value={memoDe}
+                  onChange={(e) => setMemoDe(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-13 font-bold text-gris800">À (destinataire)</label>
+                <input
+                  className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                  value={memoA}
+                  onChange={(e) => setMemoA(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-13 font-bold text-gris800">Compte / référence</label>
+                <input
+                  className="w-full rounded border border-gris300 px-3 py-2 text-13 font-mono"
+                  value={compteClient}
+                  onChange={(e) => setCompteClient(e.target.value)}
+                  placeholder="ex. WS-1142"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-13 font-bold text-gris800">Numéro Case (JADE)</label>
+                <input
+                  className="w-full rounded border border-gris300 px-3 py-2 text-13 font-mono"
+                  value={numeroCase}
+                  onChange={(e) => setNumeroCase(e.target.value)}
+                  placeholder="ex. CASE-100231"
+                />
+                <p className="mt-1 text-12 text-gris600">Facultatif — à titre indicatif.</p>
+              </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label className="mb-1 block text-13 font-bold text-gris800">Objectif</label>
+                <input
+                  className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                  value={memoObjectif}
+                  onChange={(e) => setMemoObjectif(e.target.value)}
+                />
+              </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label className="mb-1 block text-13 font-bold text-gris800">
+                  Contexte de la réclamation <span className="text-rouge">*</span>
+                </label>
+                <textarea
+                  className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                  style={{ minHeight: 56 }}
+                  value={memoContexte}
+                  onChange={(e) => setMemoContexte(e.target.value)}
+                />
+              </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label className="mb-1 block text-13 font-bold text-gris800">Observation</label>
+                <textarea
+                  className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                  style={{ minHeight: 48 }}
+                  value={memoObservation}
+                  onChange={(e) => setMemoObservation(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-13 font-bold text-gris800">Montant en FCFA (optionnel)</label>
+                <input
+                  className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                  type="number"
+                  min="0"
+                  value={montantXof}
+                  onChange={(e) => setMontantXof(e.target.value)}
+                />
+                <p className="mt-1 text-12 text-gris600">Référence, indicative — sans effet sur le montant TTC réel.</p>
+              </div>
+
+              <ResponsabiliteFields
+                directions={directions}
+                directionRespId={directionRespId}
+                choisirDirection={choisirDirection}
+                directionSelectionnee={directionSelectionnee}
+                serviceRespId={serviceRespId}
+                choisirServiceReel={choisirServiceReel}
+                serviceAutreActif={serviceAutreActif}
+                toggleServiceAutre={toggleServiceAutre}
+                responsabiliteServiceAutre={responsabiliteServiceAutre}
+                setResponsabiliteServiceAutre={setResponsabiliteServiceAutre}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Univers FMI / Facteur de dégrèvement — regroupement de la maquette
+            (screens1.jsx:463-469, carte "Montant & commentaire" juste avant
+            les pièces jointes). */}
         <div className="rounded-6 border border-gris200 bg-blanc p-5">
           <div className="mb-3 flex items-center gap-2">
-            <Icon nom="doc" taille={17} />
-            <h3 className="text-14 font-bold">Mémo d'ajustement Wholesale</h3>
-            <Badge ton={BADGE_FICHE_PAR_CIRCUIT.DF.ton}>{BADGE_FICHE_PAR_CIRCUIT.DF.texte}</Badge>
+            <Icon nom="filter" taille={17} />
+            <h3 className="text-14 font-bold">Classification</h3>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-13 font-bold text-gris800">De (émetteur)</label>
-              <input
+              <label className="mb-1 block text-13 font-bold text-gris800">Univers FMI</label>
+              <select
                 className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-                value={memoDe}
-                onChange={(e) => setMemoDe(e.target.value)}
-                disabled={!!demande}
-              />
+                value={universFmiCode}
+                onChange={(e) => setUniversFmiCode(e.target.value)}
+                disabled={!univers}
+              >
+                <option value="">— Choisir —</option>
+                {univers?.map((u) => (
+                  <option key={u.code} value={u.code}>
+                    {u.libelle}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
-              <label className="mb-1 block text-13 font-bold text-gris800">À (destinataire)</label>
-              <input
+              <label className="mb-1 block text-13 font-bold text-gris800">Facteur de dégrèvement</label>
+              <select
                 className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-                value={memoA}
-                onChange={(e) => setMemoA(e.target.value)}
-                disabled={!!demande}
-              />
+                value={facteurCode}
+                onChange={(e) => setFacteurCode(e.target.value)}
+                disabled={!facteurs}
+              >
+                <option value="">— Choisir —</option>
+                {facteurs?.map((f) => (
+                  <option key={f.code} value={f.code}>
+                    {f.libelle}
+                  </option>
+                ))}
+              </select>
             </div>
+          </div>
+        </div>
+
+        {/* Carte « Montant à ajuster » — Priorité 2 (19/08/2026) : remplace
+            RechercheNd/SelecteurLignes/Lignes retenues. Saisie libre au
+            niveau du dossier (Demande.montantHt), plus commentaire (R14,
+            obligatoire à la soumission, jamais à la création — même
+            mécanisme cumulable que R13/sous-flux). */}
+        <div className="rounded-6 border border-gris200 bg-blanc p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <Icon nom="calc" taille={17} />
+            <h3 className="text-14 font-bold">Montant {circuit === "DF" ? "à ajuster (FCFA)" : "& commentaire"}</h3>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-13 font-bold text-gris800">Compte / référence</label>
-              <input
-                className="w-full rounded border border-gris300 px-3 py-2 text-13 font-mono disabled:opacity-60"
-                value={compteClient}
-                onChange={(e) => setCompteClient(e.target.value)}
-                placeholder="ex. WS-1142"
-                disabled={!!demande}
-              />
-            </div>
-            <div style={{ gridColumn: "1 / -1" }}>
-              <label className="mb-1 block text-13 font-bold text-gris800">Objectif</label>
-              <input
-                className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-                value={memoObjectif}
-                onChange={(e) => setMemoObjectif(e.target.value)}
-                disabled={!!demande}
-              />
+              <label className="mb-1 block text-13 font-bold text-gris800">
+                Montant à ajuster HT (FCFA) <span className="text-rouge">*</span>
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  className="w-full rounded border border-gris300 px-3 py-2 text-13 font-mono"
+                  type="number"
+                  min="0"
+                  value={montantHt}
+                  onChange={(e) => setMontantHt(e.target.value)}
+                  placeholder="0"
+                />
+                <span className="text-12 text-gris600">FCFA</span>
+              </div>
             </div>
             <div style={{ gridColumn: "1 / -1" }}>
               <label className="mb-1 block text-13 font-bold text-gris800">
-                Contexte de la réclamation <span className="text-rouge">*</span>
+                Commentaire <span className="text-rouge">*</span>
               </label>
               <textarea
-                className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
+                className="w-full rounded border border-gris300 px-3 py-2 text-13"
                 style={{ minHeight: 56 }}
-                value={memoContexte}
-                onChange={(e) => setMemoContexte(e.target.value)}
-                disabled={!!demande}
+                value={commentaire}
+                onChange={(e) => setCommentaire(e.target.value)}
               />
+              <p className="mt-1 text-12 text-gris600">Obligatoire à la soumission (R14).</p>
             </div>
-            <div style={{ gridColumn: "1 / -1" }}>
-              <label className="mb-1 block text-13 font-bold text-gris800">Observation</label>
-              <textarea
-                className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-                style={{ minHeight: 48 }}
-                value={memoObservation}
-                onChange={(e) => setMemoObservation(e.target.value)}
-                disabled={!!demande}
-              />
-            </div>
-            {/* Ordre exact de la maquette (screens1.jsx:419) — avant-dernier
-                champ, juste avant Responsabilité direction/service. Pur
-                détail d'ordre (inventaire ordonné trois circuits, Phase
-                10.6septies clôture) : le champ lui-même et son renommage
-                €→FCFA sont déjà tranchés (catégorie 4, DIVERGENCES.md). */}
-            <div>
-              <label className="mb-1 block text-13 font-bold text-gris800">Montant en FCFA (optionnel)</label>
-              <input
-                className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-                type="number"
-                min="0"
-                value={montantXof}
-                onChange={(e) => setMontantXof(e.target.value)}
-                disabled={!!demande}
-              />
-              <p className="mt-1 text-12 text-gris600">Référence, indicative — sans effet sur le montant TTC réel.</p>
-            </div>
-
-            <ResponsabiliteFields
-              directions={directions}
-              directionRespId={directionRespId}
-              choisirDirection={choisirDirection}
-              directionSelectionnee={directionSelectionnee}
-              serviceRespId={serviceRespId}
-              choisirServiceReel={choisirServiceReel}
-              serviceAutreActif={serviceAutreActif}
-              toggleServiceAutre={toggleServiceAutre}
-              responsabiliteServiceAutre={responsabiliteServiceAutre}
-              setResponsabiliteServiceAutre={setResponsabiliteServiceAutre}
-              disabled={!!demande}
-            />
           </div>
         </div>
-      )}
 
-      {/* Univers FMI / Facteur de dégrèvement — inventaire ordonné trois
-          circuits (Phase 10.6septies, clôture) : déplacés depuis la carte
-          Identification vers cet emplacement pour matcher le regroupement
-          de la maquette (screens1.jsx:463-469, carte "Montant & commentaire"
-          juste avant les pièces jointes) — la maquette les place à côté du
-          montant, jamais à côté de l'agent/motif/libellé. Montant HT
-          lui-même reste dans RechercheNd/SelecteurLignes (décision actée,
-          pas remise en cause) : ce sont les deux seuls champs de ce
-          regroupement encore à porter. */}
-      <div className="rounded-6 border border-gris200 bg-blanc p-5">
-        <div className="mb-3 flex items-center gap-2">
-          <Icon nom="filter" taille={17} />
-          <h3 className="text-14 font-bold">Classification</h3>
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-13 font-bold text-gris800">Univers FMI</label>
-            <select
-              className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-              value={universFmiCode}
-              onChange={(e) => setUniversFmiCode(e.target.value)}
-              disabled={!!demande || !univers}
-            >
-              <option value="">— Choisir —</option>
-              {univers?.map((u) => (
-                <option key={u.code} value={u.code}>
-                  {u.libelle}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-13 font-bold text-gris800">Facteur de dégrèvement</label>
-            <select
-              className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-              value={facteurCode}
-              onChange={(e) => setFacteurCode(e.target.value)}
-              disabled={!!demande || !facteurs}
-            >
-              <option value="">— Choisir —</option>
-              {facteurs?.map((f) => (
-                <option key={f.code} value={f.code}>
-                  {f.libelle}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <RechercheNd
-        onLigneTrouvee={(contexte) =>
-          setLignesLocales((s) =>
-            s.some((l) => l.contexte.ligne.id === contexte.ligne.id)
-              ? s
-              : [...s, { contexte, formule: null, montant: montantLigneParDefaut() }]
-          )
-        }
-      />
-
-      <SelecteurLignes
-        lignes={lignesLocales}
-        onRetirer={(ligneId) => setLignesLocales((s) => s.filter((l) => l.contexte.ligne.id !== ligneId))}
-        onChangeFormule={(ligneId, valeur) =>
-          setLignesLocales((s) => s.map((l) => (l.contexte.ligne.id === ligneId ? { ...l, formule: valeur } : l)))
-        }
-        onChangeMontant={(ligneId, valeur) =>
-          setLignesLocales((s) => s.map((l) => (l.contexte.ligne.id === ligneId ? { ...l, montant: valeur } : l)))
-        }
-        onEnregistrer={handleEnregistrerLignes}
-        enregistrement={enregistrement}
-        erreur={erreurEnregistrement}
-        onBlurMontantHt={handleBlurMontantHt}
-      />
-
-      {/* Pièces justificatives — inventaire ordonné trois circuits (Phase
-          10.6septies) : la maquette (screens1.jsx:479, PiecesJointes) les
-          affiche dès l'écran de création, pour les trois circuits
-          identiquement, en local (blob URLs jamais uploadées, tout part en
-          un seul envoi à la soumission — modèle sans équivalent réel, cf.
-          DIVERGENCES.md). Le serveur exige un demandeId (POST /api/demandes/
-          {id}/pieces) qui n'existe qu'après le premier "Enregistrer les
-          lignes" — même contrainte, même gate que le panneau Taxes et
-          ApercuRoutage. PiecesTab (DossierDetailScreen) réutilisé tel quel,
-          aucun second mécanisme d'upload : ajout/suppression réels déjà
-          câblés (ajouterPiece/supprimerPiece), demandeId/pieces/onChange
-          sont les trois seules props, aucune dépendance à l'état interne de
-          DossierDetailScreen. */}
-      {demande && (
-        <PiecesTab
-          demandeId={demande.demande.id}
-          pieces={demande.pieces}
-          onChange={(nouvelles) => setDemande((d) => (d ? { ...d, pieces: nouvelles } : d))}
-        />
-      )}
+        {/* Pièces justificatives — la maquette (screens1.jsx:479) les affiche
+            dès l'écran de création, pour les trois circuits identiquement.
+            Le serveur exige un demandeId (POST /api/demandes/{id}/pieces)
+            qui n'existe qu'une fois la sauvegarde silencieuse déclenchée —
+            même gate que le panneau Taxes et ApercuRoutage. */}
+        {demande && (
+          <PiecesTab
+            demandeId={demande.demande.id}
+            pieces={demande.pieces}
+            onChange={(nouvelles) => setDemande((d) => (d ? { ...d, pieces: nouvelles } : d))}
+          />
+        )}
       </div>
 
       {/* Panneau latéral — équivalent du bloc « Calcul automatique / Routage
           prévu / Soumettre » de la maquette (docs/design/screens1.jsx),
-          aligné en haut à droite du formulaire plutôt qu'empilé dessous.
-          Montants affichés uniquement APRÈS "Enregistrer les lignes" : ce
-          sont ceux renvoyés par le serveur (demande.lignes[].montantHtLigne,
-          demande.demande.montantTtc), jamais une estimation calculée ici —
-          même principe qu'ApercuRoutage.
-          `lg:sticky lg:top-26` (audit de complétude structurelle) — la
-          maquette pose `position: sticky; top: 86` sur ce même panneau
-          (screens1.jsx:483), jamais reproduit ici : sur un formulaire plus
-          long que le viewport, le panneau défilait hors champ avec le
-          contenu au lieu de rester visible. `top-26` reprend le padding déjà
-          utilisé par `<main className="... p-26">` (AppShell.tsx) pour un
-          alignement cohérent sous la Topbar. */}
+          aligné en haut à droite du formulaire plutôt qu'empilé dessous. */}
       <div className="flex flex-col gap-4 lg:sticky lg:top-26">
-        {/* « Taxes appliquées » — lecture seule tant qu'aucun dossier n'existe
-            (rien à quoi rattacher un PATCH /taxes) : affiche alors les
-            défauts du circuit (ParametreCalcul). Devient interactif dès que
-            `demande` existe, câblé sur PATCH /api/demandes/{id}/taxes
-            (Phase 10.6septies, confirmation métier docs/10 DOBB #1/#2/#6). */}
+        {/* « Taxes appliquées » — lecture seule tant qu'aucun dossier
+            n'existe (rien à quoi rattacher un PATCH /taxes) : affiche alors
+            les défauts du circuit. Devient interactif dès que `demande`
+            existe. */}
         {!demande && parametresCalcul && (
           <div className="rounded-6 border border-gris200 bg-blanc p-5">
             <div className="mb-3 flex items-center gap-2">
@@ -1219,7 +1240,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
               </span>
               <span>Assiette TVA par défaut : {parametresCalcul.assietteTvaDefaut === "HT_TSC" ? "HT + TSC" : "HT seul"}</span>
             </div>
-            <p className="mt-2 text-12 text-gris600">Modifiable une fois le dossier créé (premier enregistrement de lignes).</p>
+            <p className="mt-2 text-12 text-gris600">Modifiable une fois le montant HT saisi.</p>
           </div>
         )}
 
@@ -1252,13 +1273,6 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
               </button>
             </div>
 
-            {/* Assiette TVA — visible seulement quand TSC ET TVA sont actives
-                (décision explicite, feu vert utilisateur) : sans TSC active,
-                l'assiette HT+TSC coïnciderait avec HT seul, un choix qui
-                n'aurait aucun effet réel. Libellés repris mot pour mot de la
-                capture (docs/design/screens1.jsx:503/507, inventaire champ
-                par champ Phase 10.6septies clôture) — "HT seul"/"HT + TSC
-                (cascade)" ne correspondait pas exactement. */}
             {taxesEdition.tscActive && taxesEdition.tvaActive && (
               <div className="mb-3">
                 <span className="mb-1 block text-12 font-bold text-gris700">Assiette de la TVA</span>
@@ -1379,43 +1393,12 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
           </div>
         )}
 
-        {/* "Total TTC" retiré d'ici : doublon visuel confirmé avec "Total TTC
-            (aperçu)" du panneau Taxes appliquées ci-dessus (même montant,
-            deux endroits) — décision explicite, reprise après la présentation
-            reportée. Le détail par ligne, lui, reste la SEULE vue du montant
-            HT réel d'une ligne en mode "période contestée" (prorata calculé
-            serveur, jamais affiché côté client avant "Enregistrer les
-            lignes" — cf. SelecteurLignes.tsx) : pas de doublon sur ce
-            point, rien à retirer. */}
-        {demande && demande.lignes.length > 0 && (
-          <div className="rounded-6 border border-gris200 bg-blanc p-5">
-            <div className="mb-3 flex items-center gap-2">
-              <Icon nom="calc" taille={17} />
-              <h3 className="text-14 font-bold">Détail des lignes</h3>
-            </div>
-            <div className="flex flex-col gap-2">
-              {demande.lignes.map((l) => (
-                <div key={l.id} className="flex justify-between text-13">
-                  <span className="font-mono text-gris600">{l.nd}</span>
-                  <Money valeur={l.montantHtLigne} />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {demande && <ApercuRoutage demandeId={demande.demande.id} declencheur={apercuDeclencheur} />}
 
-        {demande && demande.lignes.length > 0 && (
-          <ApercuRoutage demandeId={demande.demande.id} declencheur={apercuDeclencheur} />
-        )}
-
-        {/* Toujours rendu, désactivé tant qu'aucune ligne n'est enregistrée —
-            même pattern que la maquette (`disabled={!tranche}`,
-            screens1.jsx:569), qui n'a jamais retiré le bouton du DOM.
-            `handleSoumettre` garde déjà `if (!demande) return;` : aucune
-            action n'est possible avant qu'une demande existe, seul le rendu
-            change (audit de complétude structurelle — le bouton était
-            absent, pas seulement désactivé, avant tout enregistrement de
-            ligne). */}
+        {/* Toujours rendu, désactivé tant qu'aucun dossier n'existe — même
+            pattern que la maquette (`disabled={!tranche}`, screens1.jsx:569),
+            qui n'a jamais retiré le bouton du DOM. `handleSoumettre` garde
+            déjà `if (!demande) return;`. */}
         <div className="rounded-6 border border-gris200 bg-blanc p-5">
           {erreursSoumission && (
             <ul className="mb-3 list-disc pl-5 text-13 font-semibold text-rouge700">
@@ -1428,7 +1411,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
           <button
             type="button"
             onClick={handleSoumettre}
-            disabled={!demande || soumissionEnCours || demande.lignes.length === 0}
+            disabled={!demande || soumissionEnCours}
             className="w-full rounded bg-orange px-4 py-2 text-13 font-bold text-noir disabled:opacity-50"
           >
             {soumissionEnCours ? "Soumission…" : "Soumettre"}
@@ -1439,11 +1422,10 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
   );
 }
 
-// Extrait de la carte DOBB/DXC (Phase 10.6, étape C/D) puis réutilisé tel
-// quel par la carte mémo DF (étape E) — même champs réels (directionRespId/
-// serviceRespId), même bascule "Autre" mutuellement exclusive. Un seul
-// endroit à faire évoluer si cette logique change, plutôt que deux copies
-// susceptibles de diverger silencieusement.
+// Extrait de la carte DOBB/DXC puis réutilisé tel quel par la carte mémo DF
+// — même champs réels (directionRespId/serviceRespId), même bascule "Autre"
+// mutuellement exclusive. Un seul endroit à faire évoluer si cette logique
+// change, plutôt que deux copies susceptibles de diverger silencieusement.
 interface ResponsabiliteFieldsProps {
   directions: DirectionResponsabiliteVue[] | null;
   directionRespId: string;
@@ -1455,7 +1437,6 @@ interface ResponsabiliteFieldsProps {
   toggleServiceAutre: (actif: boolean) => void;
   responsabiliteServiceAutre: string;
   setResponsabiliteServiceAutre: (v: string) => void;
-  disabled: boolean;
 }
 
 function ResponsabiliteFields({
@@ -1468,8 +1449,7 @@ function ResponsabiliteFields({
   serviceAutreActif,
   toggleServiceAutre,
   responsabiliteServiceAutre,
-  setResponsabiliteServiceAutre,
-  disabled
+  setResponsabiliteServiceAutre
 }: ResponsabiliteFieldsProps) {
   return (
     <>
@@ -1479,7 +1459,7 @@ function ResponsabiliteFields({
           className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
           value={directionRespId}
           onChange={(e) => choisirDirection(e.target.value)}
-          disabled={disabled || !directions || serviceAutreActif}
+          disabled={!directions || serviceAutreActif}
         >
           <option value="">— Choisir —</option>
           {directions?.map((d) => (
@@ -1495,7 +1475,7 @@ function ResponsabiliteFields({
           className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
           value={serviceRespId}
           onChange={(e) => choisirServiceReel(e.target.value)}
-          disabled={disabled || !directionSelectionnee || serviceAutreActif}
+          disabled={!directionSelectionnee || serviceAutreActif}
         >
           <option value="">— Choisir —</option>
           {directionSelectionnee?.services.map((s) => (
@@ -1508,12 +1488,7 @@ function ResponsabiliteFields({
 
       <div style={{ gridColumn: "1 / -1" }}>
         <label className="flex items-center gap-2 text-13">
-          <input
-            type="checkbox"
-            checked={serviceAutreActif}
-            onChange={(e) => toggleServiceAutre(e.target.checked)}
-            disabled={disabled}
-          />
+          <input type="checkbox" checked={serviceAutreActif} onChange={(e) => toggleServiceAutre(e.target.checked)} />
           Responsabilité par service : « Autre » (non référencé)
         </label>
         {serviceAutreActif && (
@@ -1522,7 +1497,6 @@ function ResponsabiliteFields({
             value={responsabiliteServiceAutre}
             onChange={(e) => setResponsabiliteServiceAutre(e.target.value)}
             placeholder="Préciser le service"
-            disabled={disabled}
           />
         )}
       </div>
