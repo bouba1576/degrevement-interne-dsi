@@ -1,7 +1,7 @@
 import request from "supertest";
 import { PrismaService } from "../src/infra/prisma/prisma.service";
 import { LdapProvider } from "../src/modules/auth/providers/ldap.provider";
-import type { UtilisateurAd } from "../src/modules/auth/ports/ldap.port";
+import type { ResultatAuthentificationAd, UtilisateurAd } from "../src/modules/auth/ports/ldap.port";
 import { demarrerAppE2e, type AppE2e } from "./helpers/e2e-app";
 
 // Pré-enregistrement des utilisateurs AD, Temps 2 (12/08/2026, CLAUDE.md) —
@@ -20,8 +20,8 @@ describe("E2E — POST /api/auth/login, refus d'un compte non pré-enregistré",
   const utilisateurIds: string[] = [];
 
   const ldapFaux: Pick<LdapProvider, "authentifier" | "estDisponible" | "rechercher"> = {
-    async authentifier(identifiantAd: string): Promise<UtilisateurAd | null> {
-      return { identifiantAd, nom: "E2E Non Provisionné", groupes: [] };
+    async authentifier(identifiantAd: string): Promise<ResultatAuthentificationAd> {
+      return { statut: "AUTHENTIFIE", utilisateur: { identifiantAd, nom: "E2E Non Provisionné", groupes: [] } };
     },
     async estDisponible(): Promise<boolean> {
       return true;

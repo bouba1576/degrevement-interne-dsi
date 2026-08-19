@@ -68,15 +68,28 @@ export class AuthController {
       throw limiteAtteinte("Trop de tentatives. Réessayez plus tard.");
     }
 
-    const utilisateurAd = await this.ldap.authentifier(identifiantAd, motDePasse);
-    if (!utilisateurAd) {
+    const resultatAd = await this.ldap.authentifier(identifiantAd, motDePasse);
+    if (resultatAd.statut === "ECHEC") {
       const { verrouille } = await this.rateLimit.enregistrerEchec("login", identifiantAd);
-      await this.journal.consigner({ evenement: "LOGIN", facteur: "AD", succes: false });
+      // codeEchec/messageEchec : détail interne (JOURNAL_SECURITE
+      // uniquement, jamais renvoyé au client HTTP ci-dessous — même
+      // discipline que le message générique "Identifiants invalides.", qui
+      // ne distingue jamais identifiant inconnu de mot de passe invalide).
+      // undefined pour LdapProvider (annuaire dev), qui n'a pas cette notion
+      // — consigner() les écrit alors comme NULL, pas comme un défaut.
+      await this.journal.consigner({
+        evenement: "LOGIN",
+        facteur: "AD",
+        succes: false,
+        codeEchec: resultatAd.codeEchec,
+        messageEchec: resultatAd.messageEchec
+      });
       if (verrouille) {
         throw limiteAtteinte("Trop de tentatives. Compte temporairement verrouillé.");
       }
       throw new UnauthorizedException({ code: "NON_AUTHENTIFIE", message: "Identifiants invalides." });
     }
+    const utilisateurAd = resultatAd.utilisateur;
     await this.rateLimit.reinitialiser("login", identifiantAd);
 
     const resolution = await this.rbacResolution.resoudre(utilisateurAd);

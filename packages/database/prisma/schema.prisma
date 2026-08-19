@@ -307,6 +307,16 @@ model JournalSecurite {
   succes        Boolean
   facteur       EnumFacteurAuth
   ip            String?
+  // Détail d'échec optionnel (19/08/2026, AdApiProvider/SF-PGD-001) — un
+  // type d'événement par étape distincte du parcours (LOGIN, MFA_CHALLENGE,
+  // ACCES_NON_PROVISIONNE...), jamais un nouveau type par sous-cause d'échec
+  // de la même étape. Générique à JournalSecurite (pas propre à LOGIN) :
+  // n'importe quel événement futur peut s'en servir sans nouvelle migration.
+  // Jamais peuplés sur succes=true. LdapProvider (annuaire dev) ne les
+  // peuple jamais non plus — un bind LDAP échoué n'a pas de code/message
+  // structuré comparable à celui de l'API AD réelle.
+  codeEchec     String?               @map("code_echec")
+  messageEchec  String?               @map("message_echec")
   horodatage    DateTime              @default(now()) @db.Timestamptz
 
   utilisateur Utilisateur? @relation(fields: [utilisateurId], references: [id])

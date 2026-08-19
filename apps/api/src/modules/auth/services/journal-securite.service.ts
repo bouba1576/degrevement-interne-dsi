@@ -8,6 +8,13 @@ interface EvenementSecurite {
   facteur: EnumFacteurAuth;
   succes: boolean;
   ip?: string;
+  // Détail d'échec optionnel (19/08/2026, AdApiProvider/SF-PGD-001) —
+  // générique à tout evenement, jamais renseigné sur succes=true. Un type
+  // d'événement par étape distincte du parcours, jamais un nouveau type par
+  // sous-cause d'échec de la même étape (cf. CLAUDE.md) : ce détail vit dans
+  // ces deux colonnes, pas dans une variante de `evenement`.
+  codeEchec?: string;
+  messageEchec?: string;
 }
 
 // SF-PGD-006 : toute tentative (AD, MFA, ouverture/fermeture de session) avec
@@ -24,7 +31,9 @@ export class JournalSecuriteService {
         evenement: evt.evenement,
         facteur: evt.facteur,
         succes: evt.succes,
-        ip: evt.ip ?? null
+        ip: evt.ip ?? null,
+        codeEchec: evt.codeEchec ?? null,
+        messageEchec: evt.messageEchec ?? null
       }
     });
   }

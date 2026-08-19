@@ -5,17 +5,35 @@ export interface UtilisateurAd {
   groupes: string[];
 }
 
+// Résultat discriminé d'authentifier() (19/08/2026, AdApiProvider/SF-PGD-001)
+// — même motif que ResolutionRbac (RbacResolutionService), un statut explicite
+// plutôt qu'un simple `null` qui aurait perdu tout détail d'échec en route.
+// codeEchec/messageEchec sont optionnels et jamais présents sur AUTHENTIFIE :
+// LdapProvider (annuaire dev, bind LDAP) ne les peuple JAMAIS — un bind
+// échoué n'a pas de code/message structuré comparable à celui de l'API AD
+// réelle. Seul AdApiProvider peut les renseigner, et seulement quand la
+// réponse HTTP en portait (cf. CLAUDE.md, « JOURNAL_SECURITE — codeEchec/
+// messageEchec »).
+export type ResultatAuthentificationAd =
+  | { statut: "AUTHENTIFIE"; utilisateur: UtilisateurAd }
+  | { statut: "ECHEC"; codeEchec?: string; messageEchec?: string };
+
 export const LDAP_PORT = "LDAP_PORT";
 
 // Authentification étape 1 (SF-PGD-001) + résolution des groupes AD (SF-PGD-007).
-// Implémentation réelle attendue (LdapProvider, ldapjs) — jamais de bouchon en Phase 2.
+// Deux implémentations réelles coexistent derrière ce port (LdapProvider,
+// AdApiProvider) — jamais de bouchon.
 export interface LdapPort {
   /**
-   * Vérifie les identifiants par un bind LDAP réel sur le DN de l'utilisateur,
-   * puis résout ses groupes. Retourne null si l'identifiant est inconnu ou le
-   * mot de passe invalide — ne distingue jamais les deux cas au niveau HTTP.
+   * Vérifie les identifiants — bind LDAP réel (LdapProvider) ou appel à
+   * l'API AD REST réelle (AdApiProvider) selon LDAP_PROVIDER. `statut:
+   * "ECHEC"` couvre indistinctement identifiant inconnu et mot de passe
+   * invalide au niveau HTTP exposé au client (jamais de distinction qui
+   * faciliterait une énumération de comptes) — codeEchec/messageEchec, eux,
+   * sont un détail INTERNE (JOURNAL_SECURITE uniquement), jamais renvoyés au
+   * client HTTP.
    */
-  authentifier(identifiantAd: string, motDePasse: string): Promise<UtilisateurAd | null>;
+  authentifier(identifiantAd: string, motDePasse: string): Promise<ResultatAuthentificationAd>;
 
   /** Bind du compte de service uniquement — pour /api/health/ready (docs/06 §11). */
   estDisponible(): Promise<boolean>;

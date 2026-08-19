@@ -91,20 +91,28 @@ member: uid=jean.kouassi,ou=users,${BASE_DN}
   it("authentifie un utilisateur réel et résout ses groupes AD", async () => {
     const resultat = await provider.authentifier("jean.kouassi@orange.com", "MotDePasseTest123!");
     expect(resultat).toEqual({
-      identifiantAd: "jean.kouassi@orange.com",
-      nom: "Jean Kouassi",
-      groupes: ["GG-DGR-INITIATEUR-DOBB"]
+      statut: "AUTHENTIFIE",
+      utilisateur: {
+        identifiantAd: "jean.kouassi@orange.com",
+        nom: "Jean Kouassi",
+        groupes: ["GG-DGR-INITIATEUR-DOBB"]
+      }
     });
   });
 
-  it("refuse un mot de passe invalide sans distinguer l'erreur", async () => {
+  // codeEchec/messageEchec (19/08/2026, JOURNAL_SECURITE) : LdapProvider ne
+  // les peuple JAMAIS, contrairement à AdApiProvider — un bind LDAP échoué
+  // n'a pas de code/message structuré comparable, vérifié explicitement ici
+  // plutôt que supposé (cf. ad-api-provider.spec.ts pour le cas où ils SONT
+  // peuplés).
+  it("refuse un mot de passe invalide sans distinguer l'erreur, sans codeEchec/messageEchec", async () => {
     const resultat = await provider.authentifier("jean.kouassi@orange.com", "mauvais-mot-de-passe");
-    expect(resultat).toBeNull();
+    expect(resultat).toEqual({ statut: "ECHEC" });
   });
 
-  it("refuse un identifiant inconnu", async () => {
+  it("refuse un identifiant inconnu, sans codeEchec/messageEchec", async () => {
     const resultat = await provider.authentifier("personne.inconnue@orange.com", "peu-importe");
-    expect(resultat).toBeNull();
+    expect(resultat).toEqual({ statut: "ECHEC" });
   });
 
   // Pré-enregistrement (analyse du 12/08/2026) — recherche annuaire, jamais

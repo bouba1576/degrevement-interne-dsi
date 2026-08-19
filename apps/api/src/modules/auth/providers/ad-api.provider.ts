@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { loadEnv } from "@pgd/config";
-import type { LdapPort, UtilisateurAd } from "../ports/ldap.port";
+import type { LdapPort, ResultatAuthentificationAd, UtilisateurAd } from "../ports/ldap.port";
 
 const CHEMIN_AUTHENTIFICATION = "/ci.orange.ldap/rs-interface/authenticate";
 
@@ -15,6 +15,20 @@ interface ReponseAdApi {
   department?: unknown;
 }
 
+// Forme réelle observée d'un échec (19/08/2026, transmise directement par la
+// personne pilotant le projet — jamais vue avant ce jour) :
+//   { "code": "IncorrectLoginOrPassword", "status": 401,
+//     "message": "Login ou mot de passe incorrect.", "timestamp": "..." }
+// `code`/`message` sont capturés quand présents pour JOURNAL_SECURITE
+// (codeEchec/messageEchec, cf. ldap.port.ts) — jamais garantis par un
+// contrat formel côté fournisseur, une seule forme d'échec ayant été
+// observée à ce jour. `timestamp` n'est pas consommé (aucune ambiguïté de
+// fuseau à traiter tant que rien ne le lit).
+interface DetailEchecAdApi {
+  code?: unknown;
+  message?: unknown;
+}
+
 // Implémentation réelle de LdapPort contre l'API REST AD (SF-PGD-001,
 // confirmée le 19/08/2026 — cf. CLAUDE.md « API AD réelle » et « identifiantAd
 // = username brut »). Coexiste avec LdapProvider (dev, OpenLDAP) derrière le
@@ -24,7 +38,7 @@ interface ReponseAdApi {
 export class AdApiProvider implements LdapPort {
   private readonly logger = new Logger(AdApiProvider.name);
 
-  async authentifier(identifiantAd: string, motDePasse: string): Promise<UtilisateurAd | null> {
+  async authentifier(identifiantAd: string, motDePasse: string): Promise<ResultatAuthentificationAd> {
     const env = loadEnv();
     const url = `${env.AD_API_URL}${CHEMIN_AUTHENTIFICATION}`;
 
@@ -50,10 +64,26 @@ export class AdApiProvider implements LdapPort {
       // (AbortError) — jamais une exception qui remonte, toujours un échec
       // d'authentification silencieux à ce niveau (même contrat que
       // LdapProvider.authentifier(), qui ne distingue jamais non plus les
-      // causes d'échec au niveau HTTP).
+      // causes d'échec au niveau HTTP). Aucun code/message : aucune réponse
+      // n'a été reçue, il n'y a rien à extraire.
       this.logger.warn(`API AD injoignable pour ${identifiantAd} : ${(erreur as Error).message}`);
-      return null;
+      return { statut: "ECHEC" };
     }
+
+    // Corps lu AVANT la décision d'accès (contrairement à une version
+    // antérieure qui court-circuitait sur un statut non-200 sans jamais
+    // parser le corps) — uniquement pour extraire codeEchec/messageEchec
+    // à des fins de journalisation. Ceci NE PARTICIPE JAMAIS à la décision
+    // d'accès elle-même, qui reste strictement gouvernée par le bloc
+    // ci-dessous.
+    let corps: unknown;
+    try {
+      corps = await reponseHttp.json();
+    } catch {
+      this.logger.warn(`API AD : corps de réponse absent ou JSON invalide pour ${identifiantAd}.`);
+      corps = undefined;
+    }
+    const { codeEchec, messageEchec } = this.extraireDetailEchec(corps);
 
     // ============================================================
     // RÈGLE NON NÉGOCIABLE — ÉCHEC FERMÉ, TOUJOURS.
@@ -66,30 +96,27 @@ export class AdApiProvider implements LdapPort {
     // malformé/vide, un délai dépassé ou une erreur réseau déjà traitée
     // ci-dessus). Aucun cas non prévu par ce contrat ne doit jamais accorder
     // l'accès par défaut — un `if` qui échoue à couvrir un cas doit échouer
-    // FERMÉ (retourner null), jamais laisser passer par omission.
+    // FERMÉ (statut: "ECHEC"), jamais laisser passer par omission.
+    // codeEchec/messageEchec, extraits ci-dessus, ne sont qu'un DÉTAIL
+    // journalisé sur l'issue déjà décidée — ils n'infléchissent jamais
+    // cette décision, dans un sens comme dans l'autre.
     // ============================================================
     if (reponseHttp.status !== 200) {
-      this.logger.warn(`API AD : statut HTTP ${reponseHttp.status} pour ${identifiantAd}.`);
-      return null;
-    }
-
-    let corps: unknown;
-    try {
-      corps = await reponseHttp.json();
-    } catch {
-      this.logger.warn(`API AD : corps de réponse absent ou JSON invalide pour ${identifiantAd}.`);
-      return null;
+      this.logger.warn(
+        `API AD : statut HTTP ${reponseHttp.status} pour ${identifiantAd}${codeEchec ? ` (${codeEchec})` : ""}.`
+      );
+      return { statut: "ECHEC", codeEchec, messageEchec };
     }
 
     if (typeof corps !== "object" || corps === null) {
       this.logger.warn(`API AD : corps de réponse n'est pas un objet pour ${identifiantAd}.`);
-      return null;
+      return { statut: "ECHEC", codeEchec, messageEchec };
     }
 
     const donnees = corps as ReponseAdApi;
     if (donnees.check !== "true") {
       this.logger.warn(`API AD : champ "check" absent ou différent de "true" pour ${identifiantAd}.`);
-      return null;
+      return { statut: "ECHEC", codeEchec, messageEchec };
     }
     // ============================================================
     // Fin de la vérification à échec fermé — au-delà de cette ligne,
@@ -110,7 +137,8 @@ export class AdApiProvider implements LdapPort {
     // cohérent avec la décision déjà actée (Temps 2, pré-enregistrement) :
     // la résolution des rôles reste exclusivement MembreRole, jamais un
     // groupe AD.
-    return { identifiantAd, nom, groupes: [] };
+    const utilisateur: UtilisateurAd = { identifiantAd, nom, groupes: [] };
+    return { statut: "AUTHENTIFIE", utilisateur };
   }
 
   // Aucune capacité de recherche exposée par cette API (confirmé, cf.
@@ -158,5 +186,17 @@ export class AdApiProvider implements LdapPort {
     const nomFamille = typeof donnees.nom === "string" ? donnees.nom.trim() : "";
     const compose = `${prenom} ${nomFamille}`.trim();
     return compose.length > 0 ? compose : identifiantAd;
+  }
+
+  // N'influence jamais la décision d'accès (cf. bloc d'échec fermé
+  // ci-dessus) — lecture purement informative pour JOURNAL_SECURITE.
+  // undefined si le corps n'est pas un objet, ou si code/message n'y sont
+  // pas des chaînes non vides.
+  private extraireDetailEchec(corps: unknown): { codeEchec?: string; messageEchec?: string } {
+    if (typeof corps !== "object" || corps === null) return {};
+    const donnees = corps as DetailEchecAdApi;
+    const codeEchec = typeof donnees.code === "string" && donnees.code.length > 0 ? donnees.code : undefined;
+    const messageEchec = typeof donnees.message === "string" && donnees.message.length > 0 ? donnees.message : undefined;
+    return { codeEchec, messageEchec };
   }
 }

@@ -15,9 +15,9 @@ describe("AdApiProvider — ÉCHEC FERMÉ sur erreur réseau (hôte injoignable)
     process.env.AD_API_TIMEOUT_MS = "300";
   });
 
-  it("authentifier() renvoie null sur connexion refusée, jamais une exception qui remonte", async () => {
+  it("authentifier() renvoie {statut: ECHEC} sur connexion refusée, jamais une exception qui remonte", async () => {
     const provider = new AdApiProvider();
-    await expect(provider.authentifier("x", "x")).resolves.toBeNull();
+    await expect(provider.authentifier("x", "x")).resolves.toEqual({ statut: "ECHEC" });
   });
 
   it("estDisponible() renvoie false sur connexion refusée", async () => {

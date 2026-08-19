@@ -1,7 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import ldap, { type Client, type SearchEntry } from "ldapjs";
 import { loadEnv } from "@pgd/config";
-import type { LdapPort, UtilisateurAd } from "../ports/ldap.port";
+import type { LdapPort, ResultatAuthentificationAd, UtilisateurAd } from "../ports/ldap.port";
 
 // Implémentation réelle (SF-PGD-001) — bind LDAP/LDAPS effectif, pas de
 // simulation. Double bind : (1) le compte de service cherche le DN de
@@ -12,7 +12,7 @@ import type { LdapPort, UtilisateurAd } from "../ports/ldap.port";
 export class LdapProvider implements LdapPort {
   private readonly logger = new Logger(LdapProvider.name);
 
-  async authentifier(identifiantAd: string, motDePasse: string): Promise<UtilisateurAd | null> {
+  async authentifier(identifiantAd: string, motDePasse: string): Promise<ResultatAuthentificationAd> {
     const env = loadEnv();
     const serviceClient = this.creerClient(env.LDAP_URL);
 
@@ -20,13 +20,15 @@ export class LdapProvider implements LdapPort {
       await this.bind(serviceClient, env.LDAP_BIND_DN, env.LDAP_BIND_PASSWORD);
 
       const entree = await this.rechercherUtilisateur(serviceClient, env.LDAP_BASE_DN, identifiantAd);
-      if (!entree) return null;
+      // Jamais de codeEchec/messageEchec ici — un bind LDAP échoué n'a pas de
+      // détail structuré comparable à celui de l'API AD réelle (cf. ldap.port.ts).
+      if (!entree) return { statut: "ECHEC" };
 
       const userClient = this.creerClient(env.LDAP_URL);
       try {
         await this.bind(userClient, entree.dn.toString(), motDePasse);
       } catch {
-        return null;
+        return { statut: "ECHEC" };
       } finally {
         userClient.unbind();
       }
@@ -34,10 +36,10 @@ export class LdapProvider implements LdapPort {
       const groupes = await this.rechercherGroupes(serviceClient, env.LDAP_BASE_DN, entree.dn.toString());
       const nom = this.attribut(entree, "cn") ?? identifiantAd;
 
-      return { identifiantAd, nom, groupes };
+      return { statut: "AUTHENTIFIE", utilisateur: { identifiantAd, nom, groupes } };
     } catch (erreur) {
       this.logger.warn(`Échec LDAP pour ${identifiantAd} : ${(erreur as Error).message}`);
-      return null;
+      return { statut: "ECHEC" };
     } finally {
       serviceClient.unbind();
     }
