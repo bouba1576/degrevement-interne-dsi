@@ -31,6 +31,11 @@ export const utilisateurAdminVueSchema = z.object({
   matricule: z.string().nullable(),
   actif: z.boolean(),
   mfaMethode: enumMethodeMfa,
+  // Dérivé de totpSecret !== null (Priorité 1, 19/08/2026) — rend visible
+  // dans UtilisateursAdminTab le trou déjà documenté dans CLAUDE.md
+  // (Questions ouvertes) : un compte mfaMethode=TOTP sans secret enrôlé ne
+  // peut jamais obtenir de session, invisible jusqu'ici sans requête directe.
+  totpEnrole: z.boolean(),
   directionId: z.string().uuid().nullable(),
   directionLibelle: z.string().nullable(),
   serviceId: z.string().uuid().nullable(),
@@ -40,6 +45,17 @@ export const utilisateurAdminVueSchema = z.object({
   roles: z.array(roleAffecteVueSchema)
 });
 export type UtilisateurAdminVue = z.infer<typeof utilisateurAdminVueSchema>;
+
+// Réponse de POST /api/admin/utilisateurs/{id}/totp-secret (Priorité 1) — le
+// secret en clair n'est retourné qu'à cet instant précis, jamais rejoué par
+// une autre route (même principe que TotpEnrolement côté self-service,
+// apps/api/src/modules/auth/ports/mfa.port.ts).
+export const totpSecretAdminVueSchema = z.object({
+  qrCodeDataUrl: z.string(),
+  secretBase32: z.string(),
+  issuer: z.string()
+});
+export type TotpSecretAdminVue = z.infer<typeof totpSecretAdminVueSchema>;
 
 // Forme attendue d'un identifiant AD — deux formes valides, pas une seule.
 // Confirmé directement par la personne pilotant le projet (19/08/2026) :

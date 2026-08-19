@@ -139,6 +139,11 @@ enum EnumEvenementSecurite {
   // passe invalide), pour ne jamais confondre les deux dans le journal de
   // sécurité.
   ACCES_NON_PROVISIONNE
+  // Génération/régénération d'un secret TOTP par un admin pour un compte
+  // tiers (Priorité 1, 19/08/2026, UtilisateursAdminTab) — distinct de
+  // MFA_CHALLENGE (une vérification par la personne elle-même) : ceci
+  // journalise l'émission d'un nouveau credential, pas son usage.
+  TOTP_ENROLEMENT_ADMIN
 
   @@map("enum_evenement_securite")
 }

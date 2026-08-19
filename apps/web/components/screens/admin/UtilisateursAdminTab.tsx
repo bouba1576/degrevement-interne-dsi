@@ -155,7 +155,10 @@ export function UtilisateursAdminTab() {
                   {u.directionLibelle ? `${u.directionLibelle}${u.serviceLibelle ? " · " + u.serviceLibelle : ""}` : "—"}
                 </td>
                 <td className="px-3 py-2">
-                  <Badge ton={u.mfaMethode === "TOTP" ? "info" : "accent"}>{u.mfaMethode}</Badge>
+                  <div className="flex flex-wrap gap-1">
+                    <Badge ton={u.mfaMethode === "TOTP" ? "info" : "accent"}>{u.mfaMethode}</Badge>
+                    {u.mfaMethode === "TOTP" && !u.totpEnrole && <Badge ton="erreur">Non enrôlé</Badge>}
+                  </div>
                 </td>
                 <td className="px-3 py-2">
                   {u.actif ? <Badge ton="succes">Actif</Badge> : <Badge ton="neutre">Désactivé</Badge>}
@@ -191,6 +194,7 @@ export function UtilisateursAdminTab() {
           onConfirmer={handleConfirmer}
           chargement={chargementFormulaire}
           erreur={erreurFormulaire}
+          onEnrolementTotpReussi={() => void charger()}
         />
       )}
     </div>

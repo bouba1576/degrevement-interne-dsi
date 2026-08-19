@@ -44,6 +44,9 @@ import { RbacResolutionService } from "./services/rbac-resolution.service";
   // appliqué à AdminMotifsService/AdminCircuitsService (méthode de lecture
   // réutilisée hors du module propriétaire, cf. AdminModule). Le token,
   // jamais la classe concrète : c'est lui qui reste swappable.
-  exports: [SessionService, JournalSecuriteService, LDAP_PORT]
+  // TotpProvider exporté pour AdminUtilisateursService (Priorité 1,
+  // 19/08/2026, génération de QR TOTP admin) — même génération que le
+  // self-service (genererEnrolement), jamais une réimplémentation.
+  exports: [SessionService, JournalSecuriteService, LDAP_PORT, TotpProvider]
 })
 export class AuthModule {}

@@ -4,10 +4,15 @@ import type {
   AnnuaireResultat,
   ModifierUtilisateurAdminRequete,
   PreEnregistrerUtilisateurRequete,
+  TotpSecretAdminVue,
   UtilisateurAdminVue
 } from "@pgd/contracts";
 import { PrismaService } from "../../../infra/prisma/prisma.service";
 import { LDAP_PORT, type LdapPort } from "../../auth/ports/ldap.port";
+import { TotpProvider } from "../../auth/providers/totp.provider";
+import { chiffrerSecretTotp } from "../../auth/providers/totp-secret-crypto";
+import { JournalSecuriteService } from "../../auth/services/journal-securite.service";
+import { loadEnv } from "@pgd/config";
 
 type UtilisateurAvecRelations = Prisma.UtilisateurGetPayload<{
   include: { membresRole: { include: { role: true } }; direction: true; service: true; sousFlux: true };
@@ -29,7 +34,9 @@ const INCLUSION_COMPLETE = {
 export class AdminUtilisateursService {
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(LDAP_PORT) private readonly ldap: LdapPort
+    @Inject(LDAP_PORT) private readonly ldap: LdapPort,
+    private readonly totpProvider: TotpProvider,
+    private readonly journalSecurite: JournalSecuriteService
   ) {}
 
   // Longueur minimale pour éviter un joker LDAP quasi-vide (`cn=*a*`) qui
@@ -135,6 +142,46 @@ export class AdminUtilisateursService {
     return this.versVue(modifie);
   }
 
+  // Priorité 1 (19/08/2026) — génère/régénère un secret TOTP pour un compte
+  // déjà pré-enregistré, comble le trou documenté dans CLAUDE.md (Questions
+  // ouvertes, « Aucune route de provisionnement TOTP n'existe aujourd'hui »).
+  // Réutilise TotpProvider.genererEnrolement (même génération que le
+  // self-service) et chiffrerSecretTotp (même fonction, une seule source de
+  // vérité pour ce chiffrement) — jamais une réimplémentation.
+  //
+  // Persistance immédiate, sans étape de confirmation par code : contrairement
+  // au self-service (MfaService.confirmerEnrolementTotp), un admin ne peut
+  // pas fournir un code généré par le téléphone de la personne cible — même
+  // mécanisme que creerCompteEtEnroler (apps/api/scripts/lib/enrolement.ts).
+  async genererSecretTotp(id: string): Promise<TotpSecretAdminVue> {
+    const utilisateur = await this.prisma.utilisateur.findUnique({ where: { id } });
+    if (!utilisateur) {
+      throw new NotFoundException({ code: "UTILISATEUR_INTROUVABLE", message: "Utilisateur introuvable." });
+    }
+    if (utilisateur.mfaMethode !== "TOTP") {
+      throw new UnprocessableEntityException({
+        code: "MFA_METHODE_INVALIDE",
+        message: "Cette action nécessite mfaMethode=TOTP — modifiez la méthode MFA avant de générer un secret."
+      });
+    }
+
+    const enrolement = await this.totpProvider.genererEnrolement(utilisateur.identifiantAd);
+    const totpSecretChiffre = chiffrerSecretTotp(enrolement.secretBase32, loadEnv().TOTP_ENCRYPTION_KEY);
+
+    await this.prisma.utilisateur.update({
+      where: { id },
+      data: { totpSecret: totpSecretChiffre, totpActiveLe: new Date() }
+    });
+    await this.journalSecurite.consigner({
+      utilisateurId: id,
+      evenement: "TOTP_ENROLEMENT_ADMIN",
+      facteur: "TOTP",
+      succes: true
+    });
+
+    return { qrCodeDataUrl: enrolement.qrCodeDataUrl, secretBase32: enrolement.secretBase32, issuer: enrolement.issuer };
+  }
+
   private async validerRoles(codes: string[]): Promise<void> {
     const trouves = await this.prisma.role.findMany({ where: { code: { in: codes } }, select: { code: true } });
     const inconnus = codes.filter((c) => !trouves.some((t) => t.code === c));
@@ -154,6 +201,7 @@ export class AdminUtilisateursService {
       matricule: u.matricule,
       actif: u.actif,
       mfaMethode: u.mfaMethode,
+      totpEnrole: u.totpSecret !== null,
       directionId: u.directionId,
       directionLibelle: u.direction?.libelle ?? null,
       serviceId: u.serviceId,

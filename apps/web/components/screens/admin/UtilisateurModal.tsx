@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Modal } from "@pgd/ui";
 import type { DirectionResponsabiliteVue, EnumMethodeMfa, RoleVue, SousFluxVue, UtilisateurAdminVue } from "@pgd/contracts";
+import { ApiError, genererSecretTotpAdmin } from "@/lib/api";
 
 export interface UtilisateurModalValeur {
   nom: string;
@@ -28,7 +29,18 @@ export interface UtilisateurModalProps {
   onConfirmer: (valeur: UtilisateurModalValeur) => void;
   chargement: boolean;
   erreur: string | null;
+  // Priorité 1 (19/08/2026) — rafraîchit la liste (badge « TOTP enrôlé »)
+  // après une génération réussie, sans affecter l'état local de cette
+  // modale (le panneau QR reste affiché tel quel jusqu'à fermeture).
+  onEnrolementTotpReussi?: () => void;
 }
+
+type EtatTotp =
+  | { type: "repos" }
+  | { type: "confirmationRegeneration" }
+  | { type: "enCours" }
+  | { type: "resultat"; qrCodeDataUrl: string; secretBase32: string; issuer: string }
+  | { type: "erreur"; message: string };
 
 export function UtilisateurModal({
   identifiantAd,
@@ -40,8 +52,10 @@ export function UtilisateurModal({
   onFermer,
   onConfirmer,
   chargement,
-  erreur
+  erreur,
+  onEnrolementTotpReussi
 }: UtilisateurModalProps) {
+  const [etatTotp, setEtatTotp] = useState<EtatTotp>({ type: "repos" });
   const [valeur, setValeur] = useState<UtilisateurModalValeur>(
     utilisateur
       ? {
@@ -78,6 +92,25 @@ export function UtilisateurModal({
   }, [sousFluxOptions]);
 
   const valide = valeur.nom.trim().length > 0 && valeur.roles.length > 0;
+
+  // Agit sur mfaMethode persisté côté serveur (utilisateur.mfaMethode), pas
+  // sur la valeur en cours de saisie (valeur.mfaMethode) — le serveur refuse
+  // tant que ce changement n'a pas été enregistré (422 MFA_METHODE_INVALIDE).
+  async function lancerGenerationTotp() {
+    if (!utilisateur) return;
+    setEtatTotp({ type: "enCours" });
+    try {
+      const resultat = await genererSecretTotpAdmin(utilisateur.id);
+      setEtatTotp({ type: "resultat", ...resultat });
+      onEnrolementTotpReussi?.();
+    } catch (e) {
+      setEtatTotp({ type: "erreur", message: e instanceof ApiError ? e.message : "Génération impossible." });
+    }
+  }
+
+  function copierSecret(secret: string) {
+    void navigator.clipboard.writeText(secret);
+  }
 
   return (
     <Modal
@@ -212,6 +245,119 @@ export function UtilisateurModal({
             </p>
           )}
         </div>
+
+        {utilisateur && (
+          <div className="rounded border border-gris200 p-3">
+            <div className="mb-2 text-12 font-bold uppercase tracking-wide text-gris600">Secret TOTP</div>
+
+            {utilisateur.mfaMethode !== "TOTP" ? (
+              <p className="text-13 text-gris600">
+                {valeur.mfaMethode === "TOTP"
+                  ? "Enregistrez d'abord ce changement de méthode MFA — la génération n'est possible qu'une fois « TOTP » confirmé côté serveur."
+                  : "Sans objet pour la méthode DUO."}
+              </p>
+            ) : (
+              <>
+                <p className="mb-2 text-13 text-gris600">
+                  {utilisateur.totpEnrole ? "Un secret est déjà enrôlé pour ce compte." : "Aucun secret enrôlé pour ce compte."}
+                </p>
+
+                {etatTotp.type === "repos" && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      utilisateur.totpEnrole ? setEtatTotp({ type: "confirmationRegeneration" }) : void lancerGenerationTotp()
+                    }
+                    className="rounded border border-gris300 px-3 py-1.5 text-13 font-bold text-gris700"
+                  >
+                    {utilisateur.totpEnrole ? "Régénérer le secret TOTP" : "Générer un QR TOTP"}
+                  </button>
+                )}
+
+                {etatTotp.type === "confirmationRegeneration" && (
+                  <div className="rounded border border-orange bg-orange50 p-2">
+                    <p className="mb-2 text-13 font-semibold text-orangeTexteSurClair">
+                      L&apos;ancien secret sera immédiatement invalidé — toute application d&apos;authentification qui le
+                      portait cessera de fonctionner, sans message d&apos;erreur avant la prochaine tentative de
+                      connexion de cette personne.
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void lancerGenerationTotp()}
+                        className="rounded bg-orange px-3 py-1.5 text-13 font-bold text-noir"
+                      >
+                        Confirmer la régénération
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEtatTotp({ type: "repos" })}
+                        className="rounded border border-gris300 px-3 py-1.5 text-13 font-bold text-gris700"
+                      >
+                        Annuler
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {etatTotp.type === "enCours" && (
+                  <button type="button" disabled className="rounded border border-gris300 px-3 py-1.5 text-13 font-bold text-gris400">
+                    Génération…
+                  </button>
+                )}
+
+                {etatTotp.type === "erreur" && (
+                  <div>
+                    <p className="mb-2 text-13 font-semibold text-rouge700">{etatTotp.message}</p>
+                    <button
+                      type="button"
+                      onClick={() => setEtatTotp({ type: "repos" })}
+                      className="rounded border border-gris300 px-3 py-1.5 text-13 font-bold text-gris700"
+                    >
+                      Réessayer
+                    </button>
+                  </div>
+                )}
+
+                {etatTotp.type === "resultat" && (
+                  <div className="flex flex-col gap-3">
+                    <p className="rounded border border-rouge700 bg-rougeFond p-2 text-12 font-semibold text-rouge700">
+                      Ce QR contient le secret en clair. Transmettez-le à la personne concernée par un canal
+                      sécurisé — jamais par e-mail ou messagerie interne non chiffrée. Il est déjà enregistré
+                      côté serveur : fermer cette fenêtre ne l&apos;annule pas.
+                    </p>
+                    <div className="flex items-start gap-4">
+                      {/* data URL locale (jamais une ressource distante) — <img> plutôt que next/image */}
+                      <img src={etatTotp.qrCodeDataUrl} alt="QR code TOTP" className="h-[160px] w-[160px] rounded border border-gris200" />
+                      <div className="flex flex-col gap-2">
+                        <div>
+                          <div className="text-11 font-bold uppercase tracking-wide text-gris600">Saisie manuelle</div>
+                          <div className="flex items-center gap-2">
+                            <code className="rounded bg-gris50 px-2 py-1 font-mono text-12">{etatTotp.secretBase32}</code>
+                            <button
+                              type="button"
+                              onClick={() => copierSecret(etatTotp.secretBase32)}
+                              className="text-12 font-semibold text-encre underline"
+                            >
+                              Copier
+                            </button>
+                          </div>
+                        </div>
+                        <a
+                          href={etatTotp.qrCodeDataUrl}
+                          download={`qr-totp-${utilisateur.identifiantAd.replace(/[^a-z0-9.]+/gi, "-")}.png`}
+                          className="text-12 font-semibold text-encre underline"
+                        >
+                          Télécharger le PNG
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
     </Modal>
   );

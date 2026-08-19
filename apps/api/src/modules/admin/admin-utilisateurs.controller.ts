@@ -4,7 +4,9 @@ import {
   annuaireResultatSchema,
   modifierUtilisateurAdminRequeteSchema,
   preEnregistrerUtilisateurRequeteSchema,
+  totpSecretAdminVueSchema,
   utilisateurAdminVueSchema,
+  type TotpSecretAdminVue,
   type UtilisateurAdminVue
 } from "@pgd/contracts";
 import { ApiZodBody, ApiZodResponse } from "../../common/swagger/zod-schema";
@@ -57,5 +59,14 @@ export class AdminUtilisateursController {
   async modifier(@Param("id") id: string, @Body() body: unknown): Promise<UtilisateurAdminVue> {
     const dto = modifierUtilisateurAdminRequeteSchema.parse(body);
     return this.utilisateurs.modifier(id, dto);
+  }
+
+  // Priorité 1 (19/08/2026) — génère/régénère un secret TOTP, retourné en
+  // clair une seule fois (cf. AdminUtilisateursService.genererSecretTotp).
+  @Roles("ADMIN_PGD")
+  @Post(":id/totp-secret")
+  @ApiZodResponse(201, totpSecretAdminVueSchema)
+  async genererSecretTotp(@Param("id") id: string): Promise<TotpSecretAdminVue> {
+    return this.utilisateurs.genererSecretTotp(id);
   }
 }

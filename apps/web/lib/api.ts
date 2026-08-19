@@ -38,6 +38,7 @@ import {
   sousFluxVueSchema,
   tacheVueSchema,
   tachesListeReponseSchema,
+  totpSecretAdminVueSchema,
   utilisateurAdminVueSchema,
   type AnnuaireResultat,
   type ApercuRoutageReponse,
@@ -105,6 +106,7 @@ import {
   type SousFluxVue,
   type TacheVue,
   type TachesListeReponse,
+  type TotpSecretAdminVue,
   type UniversFmiVue,
   type UtilisateurAdminVue
 } from "@pgd/contracts";
@@ -545,6 +547,14 @@ export function modifierUtilisateurAdmin(id: string, donnees: ModifierUtilisateu
     method: "PATCH",
     headers: JSON_HEADERS,
     body: JSON.stringify(donnees)
+  });
+}
+
+// Génère/régénère un secret TOTP (Priorité 1) — le secret/QR retournés ne
+// sont jamais rejouables : à afficher immédiatement, jamais mis en cache.
+export function genererSecretTotpAdmin(id: string): Promise<TotpSecretAdminVue> {
+  return requete(`/api/admin/utilisateurs/${id}/totp-secret`, totpSecretAdminVueSchema, {
+    method: "POST"
   });
 }
 
