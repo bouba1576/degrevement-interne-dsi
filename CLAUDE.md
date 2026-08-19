@@ -423,7 +423,7 @@ Troisième forme réelle d'échec observée (après `IncorrectLoginOrPassword` l
 
 **Cause non investiguée, délibérément** : rien dans ce dépôt n'explique ce changement (VPN, règle réseau, changement de topologie côté hôte de développement) — non nécessaire pour ce qui est documenté ici, et deviner serait exactement le genre d'affirmation non vérifiée que ce fichier évite ailleurs. Simple constat daté : injoignable le 12/08, joignable le 19/08, depuis le conteneur `api` de ce dépôt.
 
-**Ce que ça ne change pas** : aucune authentification réelle avec de vrais identifiants n'a encore été tentée depuis cet environnement — voir la section dédiée à la bascule `LDAP_PROVIDER=ad-api` du 19/08/2026 pour l'état de cette vérification précise, distincte de la simple joignabilité réseau constatée ici.
+**Ce que ça ne changeait pas, au moment de cette découverte** : la joignabilité réseau, seule, ne valait pas authentification réelle avec de vrais identifiants — celle-ci a été faite séparément, plus tard le même jour (19/08/2026), voir la section dédiée à la bascule `LDAP_PROVIDER=ad-api` (« REVÉRIFICATION CONTRE LE VRAI SYSTÈME — FAITE ») pour le résultat.
 
 Verrouillé par test — `apps/api/test/ad-api-provider.spec.ts`, describe « forme réelle observée de l'API AD (400 MethodArgumentNotValidException) » : corps exact, refus fermé prouvé, `codeEchec`/`messageEchec` capturés (`"MethodArgumentNotValidException"`/`"Bad Request"`).
 
@@ -478,7 +478,14 @@ Suite directe de la section précédente : l'intégration réelle qui manquait (
 
 **`c_afofana6` non touché, comme demandé** — ni le compte ni sa vérification déjà faite (section précédente) n'ont été modifiés par ce chantier.
 
-**REVÉRIFICATION CONTRE LE VRAI SYSTÈME — EN ATTENTE, NE PEUT PAS SE FAIRE DEPUIS CET ENVIRONNEMENT.** `192.168.31.78` (hôte de l'API AD réelle) reste injoignable depuis ce poste de développement (déjà documenté, cf. « API AD réelle » — IP privée du réseau interne Orange). Une fois `LDAP_PROVIDER=ad-api` sélectionnable en configuration réelle, la personne pilotant le projet doit revérifier `c_afofana6` (ou tout autre compte réel) contre le vrai système, avec de vrais identifiants, depuis un poste sur le réseau interne — cette session ne peut fournir qu'une vérification par serveur simulé, jamais une preuve contre le système réel. Rien dans ce chantier ne doit être lu comme une confirmation que l'intégration fonctionne contre l'API réelle elle-même — seulement qu'elle respecte fidèlement le contrat tel que documenté, et échoue fermé sur tout ce qui s'en écarte.
+**REVÉRIFICATION CONTRE LE VRAI SYSTÈME — FAITE, 19/08/2026, RÉUSSIE.** `LDAP_PROVIDER` basculé sur `ad-api` dans le `.env` réellement utilisé (`AD_API_URL=http://192.168.31.78:8080` — devenu joignable depuis cet environnement ce même jour, cf. section dédiée « Joignabilité de l'API AD réelle » ci-dessous), conteneur `api` recréé pour le prendre en compte. Premier login réel contre `AdApiProvider`, effectué par la personne pilotant le projet elle-même — jamais par cette session, le mot de passe réel n'a jamais été saisi ni vu ici (cf. limite posée explicitement au moment de la bascule) : `c_afofana6`, vrai mot de passe AD, écran `LoginScreen` réel de bout en bout, code TOTP réel, session obtenue.
+
+Vérifié après coup, directement en base, pas supposé :
+- `journal_securite` : `LOGIN`/`succes=true`/`facteur=AD`, `code_echec`/`message_echec` NULL sur cette ligne de succès (2026-08-19 11:29:20 UTC).
+- Deux entrées `MFA_CHALLENGE`/`succes=true`/`facteur=TOTP` — la première ~10 ms après le `LOGIN` (démarrage du défi), la seconde ~15 s plus tard (code vérifié) — l'écart correspond à une saisie humaine réelle du code, pas un script.
+- `membre_role` de `c_afofana6` : une seule ligne, `ADMIN_PGD` — inchangée depuis la création du compte, seule source des `roles` embarqués dans la session ; la session obtenue porte donc `roles: ["ADMIN_PGD"]`.
+
+**Ce que ça confirme, et ce que ça ne confirme pas.** Confirme : `AdApiProvider` authentifie réellement contre l'API AD réelle, `identifiantAd` transmis tel quel (`c_afofana6`, jamais transformé) y est bien reconnu, le contrat documenté (`check:"true"`, etc.) correspond à ce que le vrai système renvoie sur un succès, et le reste du pipeline (RBAC, MFA TOTP, session) fonctionne sans changement au-delà du fournisseur LDAP. Ne confirme pas : le comportement d'`AdApiProvider` face à d'autres formes d'échec réelles non encore rencontrées au-delà des trois déjà documentées (`IncorrectLoginOrPassword`, `MethodArgumentNotValidException`, et l'échec réseau générique) — chaque nouvelle forme observée reste à verrouiller par test au moment où elle apparaît, comme les trois précédentes.
 
 ### `JOURNAL_SECURITE` — `codeEchec`/`messageEchec` (19/08/2026)
 
