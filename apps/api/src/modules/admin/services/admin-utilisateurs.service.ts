@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from "@nestjs/common";
+import { ConflictException, Inject, Injectable, NotFoundException, UnprocessableEntityException } from "@nestjs/common";
 import { Prisma } from "@pgd/database";
 import type {
   AnnuaireResultat,
@@ -7,7 +7,7 @@ import type {
   UtilisateurAdminVue
 } from "@pgd/contracts";
 import { PrismaService } from "../../../infra/prisma/prisma.service";
-import { LdapProvider } from "../../auth/providers/ldap.provider";
+import { LDAP_PORT, type LdapPort } from "../../auth/ports/ldap.port";
 
 type UtilisateurAvecRelations = Prisma.UtilisateurGetPayload<{
   include: { membresRole: { include: { role: true } }; direction: true; service: true; sousFlux: true };
@@ -29,7 +29,7 @@ const INCLUSION_COMPLETE = {
 export class AdminUtilisateursService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly ldap: LdapProvider
+    @Inject(LDAP_PORT) private readonly ldap: LdapPort
   ) {}
 
   // Longueur minimale pour éviter un joker LDAP quasi-vide (`cn=*a*`) qui

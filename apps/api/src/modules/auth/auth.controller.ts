@@ -5,6 +5,7 @@ import {
   HttpCode,
   HttpException,
   HttpStatus,
+  Inject,
   Logger,
   Post,
   Query,
@@ -33,7 +34,7 @@ import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import type { UtilisateurRequete } from "../../common/guards/auth.guard";
 import { PrismaService } from "../../infra/prisma/prisma.service";
 import type { ChallengeDemarre } from "./ports/mfa.port";
-import { LdapProvider } from "./providers/ldap.provider";
+import { LDAP_PORT, type LdapPort } from "./ports/ldap.port";
 import { MfaService } from "./services/mfa.service";
 import { SessionService } from "./services/session.service";
 import { RateLimitService } from "./services/rate-limit.service";
@@ -46,7 +47,7 @@ export class AuthController {
   private readonly logger = new Logger(AuthController.name);
 
   constructor(
-    private readonly ldap: LdapProvider,
+    @Inject(LDAP_PORT) private readonly ldap: LdapPort,
     private readonly rbacResolution: RbacResolutionService,
     private readonly mfaService: MfaService,
     private readonly sessionService: SessionService,

@@ -41,6 +41,21 @@ export const envSchema = z.object({
   LDAP_BASE_DN: z.string().min(1, "LDAP_BASE_DN est requis"),
   LDAP_USER_DOMAIN: z.string().default("orange.com"),
 
+  // --- Intégration réelle API AD (AdApiProvider, 19/08/2026) -------------
+  // Sélecteur de fournisseur LdapPort, même mécanique que CRM_PROVIDER/
+  // GED_PROVIDER/SMTP_PROVIDER (bouchons commutables, cf. CLAUDE.md « Ports
+  // d'intégration ») — jamais un remplacement de LdapProvider (dev,
+  // OpenLDAP), qui reste le défaut et reste pleinement fonctionnel.
+  LDAP_PROVIDER: z.enum(["ldap", "ad-api"]).default("ldap"),
+  // Base uniquement (schéma+hôte+port) — le chemin documenté
+  // (/ci.orange.ldap/rs-interface/authenticate) est fixe, ajouté par
+  // AdApiProvider, pas paramétrable ici. Vide par défaut : sans objet tant
+  // que LDAP_PROVIDER=ldap (défaut), et un appel avec une base vide échoue
+  // de toute façon côté fetch — la même discipline d'échec fermé s'applique
+  // sans code de validation dédié.
+  AD_API_URL: z.string().default(""),
+  AD_API_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+
   // --- Phase 2 : MFA (MfaPort — réel, SF-PGD-002, ADR-08) ----------------
   DUO_CLIENT_ID: z.string().min(1, "DUO_CLIENT_ID est requis"),
   DUO_CLIENT_SECRET: z.string().min(1, "DUO_CLIENT_SECRET est requis"),

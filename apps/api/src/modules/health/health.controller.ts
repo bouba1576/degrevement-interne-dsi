@@ -1,4 +1,4 @@
-import { Controller, Get } from "@nestjs/common";
+import { Controller, Get, Inject } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 import { connect } from "node:net";
 import { loadEnv } from "@pgd/config";
@@ -7,7 +7,7 @@ import { ApiZodResponse } from "../../common/swagger/zod-schema";
 import { Public } from "../../common/decorators/public.decorator";
 import { PrismaService } from "../../infra/prisma/prisma.service";
 import { CacheService } from "../../infra/redis/cache.service";
-import { LdapProvider } from "../auth/providers/ldap.provider";
+import { LDAP_PORT, type LdapPort } from "../auth/ports/ldap.port";
 import { DuoProvider } from "../auth/providers/duo.provider";
 
 @ApiTags("santé")
@@ -16,7 +16,7 @@ export class HealthController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cache: CacheService,
-    private readonly ldap: LdapProvider,
+    @Inject(LDAP_PORT) private readonly ldap: LdapPort,
     private readonly duo: DuoProvider
   ) {}
 

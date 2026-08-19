@@ -72,6 +72,13 @@ services:
       LDAP_BIND_PASSWORD: ${LDAP_BIND_PASSWORD}
       LDAP_BASE_DN: ${LDAP_BASE_DN}
       LDAP_USER_DOMAIN: ${LDAP_USER_DOMAIN:-orange.com}
+      # Sélecteur de fournisseur LdapPort (AdApiProvider, 19/08/2026) — défaut
+      # "ldap" (LdapProvider, ce que ce fichier configure ci-dessus) ;
+      # "ad-api" bascule vers l'API AD REST réelle (AD_API_URL requis dans ce
+      # cas). Coexistence, jamais un remplacement — cf. CLAUDE.md.
+      LDAP_PROVIDER: ${LDAP_PROVIDER:-ldap}
+      AD_API_URL: ${AD_API_URL:-}
+      AD_API_TIMEOUT_MS: ${AD_API_TIMEOUT_MS:-5000}
       DUO_CLIENT_ID: ${DUO_CLIENT_ID}
       DUO_CLIENT_SECRET: ${DUO_CLIENT_SECRET}
       DUO_API_HOST: ${DUO_API_HOST}

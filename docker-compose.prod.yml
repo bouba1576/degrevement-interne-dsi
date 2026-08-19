@@ -73,6 +73,13 @@ services:
       # packages/*, vérifié par recherche) — conservée pour cohérence avec
       # packages/config/src/env.schema.ts, pas pour un usage réel aujourd'hui.
       LDAP_USER_DOMAIN: ${LDAP_USER_DOMAIN:-orange.com}
+      # AdApiProvider (SF-PGD-001, 19/08/2026) — coexistence avec LdapProvider
+      # ci-dessus, jamais un remplacement. LDAP_PROVIDER=ad-api requiert
+      # AD_API_URL ; cf. .env.prod.example pour le contrat détaillé et la
+      # revérification encore en attente depuis le réseau interne.
+      LDAP_PROVIDER: ${LDAP_PROVIDER:-ldap}
+      AD_API_URL: ${AD_API_URL:-}
+      AD_API_TIMEOUT_MS: ${AD_API_TIMEOUT_MS:-5000}
       DUO_CLIENT_ID: ${DUO_CLIENT_ID:?DUO_CLIENT_ID doit être défini dans .env.prod}
       DUO_CLIENT_SECRET: ${DUO_CLIENT_SECRET:?DUO_CLIENT_SECRET doit être défini dans .env.prod}
       DUO_API_HOST: ${DUO_API_HOST:?DUO_API_HOST doit être défini dans .env.prod}
