@@ -1,0 +1,52 @@
+User stories par direction
+
+1 - Direction DOBB
+  * Possibilité de saisir manuellement la TSC comme c’est le cas de la TVA (Sur le panneau de calcul de l'écran du formulaire d'ajustement)
+  * Avoir une vue sans la ligne HT+TSC quand nous appliquons la nouvelle règle de calcul avec les taxes appliquée (Sur le panneau de calcul de l'écran du formulaire d'ajustement)
+  * Rendre le champ LIBELLE dynamique (Contestation facture/ Régularisation de compte) sur le formulaire d'ajustement
+  * Faire remonter le N° DE CASE JADE sur la fiche d’ajustement
+  * Identifier par un 1 signe tous les dossiers qui ont déjà été récupérés pour traitement dans la corbeille des validateurs afin d’éviter les cas de doublon dans la prise en charge
+  * Dans le champ des TAXES APPLIQUEES, ne pas oublier d’ajouter l’onglet pour l’ancien calcul TSC ( TVA calculé sur HT+TSC)
+  * Ne pas oublier la création d’une corbeille dans laquelle tous les dossiers rejetés par le validateur seront routés, l’initiateur recevra une notification en alerte sur le dossier rejeté
+  * Possibilité de générer un bilan pour les KPI’S (journalier, hebdomadaire, mensuel, annuel)
+  * On souhaite que le champ RECUPERATION CLIENT PAR N° DE COMPTE soit plutôt fait par le N° de case au lieu du N° de compte
+  * Ne pas rendre le champ AGENT INITIATEUR déroulant
+  * Dans le champ RESPONSABILITE PAR DIRECTION, rajouter ces acteurs : DSI, DAL, DF, DG, DRDI, DJR et Retirer les acteurs MARKETING B2B, SI, DM/DRSI, TOP MANAGEMENT
+  * Dans le champ RESPONSABILITE PAR SERVICE, Retirer les acteurs ADV MOBILE et ADV ASCOM et rajouter AUTRES
+
+
+2 - Direction DF
+  * Pour la DF-Opérateurs, nos réclamations ne sont pas tracées dans JADE ; nous voulons nous rassurer que ce champ ne sera pas bloquants pour nous.
+  * En terme d’état, est-il possible de pouvoir faire une extraction des dossiers, avec un filtre sur le statut (en cours, terminé, etc…).
+L’idée de cet état sera de permettre aux équipes de faire leur suivi ainsi que les rapprochements avec les autres systèmes externes ( GAIA et BSCS ).
+
+
+3- Direction DXC
+  * Le téléchargement des pièces jointes ne nous dirige pas vers nos dossiers
+  * Le champ LIBELLE doit être déroulant (Contestation facture/ Régularisation de compte) 
+  * Pouvoir effectuer la saisie du montant dans la partie montant à ajuster HT (FCFA)
+  * Nom du client doit remonter après la saisie du N°client et non déroulant
+  * Afficher le récurrent mensuel dès la sélection de la formule.
+  * Permettre la saisie manuelle du nom du service si « Autre » est choisi dans la rubrique Responsabilité par Service.
+  * Rendre le commentaire obligatoire sur la fiche d'ajustement
+  * Ajouter le statut de la ligne concernée (Actif, Suspendu, Résilié).
+  * Tableau de bord
+Insérer un calendrier permettant de sélectionner une période précise.
+Développer des tableaux de bord spécifiques :
+Par Agent
+Par Programme (Ex Réclamation B2C)
+La liste des statistiques par motif doit être complétée pour être plus exhaustive.
+Ajouter des statistiques par libellé, Agent, et Programme.
+
+
+4 - Direction FRA
+  * Au de l’onglet ‘’ Mes demandes ‘’ ajouter les champs suivants au details d'un dossier :Numéro de compte client, Les motifs de l’ajustements + clients exonérés, Ajouter le segment de Marché , Le nom de l’agent responsable du dégréement et son entité, Le type d’offre (Mobile, LS, Voix fixe ) 
+* Une autre proposition afin de réduire les erreurs de saisie, 
+pour certains champs, pouvez-vous les réaliser en liste déroulante :
+§  Les motifs d’ajustement (Résiliation non effective, etc…)
+§  Périmètres de marché (B2B, B2C et autres ….)
+§  Offre ( Mobile , Internet , fixe etc….)
+ 
+
+  
+

@@ -6,6 +6,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@pgd/web", "exec", "next", "dev", "-p", "3057"],
       "port": 3057
+    },
+    {
+      "name": "maquette",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--yes", "http-server", "docs/design", "-p", "4173", "-c-1"],
+      "port": 4173
     }
   ]
 }
