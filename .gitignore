@@ -24,3 +24,8 @@ packages/database/prisma/generated/
 # être commité, contrairement à exemple-comptes.json (données fictives).
 apps/api/scripts/*.json
 !apps/api/scripts/exemple-comptes.json
+# Même discipline — secrets/rclone.conf (destination distante du service de
+# sauvegarde, docker-compose.prod.yml, cf. CLAUDE.md) porte des identifiants
+# réels une fois la destination connue. Jamais dans ce dépôt, préventif dès
+# maintenant même si le fichier n'existe pas encore.
+/secrets/

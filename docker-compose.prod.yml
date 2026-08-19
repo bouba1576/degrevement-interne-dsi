@@ -78,6 +78,41 @@ services:
       timeout: 5s
       retries: 10
 
+  # Sauvegarde Postgres (19/08/2026, mécanisme distinct de Nexus — en
+  # parallèle de cette dépendance externe en attente, pas bloqué par elle).
+  # Service dédié, jamais un cron hôte — cohérent avec le reste de ce
+  # fichier : tout est déclaré ici, rien ne dépend d'un état externe non
+  # versionné. cf. CLAUDE.md, section dédiée, pour la conception complète.
+  backup:
+    build:
+      context: .
+      dockerfile: docker/backup/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER doit être défini dans .env.prod}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD doit être défini dans .env.prod}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB doit être défini dans .env.prod}
+      # Fréquence/rétention : proposées à 86400s (quotidien) / 7 jours,
+      # actées comme défaut par la personne pilotant le projet (19/08/2026)
+      # — restent overridables dans .env.prod si la décision change.
+      BACKUP_INTERVAL_SECONDES: ${BACKUP_INTERVAL_SECONDES:-86400}
+      BACKUP_RETENTION_JOURS: ${BACKUP_RETENTION_JOURS:-7}
+      # Vide par défaut — destination distante non encore communiquée côté
+      # infrastructure Orange (19/08/2026). Le mécanisme reste pleinement
+      # fonctionnel en local seul tant que cette variable n'est pas fournie
+      # — jamais une condition bloquante, cf. docker/backup/backup.sh.
+      BACKUP_REMOTE_TARGET: ${BACKUP_REMOTE_TARGET:-}
+    volumes:
+      - pgd_prod_backups_data:/backups
+      # rclone.conf : uniquement nécessaire une fois BACKUP_REMOTE_TARGET
+      # renseigné (protocole/identifiants propres à la destination réelle,
+      # jamais dans ce dépôt). Absent aujourd'hui — décommenter le jour où
+      # la destination distante est connue et ce fichier créé hors du dépôt.
+      # - ./secrets/rclone.conf:/config/rclone/rclone.conf:ro
+
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -239,3 +274,9 @@ volumes:
   pgd_prod_postgres_data:
   pgd_prod_redis_data:
   pgd_prod_rabbitmq_data:
+  # Socle local du mécanisme de sauvegarde — sur le même disque physique que
+  # les autres volumes de cet hôte par défaut. Protège contre une perte de
+  # conteneur/volume Postgres, PAS contre une panne disque/serveur complète
+  # (cf. CLAUDE.md, section dédiée) : la destination distante
+  # (BACKUP_REMOTE_TARGET) reste nécessaire pour cette protection-là.
+  pgd_prod_backups_data:
