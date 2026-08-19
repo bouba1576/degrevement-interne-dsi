@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Modal, Icon } from "@pgd/ui";
-import type { AnnuaireResultat } from "@pgd/contracts";
+import { estFormeIdentifiantAdValide, type AnnuaireResultat } from "@pgd/contracts";
 import { ApiError, rechercherAnnuaireAd } from "@/lib/api";
 
 export interface AnnuaireRechercheModalProps {
@@ -23,9 +23,9 @@ export interface AnnuaireRechercheModalProps {
 // capacité de recherche — un seul point d'accès, l'authentification, cf.
 // CLAUDE.md « API AD réelle ». LdapPort.rechercher() ne peut donc pas rester
 // le seul chemin de pré-enregistrement). Même garde-fou de forme que le
-// contrat serveur (preEnregistrerUtilisateurRequeteSchema) — jamais de
-// vérification d'existence, aucune source consultable ne le permet ici.
-const IDENTIFIANT_AD_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// contrat serveur (`estFormeIdentifiantAdValide`, importé directement — pas
+// une réimplémentation locale) : accepte la forme e-mail (socle de test dev)
+// et la forme brute (username AD réel, confirmé 19/08/2026, cf. CLAUDE.md).
 
 export function AnnuaireRechercheModal({ onFermer, onSelectionner, identifiantsDejaPreEnregistres }: AnnuaireRechercheModalProps) {
   const [mode, setMode] = useState<"recherche" | "manuel">("recherche");
@@ -65,8 +65,10 @@ export function AnnuaireRechercheModal({ onFermer, onSelectionner, identifiantsD
       setErreurManuel("Le nom est requis.");
       return;
     }
-    if (!IDENTIFIANT_AD_REGEX.test(identifiant)) {
-      setErreurManuel("Forme attendue : identifiant@domaine (ex. jean.kouassi@orange.com) — existence non vérifiable ici.");
+    if (!estFormeIdentifiantAdValide(identifiant)) {
+      setErreurManuel(
+        "Forme attendue : identifiant@domaine (ex. jean.kouassi@orange.com), ou un identifiant AD brut sans espace (ex. c_afofana6) — existence non vérifiable ici."
+      );
       return;
     }
     setErreurManuel(null);
