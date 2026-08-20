@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { CircuitPill, Icon, StatusBadge, type StatutDemande } from "@pgd/ui";
-import type { DemandeDetail, EtapeDossier, SessionUtilisateur } from "@pgd/contracts";
+import type { DemandeDetail, EtapeDossier, JournalAuditVue, SessionUtilisateur } from "@pgd/contracts";
 import {
   ApiError,
   abandonnerDemande,
@@ -49,8 +49,11 @@ export function DossierDetailScreen({ dossierId, utilisateur, onRetour }: Dossie
   // chargé ailleurs (AuditTab ne fetch le journal que lorsqu'on ouvre
   // l'onglet), donc un appel de plus ici, au même titre que les deux déjà
   // groupés dans ce Promise.all — même famille de coût que pieces.length,
-  // déjà disponible via `detail` sans requête dédiée.
-  const [compteAudit, setCompteAudit] = useState<number | null>(null);
+  // déjà disponible via `detail` sans requête dédiée. Tableau complet
+  // conservé (pas seulement .length) : sert aussi le bandeau "Rejeté par…"
+  // ci-dessous (entrée JournalAudit action="cloture", cf. commentaire à son
+  // usage) — un seul appel pour les deux besoins, pas un doublon.
+  const [audit, setAudit] = useState<JournalAuditVue[] | null>(null);
   const [onglet, setOnglet] = useState<Onglet>("apercu");
   const [erreur, setErreur] = useState<string | null>(null);
   const [chargementAction, setChargementAction] = useState(false);
@@ -65,7 +68,7 @@ export function DossierDetailScreen({ dossierId, utilisateur, onRetour }: Dossie
       ]);
       setDetail(d);
       setEtapes(e);
-      setCompteAudit(audit.length);
+      setAudit(audit);
       setErreur(null);
     } catch (err) {
       setErreur(err instanceof ApiError ? err.message : "Erreur inattendue.");
@@ -94,6 +97,17 @@ export function DossierDetailScreen({ dossierId, utilisateur, onRetour }: Dossie
   // qu'un confort d'affichage, R2 des règles non négociables).
   const aucuneDecisionPrise = etapes.every((e) => e.dateDecision === null);
   const peutModifier = peutAbandonnerOuRappeler && aucuneDecisionPrise;
+  // Bandeaux "Rejeté par…"/"Dossier validé" (docs/design/screens2.jsx:431-432,
+  // DIVERGENCES.md, jamais capturés avant ce tour). Le rejet ne mène à REJETE
+  // que dans le cas terminal clore=true (le renvoi par défaut remet le
+  // dossier en BROUILLON, cf. CLAUDE.md § « Renvoi ou clôture d'un dossier
+  // rejeté ») — l'auteur/motif ne sont donc pas des champs de Demande mais
+  // l'entrée JournalAudit action="cloture" (commentaire=motifCloture),
+  // déjà chargée ci-dessus pour le compteur d'onglet.
+  const entreeCloture = audit
+    ? [...audit].reverse().find((a) => a.action === "cloture")
+    : undefined;
+  const controleEnAttente = etapes.some((e) => e.typeActeur === "C" && e.dateDecision === null);
 
   async function handleAbandonner() {
     setChargementAction(true);
@@ -193,13 +207,37 @@ export function DossierDetailScreen({ dossierId, utilisateur, onRetour }: Dossie
         <TacheActionBanner etapes={etapes} utilisateur={utilisateur} onActionEffectuee={charger} />
       )}
 
+      {demande.statut === "REJETE" && (
+        <div className="mb-4 flex items-start gap-2 rounded-6 border border-rouge200 bg-rouge50 p-3 text-13">
+          <Icon nom="x" taille={17} className="mt-0.5 shrink-0 text-rouge700" />
+          <div>
+            <p className="font-bold text-rouge700">
+              Rejeté{entreeCloture ? ` par ${entreeCloture.acteur}` : ""}
+            </p>
+            <p className="text-gris700">Motif : {entreeCloture?.commentaire ?? "—"}</p>
+          </div>
+        </div>
+      )}
+      {demande.statut === "VALIDE" && (
+        <div className="mb-4 flex items-start gap-2 rounded-6 border border-vert200 bg-vert50 p-3 text-13">
+          <Icon nom="check" taille={17} className="mt-0.5 shrink-0 text-vert700" />
+          <div>
+            <p className="font-bold text-vert700">Dossier validé</p>
+            <p className="text-gris700">
+              Toutes les étapes bloquantes approuvées · transmis au SI de facturation
+              {controleEnAttente ? " · contrôle a posteriori en attente" : ""}.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="mb-4 flex gap-1 border-b border-gris200">
         {(
           [
             ["apercu", "Aperçu"],
             ["circuit", "Circuit de validation"],
             ["pieces", `Pièces (${pieces.length})`],
-            ["audit", compteAudit === null ? "Journal d'audit" : `Journal d'audit (${compteAudit})`]
+            ["audit", audit === null ? "Journal d'audit" : `Journal d'audit (${audit.length})`]
           ] as const
         ).map(([cle, libelle]) => (
           <button

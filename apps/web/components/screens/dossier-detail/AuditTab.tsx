@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Icon } from "@pgd/ui";
 import type { JournalAuditVue } from "@pgd/contracts";
 import { ApiError, journalAuditDemande } from "@/lib/api";
 
@@ -40,6 +41,9 @@ export function AuditTab({ demandeId }: AuditTabProps) {
             .reverse()
             .map((e) => (
               <div key={e.id} className="flex items-start gap-3 border-b border-gris100 pb-3 last:border-none">
+                <div className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full bg-gris100 text-gris700">
+                  <Icon nom="dots" taille={14} />
+                </div>
                 <div className="flex-1">
                   <div className="flex flex-wrap items-center gap-2 text-13">
                     <span className="font-bold">{e.action}</span>

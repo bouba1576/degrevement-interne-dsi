@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { Icon } from "@pgd/ui";
 import type { PieceJointeVue } from "@pgd/contracts";
 import { ApiError, ajouterPiece, supprimerPiece } from "@/lib/api";
 
@@ -77,6 +78,7 @@ export function PiecesTab({ demandeId, pieces, onChange }: PiecesTabProps) {
         <div className="flex flex-col gap-2">
           {pieces.map((piece) => (
             <div key={piece.id} className="flex items-center gap-3 rounded border border-gris200 p-3">
+              <Icon nom="doc" taille={18} className="shrink-0 text-gris600" />
               <div className="flex-1">
                 <div className="text-13 font-semibold">{piece.nomFichier}</div>
                 <div className="text-12 text-gris600">
