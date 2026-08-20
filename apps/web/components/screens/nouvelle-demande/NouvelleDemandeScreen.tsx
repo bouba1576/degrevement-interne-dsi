@@ -930,6 +930,27 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                       onChange={(e) => setFinPeriodeContestee(e.target.value)}
                     />
                   </div>
+                  {/* Période contestée (jours) — la maquette (screens1.jsx:385,
+                      `f.pJours`) en fait une saisie manuelle indépendante ;
+                      vérifié avant de la reproduire telle quelle : le serveur
+                      réel calcule déjà ce nombre depuis les deux dates
+                      ci-dessus (DemandeService.calculerJoursContestes,
+                      periodeContesteeJours dans demandeDetailSchema) — un
+                      champ manuel dupliquerait une valeur que le serveur
+                      recalcule de toute façon, avec un risque réel de
+                      contradiction (l'utilisateur saisit un nombre qui ne
+                      correspond pas à l'écart réel des dates). Affichage en
+                      lecture seule de la valeur serveur, jamais recalculée
+                      côté client (R11) — visible seulement une fois le
+                      dossier créé (avant, aucune valeur n'existe encore). */}
+                  {demande && demande.demande.periodeContesteeJours !== null && (
+                    <div>
+                      <label className="mb-1 block text-13 font-bold text-gris800">Période contestée (jours)</label>
+                      <p className="rounded border border-gris200 bg-gris50 px-3 py-2 text-13 text-gris700">
+                        {demande.demande.periodeContesteeJours}
+                      </p>
+                    </div>
+                  )}
                   {/* Point de contact — <select>, pas un champ libre (Priorité
                       1.3, 20/08/2026) : liste réelle trouvée dans la maquette
                       (docs/design/data.jsx:211-219, POINTS_CONTACT), pas
@@ -1238,16 +1259,21 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
           prévu / Soumettre » de la maquette (docs/design/screens1.jsx),
           aligné en haut à droite du formulaire plutôt qu'empilé dessous. */}
       <div className="flex flex-col gap-4 lg:sticky lg:top-26">
-        {/* « Taxes appliquées » — lecture seule tant qu'aucun dossier
-            n'existe (rien à quoi rattacher un PATCH /taxes) : affiche alors
-            les défauts du circuit. Devient interactif dès que `demande`
-            existe. */}
+        {/* « Calcul automatique » (docs/design/screens1.jsx:484-537) — la
+            maquette nomme la carte englobante « Calcul automatique »
+            (card-head), « Taxes appliquées » n'y est qu'un sous-titre
+            interne (tiny muted uppercase) : le h3 de carte était nommé
+            « Taxes appliquées » à tort, corrigé ici. Lecture seule tant
+            qu'aucun dossier n'existe (rien à quoi rattacher un PATCH
+            /taxes) : affiche alors les défauts du circuit. Devient
+            interactif dès que `demande` existe. */}
         {!demande && parametresCalcul && (
           <Card className="p-5">
             <div className="mb-3 flex items-center gap-2">
               <Icon nom="calc" taille={17} />
-              <h3 className="text-14 font-bold">Taxes appliquées</h3>
+              <h3 className="text-14 font-bold">Calcul automatique</h3>
             </div>
+            <div className="mb-1 text-11 font-bold uppercase tracking-[.05em] text-gris600">Taxes appliquées</div>
             <div className="flex flex-col gap-1 text-13 text-gris700">
               <span>
                 TSC {parametresCalcul.tscActiveDefaut ? "appliquée" : "non appliquée"} (
@@ -1267,9 +1293,10 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
           <Card className="p-5">
             <div className="mb-3 flex items-center gap-2">
               <Icon nom="calc" taille={17} />
-              <h3 className="text-14 font-bold">Taxes appliquées</h3>
+              <h3 className="text-14 font-bold">Calcul automatique</h3>
               {enregistrementTaxes && <span className="text-12 font-semibold text-gris600">Enregistrement…</span>}
             </div>
+            <div className="mb-3 text-11 font-bold uppercase tracking-[.05em] text-gris600">Taxes appliquées</div>
 
             <div className="mb-3 flex gap-2">
               <button
@@ -1445,9 +1472,11 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
             </ul>
           )}
           {erreurSoumissionUnique && <p className="mb-3 text-13 font-semibold text-rouge700">{erreurSoumissionUnique}</p>}
-          <Button onClick={handleSoumettre} disabled={!demande || soumissionEnCours} pleineLargeur>
-            {soumissionEnCours ? "Soumission…" : "Soumettre"}
+          <Button onClick={handleSoumettre} disabled={!demande || soumissionEnCours} taille="grande" pleineLargeur>
+            <Icon nom="send" taille={17} />
+            {soumissionEnCours ? "Soumission…" : "Soumettre la demande"}
           </Button>
+          <p className="mt-2 text-center text-12 text-gris600">Un identifiant unique sera généré et l&apos;action journalisée.</p>
         </Card>
       </div>
     </div>
