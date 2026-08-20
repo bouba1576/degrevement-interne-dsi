@@ -18,7 +18,6 @@ import type {
   ParametresCalculPublicVue,
   SessionUtilisateur,
   SoumissionReponse,
-  SousFluxVue,
   UniversFmiVue
 } from "@pgd/contracts";
 import {
@@ -43,12 +42,6 @@ import { ApercuRoutage } from "./ApercuRoutage";
 import { PiecesTab } from "../dossier-detail/PiecesTab";
 
 const CIRCUITS: EnumCircuit[] = ["DOBB", "DXC", "DF"];
-
-// Segment associé à chaque circuit (table CLAUDE.md « Projet ») — libellé
-// d'affichage statique, pas une règle métier : n'influence ni le routage ni
-// le calcul, sert uniquement le badge visuel déjà présent dans la maquette
-// (docs/design/screens1.jsx, badge "DOBB · B2B" etc.).
-const SEGMENT_PAR_CIRCUIT: Record<EnumCircuit, string> = { DOBB: "B2B", DXC: "B2C", DF: "Wholesale" };
 
 // Badge sur la carte « Fiche d'ajustement » (Phase 10.6sexies, inventaire
 // champ par champ) — contenu de maquette statique, pas une donnée
@@ -159,7 +152,10 @@ interface TaxesEdition {
 }
 
 export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProps) {
-  const [circuit, setCircuit] = useState<EnumCircuit>(() => circuitParDefaut(utilisateur.roles));
+  // Déduit silencieusement du profil, jamais affiché ni modifiable à
+  // l'écran (Priorité 0.2, révision du 19/08/2026, cf. CLAUDE.md) — plus un
+  // état React puisqu'il ne change plus jamais après le premier rendu.
+  const circuit = circuitParDefaut(utilisateur.roles);
   const [nomClient, setNomClient] = useState("");
   const [commentaire, setCommentaire] = useState("");
   const [dateDemande, setDateDemande] = useState(dateDuJourLocale);
@@ -174,7 +170,6 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
   const [matriculeInitiateur, setMatriculeInitiateur] = useState("");
   const [agentSaisie, setAgentSaisie] = useState(utilisateur.nom);
   const [sousFlux, setSousFlux] = useState("");
-  const [sousFluxOptions, setSousFluxOptions] = useState<SousFluxVue[] | null>(null);
   const [libelle, setLibelle] = useState("");
   const [motifId, setMotifId] = useState("");
   const [universFmiCode, setUniversFmiCode] = useState("");
@@ -210,17 +205,21 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
     void listerLibellesAjustementActifs(circuit).then(setLibellesAjustement);
   }, [circuit]);
 
-  // Sous-flux — même mécanique que motifs/libellés : référentiel réel scopé
-  // au circuit. Préremplissage depuis le profil de session
-  // (utilisateur.sousFluxId, JWT) uniquement si l'entrée référentielle
-  // correspond au circuit sélectionné ; reste éditable dans tous les cas.
+  // Sous-flux — RÉVISION Priorité 0.2 (19/08/2026, cf. CLAUDE.md) : jamais
+  // affiché ni modifiable à l'écran, déduit silencieusement du
+  // `sousFluxId` du profil de session. Décision inversant la présélection
+  // éditable d'origine (SF-PGD-109), sur instruction explicite après
+  // consultation métier. Aucun repli applicatif si le sousFluxId du profil
+  // ne correspond à aucune entrée du circuit déduit (profil sans
+  // sousFluxId, ou sousFluxId d'un autre circuit) — traité comme une
+  // précondition opérationnelle (profil admin correct), pas une garantie
+  // à coder : deux cas réels de ce type trouvés et corrigés en base avant
+  // cette révision (jean.kouassi, FGGK6451), cf. CLAUDE.md.
   useEffect(() => {
     setSousFlux("");
-    setSousFluxOptions(null);
     void listerSousFluxReferentiel(circuit).then((options) => {
-      setSousFluxOptions(options);
-      const prefill = utilisateur.sousFluxId ? options.find((s) => s.id === utilisateur.sousFluxId) : undefined;
-      if (prefill) setSousFlux(prefill.libelle);
+      const correspondance = utilisateur.sousFluxId ? options.find((s) => s.id === utilisateur.sousFluxId) : undefined;
+      if (correspondance) setSousFlux(correspondance.libelle);
     });
   }, [circuit, utilisateur.sousFluxId]);
 
@@ -666,30 +665,13 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
               </h3>
               {sauvegardeEnCours && <span className="text-12 font-semibold text-gris600">Enregistrement…</span>}
             </div>
-            <span className="rounded-full border border-gris200 bg-gris50 px-3 py-1 text-12 font-bold text-gris700">
-              {circuit} · {SEGMENT_PAR_CIRCUIT[circuit]}
-            </span>
           </div>
           {erreurSauvegarde && <p className="mb-3 text-13 font-semibold text-rouge700">{erreurSauvegarde}</p>}
 
-          {/* Circuit — seul champ verrouillé une fois le dossier créé : le
-              segment/routage en dépendent structurellement
-              (modifierDemandeRequeteSchema omet circuit, jamais modifiable
-              après coup). Tous les autres champs restent éditables tout du
-              long, saisie sauvegardée en silence (option B). */}
-          <label className="mb-1 block text-13 font-bold text-gris800">Circuit</label>
-          <select
-            className="mb-3 w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-            value={circuit}
-            onChange={(e) => setCircuit(e.target.value as EnumCircuit)}
-            disabled={!!demande}
-          >
-            {CIRCUITS.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+          {/* Circuit — RÉVISION Priorité 0.2 (19/08/2026) : jamais affiché ni
+              modifiable à l'écran, déduit silencieusement du profil
+              (circuitParDefaut). Décision inversant la sélection manuelle
+              d'origine, sur instruction explicite après consultation métier. */}
 
           <label className="mb-1 block text-13 font-bold text-gris800">
             {circuit === "DF" ? "Opérateur" : "Nom du client"} <span className="text-rouge">*</span>
@@ -764,22 +746,6 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                 value={agentSaisie}
                 onChange={(e) => setAgentSaisie(e.target.value)}
               />
-            </div>
-            <div>
-              <label className="mb-1 block text-13 font-bold text-gris800">Sous-flux</label>
-              <select
-                className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-                value={sousFlux}
-                onChange={(e) => setSousFlux(e.target.value)}
-                disabled={!sousFluxOptions}
-              >
-                <option value="">— Choisir —</option>
-                {sousFluxOptions?.map((s) => (
-                  <option key={s.id} value={s.libelle}>
-                    {s.libelle}
-                  </option>
-                ))}
-              </select>
             </div>
             <div>
               <label className="mb-1 block text-13 font-bold text-gris800">Motif</label>
