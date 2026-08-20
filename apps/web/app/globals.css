@@ -126,12 +126,22 @@
     --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* `body` utilisait `@apply bg-background text-foreground` — les tokens
+   shadcn du bloc `:root` ci-dessus (scaffold jamais utilisé par le reste de
+   l'app, oklch(1 0 0)/oklch(0.145 0 0)), pas les tokens PGD réellement
+   extraits de la maquette (`--g50`/`--ink`, docs/design/styles.css:53).
+   Conséquence réelle : fond blanc pur sur TOUTES les pages au lieu du gris
+   très clair (#f8f8f8) de la maquette — trouvé en auditant le design system
+   dans son ensemble, pas un écran isolé. `border-border` (règle universelle
+   `*`) reste inchangé : ce reset ne prend effet que sur un élément qui fixe
+   déjà une largeur de bordure sans couleur explicite, jamais visible tel
+   quel. */
 @layer base {
   * {
     @apply border-border outline-ring/50;
     }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-gris50 text-encre;
     }
   html {
     @apply font-sans;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Icon, Modal, SlaTimer, TypeActeurBadge } from "@pgd/ui";
+import { Button, Icon, Modal, SlaTimer, TypeActeurBadge } from "@pgd/ui";
 import type { EtapeDossier, SessionUtilisateur, TacheVue } from "@pgd/contracts";
 import { ApiError, approuverTache, claimTache, rejeterTache, trouverTache, unclaimTache } from "@/lib/api";
 
@@ -96,14 +96,9 @@ export function TacheActionBanner({ etapes, utilisateur, onActionEffectuee }: Ta
           </div>
 
           {!reclameeParMoi && (
-            <button
-              type="button"
-              disabled={chargement}
-              onClick={() => executer(() => claimTache(tache.id))}
-              className="flex items-center gap-1.5 rounded bg-encre px-3 py-1.5 text-13 font-bold text-blanc disabled:opacity-50"
-            >
+            <Button disabled={chargement} onClick={() => executer(() => claimTache(tache.id))} variante="sombre" taille="petite">
               <Icon nom="lock" taille={15} /> Récupérer
-            </button>
+            </Button>
           )}
 
           {reclameeParMoi && (

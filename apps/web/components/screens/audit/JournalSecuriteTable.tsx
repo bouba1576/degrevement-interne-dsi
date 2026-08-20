@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Empty, type TonBadge } from "@pgd/ui";
+import { Badge, Card, Empty, type TonBadge } from "@pgd/ui";
 import type { EnumEvenementSecurite, EnumFacteurAuth, JournalSecuriteVue } from "@pgd/contracts";
 
 export interface JournalSecuriteTableProps {
@@ -40,16 +40,16 @@ const LIBELLE_FACTEUR: Record<EnumFacteurAuth, string> = {
 export function JournalSecuriteTable({ entrees }: JournalSecuriteTableProps) {
   if (entrees.length === 0) {
     return (
-      <div className="rounded-6 border border-gris200 bg-blanc p-8">
+      <Card className="p-8">
         <Empty icone="lock" titre="Aucun événement">
           Aucun événement ne correspond à ces critères.
         </Empty>
-      </div>
+      </Card>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-6 border border-gris200 bg-blanc">
+    <Card className="overflow-hidden">
       <table className="w-full text-13">
         <thead>
           <tr className="border-b border-gris100 text-left text-12 font-bold text-gris600">
@@ -88,6 +88,6 @@ export function JournalSecuriteTable({ entrees }: JournalSecuriteTableProps) {
           ))}
         </tbody>
       </table>
-    </div>
+    </Card>
   );
 }

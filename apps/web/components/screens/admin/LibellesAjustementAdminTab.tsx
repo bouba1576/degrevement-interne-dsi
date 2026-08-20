@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Badge, CircuitPill } from "@pgd/ui";
+import { Badge, Button, Card, CircuitPill } from "@pgd/ui";
 import type { CircuitVue, LibelleAjustementVue } from "@pgd/contracts";
 import {
   ApiError,
@@ -114,19 +114,14 @@ export function LibellesAjustementAdminTab() {
           onChange={(e) => setNouveauLibelle(e.target.value)}
           placeholder="Nouveau libellé"
         />
-        <button
-          type="button"
-          onClick={handleCreer}
-          disabled={chargement || !nouveauLibelle.trim()}
-          className="rounded bg-encre px-3 py-1.5 text-13 font-bold text-blanc disabled:opacity-50"
-        >
+        <Button onClick={handleCreer} disabled={chargement || !nouveauLibelle.trim()} variante="sombre" taille="petite">
           + Ajouter
-        </button>
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {circuits.map((c) => (
-          <div key={c.code} className="rounded-6 border border-gris200 bg-blanc p-4">
+          <Card key={c.code} className="p-5">
             <div className="mb-3 flex items-center gap-2">
               <CircuitPill code={c.code} />
               <h4 className="text-13 font-bold">{c.segment}</h4>
@@ -191,7 +186,7 @@ export function LibellesAjustementAdminTab() {
                   </div>
                 ))}
             </div>
-          </div>
+          </Card>
         ))}
       </div>
     </div>

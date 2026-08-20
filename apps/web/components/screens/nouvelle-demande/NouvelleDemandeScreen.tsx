@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
-import { Badge, Icon, Money } from "@pgd/ui";
+import { Badge, Button, Card, Icon, Money } from "@pgd/ui";
 import type {
   CircuitVue,
   CompteClient,
@@ -674,10 +674,10 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
 
   if (soumissionReussie) {
     return (
-      <div className="rounded-6 border border-gris200 bg-blanc p-5 text-13">
+      <Card className="p-5 text-13">
         Demande soumise — statut <span className="font-bold">{soumissionReussie.statut}</span>, étape courante{" "}
         {soumissionReussie.etapeCourante}.
-      </div>
+      </Card>
     );
   }
 
@@ -708,7 +708,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
         {/* Carte « Identification » — communs aux trois circuits. Motif
             scopé au circuit courant ; univers/facteur indépendants du
             circuit. */}
-        <div className="rounded-6 border border-gris200 bg-blanc p-5">
+        <Card className="p-5">
           <div className="mb-3 flex items-center gap-2">
             <Icon nom="building" taille={17} />
             <h3 className="text-14 font-bold">
@@ -818,13 +818,13 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
               )}
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* Carte « DOBB/DXC » — champs partagés par les deux circuits +
             champs propres à DOBB seul. Absente pour DF (aucune source ne les
             y montre). */}
         {(circuit === "DOBB" || circuit === "DXC") && (
-          <div className="rounded-6 border border-gris200 bg-blanc p-5">
+          <Card className="p-5">
             <div className="mb-3 flex items-center gap-2">
               <Icon nom="flow" taille={17} />
               <h3 className="text-14 font-bold">{circuit === "DOBB" ? "Fiche d'ajustement B2B" : "Fiche d'ajustement B2C"}</h3>
@@ -1014,7 +1014,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                 setResponsabiliteServiceAutre={setResponsabiliteServiceAutre}
               />
             </div>
-          </div>
+          </Card>
         )}
 
         {/* Carte « Mémo Wholesale » — DF uniquement. Compte/référence et
@@ -1023,7 +1023,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
             Contexte/Observation/Montant) passe par champsCircuit — cf.
             champsCircuitDfSchema plus haut. */}
         {circuit === "DF" && (
-          <div className="rounded-6 border border-gris200 bg-blanc p-5">
+          <Card className="p-5">
             <div className="mb-3 flex items-center gap-2">
               <Icon nom="doc" taille={17} />
               <h3 className="text-14 font-bold">Mémo d'ajustement Wholesale</h3>
@@ -1131,13 +1131,13 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                 setResponsabiliteServiceAutre={setResponsabiliteServiceAutre}
               />
             </div>
-          </div>
+          </Card>
         )}
 
         {/* Univers FMI / Facteur de dégrèvement — regroupement de la maquette
             (screens1.jsx:463-469, carte "Montant & commentaire" juste avant
             les pièces jointes). */}
-        <div className="rounded-6 border border-gris200 bg-blanc p-5">
+        <Card className="p-5">
           <div className="mb-3 flex items-center gap-2">
             <Icon nom="filter" taille={17} />
             <h3 className="text-14 font-bold">Classification</h3>
@@ -1176,14 +1176,14 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
               </select>
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* Carte « Montant à ajuster » — Priorité 2 (19/08/2026) : remplace
             RechercheNd/SelecteurLignes/Lignes retenues. Saisie libre au
             niveau du dossier (Demande.montantHt), plus commentaire (R14,
             obligatoire à la soumission, jamais à la création — même
             mécanisme cumulable que R13/sous-flux). */}
-        <div className="rounded-6 border border-gris200 bg-blanc p-5">
+        <Card className="p-5">
           <div className="mb-3 flex items-center gap-2">
             <Icon nom="calc" taille={17} />
             <h3 className="text-14 font-bold">Montant {circuit === "DF" ? "à ajuster (FCFA)" : "& commentaire"}</h3>
@@ -1218,7 +1218,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
               <p className="mt-1 text-12 text-gris600">Obligatoire à la soumission (R14).</p>
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* Pièces justificatives — la maquette (screens1.jsx:479) les affiche
             dès l'écran de création, pour les trois circuits identiquement.
@@ -1243,7 +1243,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
             les défauts du circuit. Devient interactif dès que `demande`
             existe. */}
         {!demande && parametresCalcul && (
-          <div className="rounded-6 border border-gris200 bg-blanc p-5">
+          <Card className="p-5">
             <div className="mb-3 flex items-center gap-2">
               <Icon nom="calc" taille={17} />
               <h3 className="text-14 font-bold">Taxes appliquées</h3>
@@ -1260,11 +1260,11 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
               <span>Assiette TVA par défaut : {parametresCalcul.assietteTvaDefaut === "HT_TSC" ? "HT + TSC" : "HT seul"}</span>
             </div>
             <p className="mt-2 text-12 text-gris600">Modifiable une fois le montant HT saisi.</p>
-          </div>
+          </Card>
         )}
 
         {demande && taxesEdition && (
-          <div className="rounded-6 border border-gris200 bg-blanc p-5">
+          <Card className="p-5">
             <div className="mb-3 flex items-center gap-2">
               <Icon nom="calc" taille={17} />
               <h3 className="text-14 font-bold">Taxes appliquées</h3>
@@ -1409,7 +1409,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
             })()}
 
             {erreurTaxes && <p className="mb-2 text-13 font-semibold text-rouge700">{erreurTaxes}</p>}
-          </div>
+          </Card>
         )}
 
         {/* Priorité 1.7 (20/08/2026) : structure du panneau visible dès le
@@ -1423,20 +1423,20 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
         {demande ? (
           <ApercuRoutage demandeId={demande.demande.id} declencheur={apercuDeclencheur} />
         ) : (
-          <div className="rounded-6 border border-gris200 bg-blanc p-5">
+          <Card className="p-5">
             <div className="mb-3 flex items-center gap-2">
               <Icon nom="flow" taille={17} />
               <h3 className="text-14 font-bold">Routage prévu</h3>
             </div>
             <p className="text-13 text-gris600">Saisissez un montant HT pour visualiser le circuit.</p>
-          </div>
+          </Card>
         )}
 
         {/* Toujours rendu, désactivé tant qu'aucun dossier n'existe — même
             pattern que la maquette (`disabled={!tranche}`, screens1.jsx:569),
             qui n'a jamais retiré le bouton du DOM. `handleSoumettre` garde
             déjà `if (!demande) return;`. */}
-        <div className="rounded-6 border border-gris200 bg-blanc p-5">
+        <Card className="p-5">
           {erreursSoumission && (
             <ul className="mb-3 list-disc pl-5 text-13 font-semibold text-rouge700">
               {erreursSoumission.map((v, i) => (
@@ -1445,15 +1445,10 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
             </ul>
           )}
           {erreurSoumissionUnique && <p className="mb-3 text-13 font-semibold text-rouge700">{erreurSoumissionUnique}</p>}
-          <button
-            type="button"
-            onClick={handleSoumettre}
-            disabled={!demande || soumissionEnCours}
-            className="w-full rounded bg-orange px-4 py-2 text-13 font-bold text-noir disabled:opacity-50"
-          >
+          <Button onClick={handleSoumettre} disabled={!demande || soumissionEnCours} pleineLargeur>
             {soumissionEnCours ? "Soumission…" : "Soumettre"}
-          </button>
-        </div>
+          </Button>
+        </Card>
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Badge, Icon, type NomIcone, type TonBadge } from "@pgd/ui";
+import { Badge, Button, Card, Icon, type NomIcone, type TonBadge } from "@pgd/ui";
 import type { Demande, EnumCircuit, EnumStatutDemande } from "@pgd/contracts";
 import { ApiError, listerDemandes } from "@/lib/api";
 import { DossierTable } from "@/components/shared/DossierTable";
@@ -124,13 +124,9 @@ export function MesDemandesScreen({ onOuvrirDossier, onNaviguer }: MesDemandesSc
           Vos trois corbeilles d&apos;initiateur. Les demandes rejetées sont à corriger sous le SLA du processus
           initié.
         </p>
-        <button
-          type="button"
-          onClick={() => onNaviguer("nouvelle")}
-          className="rounded bg-encre px-3 py-1.5 text-13 font-bold text-blanc"
-        >
+        <Button onClick={() => onNaviguer("nouvelle")} variante="sombre" taille="petite">
           + Nouvelle demande
-        </button>
+        </Button>
       </div>
 
       <div className="mb-4 flex gap-2">
@@ -151,7 +147,7 @@ export function MesDemandesScreen({ onOuvrirDossier, onNaviguer }: MesDemandesSc
         ))}
       </div>
 
-      <div className="mb-4 flex flex-wrap items-end gap-3 rounded-6 border border-gris200 bg-blanc p-4">
+      <Card className="mb-4 flex flex-wrap items-end gap-3 p-5">
         <label className="flex flex-1 flex-col gap-1 text-13" style={{ minWidth: 220 }}>
           Recherche
           <div className="relative">
@@ -180,7 +176,7 @@ export function MesDemandesScreen({ onOuvrirDossier, onNaviguer }: MesDemandesSc
             ))}
           </select>
         </label>
-      </div>
+      </Card>
 
       {erreur && <p className="mb-3 text-13 font-semibold text-rouge700">{erreur}</p>}
 

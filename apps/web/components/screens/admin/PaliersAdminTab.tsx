@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Badge, CircuitPill, Icon, Money, TypeActeurBadge } from "@pgd/ui";
+import { Badge, Button, CircuitPill, Icon, Money, TypeActeurBadge } from "@pgd/ui";
 import type { CircuitVue, EnumCircuit, PalierVue, RoleVue, TrouPalier } from "@pgd/contracts";
 import { ApiError, creerPalier, listerCircuits, listerPaliers, listerRoles, modifierPalier, supprimerPalier } from "@/lib/api";
 import { PalierModal, type PalierModalValeur } from "./PalierModal";
@@ -176,13 +176,9 @@ export function PaliersAdminTab() {
               (palierDeclencheId ? <Badge ton="succes">tranche trouvée</Badge> : <Badge ton="erreur">aucune tranche</Badge>)}
           </div>
 
-          <button
-            type="button"
-            onClick={() => setPalierEnEdition(null)}
-            className="rounded bg-encre px-3 py-1.5 text-13 font-bold text-blanc"
-          >
+          <Button onClick={() => setPalierEnEdition(null)} variante="sombre" taille="petite">
             + Nouveau palier
-          </button>
+          </Button>
         </div>
 
         {trousDuCircuit.length > 0 && (

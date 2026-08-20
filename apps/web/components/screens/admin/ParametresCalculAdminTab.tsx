@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Field, Icon, Modal, Money } from "@pgd/ui";
+import { Button, Card, Field, Icon, Modal, Money } from "@pgd/ui";
 import type { EnumAssietteTva, ParametreCalculVue } from "@pgd/contracts";
 import { ApiError, compterBrouillons, listerParametresCalcul, modifierParametreCalcul } from "@/lib/api";
 
@@ -146,7 +146,7 @@ export function ParametresCalculAdminTab() {
 
         return (
           <div key={p.circuit} className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
-            <div className="rounded-6 border border-gris200 bg-blanc p-4">
+            <Card className="p-5">
               <div className="mb-3 flex items-center gap-2">
                 <Icon nom="calc" taille={17} />
                 <h3 className="font-mono text-14 font-bold">{p.circuit}</h3>
@@ -230,15 +230,16 @@ export function ParametresCalculAdminTab() {
                   </label>
                 </div>
               </div>
-              <button
-                type="button"
+              <Button
                 onClick={() => demanderEnregistrement(p.circuit)}
                 disabled={enregistrement === p.circuit}
-                className="mt-3 rounded bg-encre px-3 py-1.5 text-13 font-bold text-blanc disabled:opacity-50"
+                variante="sombre"
+                taille="petite"
+                className="mt-3"
               >
                 {enregistrement === p.circuit ? "Enregistrement…" : "Enregistrer"}
-              </button>
-            </div>
+              </Button>
+            </Card>
 
             {/* lg:sticky lg:top-26 (audit de complétude structurelle) — la
                 maquette pose position:sticky;top:86 sur ce même panneau
@@ -296,14 +297,14 @@ export function ParametresCalculAdminTab() {
               <button type="button" onClick={() => setConfirmation(null)} className="rounded border border-gris200 px-3 py-1.5 text-13 font-bold text-gris700">
                 Annuler
               </button>
-              <button
-                type="button"
+              <Button
                 onClick={() => appliquer(confirmation.circuit)}
                 disabled={enregistrement === confirmation.circuit}
-                className="rounded bg-encre px-3 py-1.5 text-13 font-bold text-blanc disabled:opacity-50"
+                variante="sombre"
+                taille="petite"
               >
                 Confirmer et recalculer
-              </button>
+              </Button>
             </>
           }
         >

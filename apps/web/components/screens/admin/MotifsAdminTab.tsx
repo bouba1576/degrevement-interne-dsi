@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Badge, CircuitPill, Icon } from "@pgd/ui";
+import { Badge, Button, Card, CircuitPill, Icon } from "@pgd/ui";
 import type { CircuitVue, MotifVue } from "@pgd/contracts";
 import { ApiError, creerMotif, listerCircuits, listerMotifs, modifierMotif, supprimerMotif } from "@/lib/api";
 import { MotifModal, type MotifModalValeur } from "./MotifModal";
@@ -79,18 +79,18 @@ export function MotifsAdminTab() {
     <div>
       {erreur && <p className="mb-3 text-13 font-semibold text-rouge700">{erreur}</p>}
 
-      <button type="button" onClick={() => setMotifEnEdition(null)} className="mb-3 rounded bg-encre px-3 py-1.5 text-13 font-bold text-blanc">
+      <Button onClick={() => setMotifEnEdition(null)} variante="sombre" taille="petite" className="mb-3">
         + Nouveau motif
-      </button>
+      </Button>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {circuits.map((c) => (
-          <div key={c.code} className="rounded-6 border border-gris200 bg-blanc p-4">
+          <Card key={c.code} className="p-5">
             <div className="mb-3 flex items-center gap-2">
               <CircuitPill code={c.code} />
               <h3 className="text-14 font-bold">{c.segment}</h3>
             </div>
-            <div className="mb-2 text-11 font-bold uppercase tracking-wide text-gris600">
+            <div className="mb-2 text-11 font-bold uppercase tracking-[.08em] text-gris600">
               Motifs ({(motifsParCircuit[c.code] ?? []).length})
             </div>
             <div className="flex flex-col gap-2">
@@ -114,7 +114,7 @@ export function MotifsAdminTab() {
                 </div>
               ))}
             </div>
-          </div>
+          </Card>
         ))}
       </div>
 

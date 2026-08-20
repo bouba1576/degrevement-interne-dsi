@@ -1,6 +1,7 @@
 import { Dialog as DialogPrimitive } from "radix-ui";
 import type { ReactNode } from "react";
 import { Icon } from "./Icon";
+import { IconButton } from "./IconButton";
 import type { NomIcone } from "../icons";
 
 export interface ModalProps {
@@ -52,13 +53,7 @@ export function Modal({ titre, icone, onFermer, children, pied, large }: ModalPr
             <DialogPrimitive.Title className="text-17 font-bold">{titre}</DialogPrimitive.Title>
             <div className="flex-1" />
             <DialogPrimitive.Close asChild>
-              <button
-                type="button"
-                className="grid h-34 w-34 place-items-center rounded border border-gris200 bg-blanc text-gris700 hover:border-gris400 hover:text-noir"
-                aria-label="Fermer"
-              >
-                <Icon nom="x" taille={16} />
-              </button>
+              <IconButton icone="x" taille={16} ariaLabel="Fermer" />
             </DialogPrimitive.Close>
           </div>
           <div className="overflow-y-auto p-6">{children}</div>

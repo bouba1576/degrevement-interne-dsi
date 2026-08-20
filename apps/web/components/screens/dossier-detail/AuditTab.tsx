@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Icon } from "@pgd/ui";
+import { Card, Icon } from "@pgd/ui";
 import type { JournalAuditVue } from "@pgd/contracts";
 import { ApiError, journalAuditDemande } from "@/lib/api";
 
@@ -31,7 +31,7 @@ export function AuditTab({ demandeId }: AuditTabProps) {
   if (!entrees) return <p className="text-13 text-gris600">Chargement…</p>;
 
   return (
-    <div className="rounded-6 border border-gris200 bg-blanc p-4">
+    <Card className="p-5">
       {entrees.length === 0 ? (
         <p className="text-13 text-gris600">Aucune entrée d&apos;audit.</p>
       ) : (
@@ -58,6 +58,6 @@ export function AuditTab({ demandeId }: AuditTabProps) {
             ))}
         </div>
       )}
-    </div>
+    </Card>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Card } from "@pgd/ui";
 import type { EnumEvenementSecurite, JournalSecuriteVue } from "@pgd/contracts";
 import { ApiError, journalSecurite } from "@/lib/api";
 import { JournalSecuriteTable } from "./JournalSecuriteTable";
@@ -75,7 +76,7 @@ export function AuditSecuriteScreen() {
         dossier.
       </p>
 
-      <div className="mb-4 flex flex-wrap items-end gap-3 rounded-6 border border-gris200 bg-blanc p-4">
+      <Card className="mb-4 flex flex-wrap items-end gap-3 p-5">
         <label className="flex flex-1 flex-col gap-1 text-13" style={{ minWidth: 200 }}>
           Compte
           <input
@@ -117,7 +118,7 @@ export function AuditSecuriteScreen() {
             className="rounded border border-gris300 px-2 py-1.5 text-13"
           />
         </label>
-      </div>
+      </Card>
 
       {erreur && <p className="mb-3 text-13 font-semibold text-rouge700">{erreur}</p>}
 

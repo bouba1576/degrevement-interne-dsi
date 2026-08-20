@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Card } from "@pgd/ui";
 import { apercuRoutage as appelerApercuRoutage, ApiError } from "@/lib/api";
 import type { ApercuRoutageReponse } from "@pgd/contracts";
 
@@ -69,7 +70,7 @@ export function ApercuRoutage({ demandeId, declencheur }: ApercuRoutageProps) {
   }, [declencheur]);
 
   return (
-    <div className="rounded-6 border border-gris200 bg-blanc p-5">
+    <Card className="p-5">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-14 font-bold">Aperçu de routage</h3>
         {chargement && <span className="text-12 font-semibold text-gris600">Calcul…</span>}
@@ -108,6 +109,6 @@ export function ApercuRoutage({ demandeId, declencheur }: ApercuRoutageProps) {
           </ol>
         </div>
       )}
-    </div>
+    </Card>
   );
 }

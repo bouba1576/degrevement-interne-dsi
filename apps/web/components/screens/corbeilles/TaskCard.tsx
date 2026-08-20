@@ -1,6 +1,6 @@
 "use client";
 
-import { Icon, Money, SlaTimer, TypeActeurBadge } from "@pgd/ui";
+import { Button, Icon, Money, SlaTimer, TypeActeurBadge } from "@pgd/ui";
 import type { TacheVue } from "@pgd/contracts";
 
 export interface TaskCardProps {
@@ -65,14 +65,9 @@ export function TaskCard({ tache, mine, locked, onClaim, onUnclaim, onOuvrir, ch
           ) : locked ? (
             <span className="text-13 text-gris600">Verrouillée</span>
           ) : (
-            <button
-              type="button"
-              disabled={chargement}
-              onClick={onClaim}
-              className="flex items-center gap-1.5 rounded bg-encre px-3 py-1.5 text-13 font-bold text-blanc disabled:opacity-50"
-            >
+            <Button disabled={chargement} onClick={onClaim} variante="sombre" taille="petite">
               <Icon nom="lock" taille={14} /> Récupérer
-            </button>
+            </Button>
           )}
           <button type="button" onClick={onOuvrir} className="text-12 font-semibold text-encre underline">
             Voir le dossier

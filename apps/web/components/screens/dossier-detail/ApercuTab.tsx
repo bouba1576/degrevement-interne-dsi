@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { Money } from "@pgd/ui";
-import { StatutLigneBadge } from "@pgd/ui";
+import { Card, CardHeader, Money, StatutLigneBadge } from "@pgd/ui";
 import type { CircuitVue, Demande, DemandeLigneVue, MotifVue } from "@pgd/contracts";
 import { listerCircuitsReferentiel, listerMotifsActifs } from "@/lib/api";
 
@@ -102,11 +101,9 @@ export function ApercuTab({ demande, lignes }: ApercuTabProps) {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px] lg:items-start">
       <div className="flex flex-col gap-4">
-        <div className="rounded-6 border border-gris200 bg-blanc">
-          <div className="border-b border-gris200 p-4">
-            <h3 className="text-14 font-bold">Informations de la demande</h3>
-          </div>
-          <div className="p-4">
+        <Card>
+          <CardHeader titre="Informations de la demande" />
+          <div className="p-5">
             {lignesCommunes.map(([libelle, valeur]) => (
               <div key={libelle} className="flex items-start gap-4 border-b border-gris100 py-2 last:border-none">
                 <div className="w-44 shrink-0 text-13 text-gris600">{libelle}</div>
@@ -125,13 +122,11 @@ export function ApercuTab({ demande, lignes }: ApercuTabProps) {
               </>
             )}
           </div>
-        </div>
+        </Card>
 
         {lignes.length > 0 && (
-          <div className="rounded-6 border border-gris200 bg-blanc">
-            <div className="border-b border-gris200 p-4">
-              <h3 className="text-14 font-bold">Lignes du dossier ({lignes.length})</h3>
-            </div>
+          <Card>
+            <CardHeader titre={`Lignes du dossier (${lignes.length})`} />
             <div className="overflow-x-auto">
               <table className="w-full text-13">
                 <thead>
@@ -160,15 +155,13 @@ export function ApercuTab({ demande, lignes }: ApercuTabProps) {
                 </tbody>
               </table>
             </div>
-          </div>
+          </Card>
         )}
       </div>
 
-      <div className="rounded-6 border border-gris200 bg-blanc">
-        <div className="border-b border-gris200 p-4">
-          <h3 className="text-14 font-bold">Montants</h3>
-        </div>
-        <div className="flex flex-col gap-2 p-4">
+      <Card>
+        <CardHeader titre="Montants" />
+        <div className="flex flex-col gap-2 p-5">
           <div className="flex justify-between text-13">
             <span className="text-gris600">Montant HT</span>
             <Money valeur={demande.montantHt} />
@@ -202,7 +195,7 @@ export function ApercuTab({ demande, lignes }: ApercuTabProps) {
             <Money valeur={demande.montantTtc} fort className="text-17 text-orange600" />
           </div>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

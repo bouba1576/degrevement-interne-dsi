@@ -1,4 +1,4 @@
-import { Badge, Icon, Money } from "@pgd/ui";
+import { Badge, Button, Card, Icon, Money } from "@pgd/ui";
 import type { TacheVue } from "@pgd/contracts";
 
 export interface ControleCardProps {
@@ -20,7 +20,7 @@ const LIBELLE_NIVEAU: Record<string, string> = {
 
 export function ControleCard({ tache, onControler, onOuvrir }: ControleCardProps) {
   return (
-    <div className="rounded-6 border border-gris200 bg-blanc p-4">
+    <Card className="p-5">
       <div className="flex flex-wrap items-center gap-4">
         <div className="min-w-[220px] flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -34,14 +34,14 @@ export function ControleCard({ tache, onControler, onOuvrir }: ControleCardProps
           <Money valeur={tache.montantTtc} fort />
         </div>
         <div className="flex flex-col gap-2">
-          <button type="button" onClick={onControler} className="flex items-center gap-1.5 rounded bg-encre px-3 py-1.5 text-13 font-bold text-blanc">
+          <Button onClick={onControler} variante="sombre" taille="petite">
             <Icon nom="shield" taille={15} /> Contrôler
-          </button>
+          </Button>
           <button type="button" onClick={onOuvrir} className="text-12 font-semibold text-encre underline">
             Voir le dossier
           </button>
         </div>
       </div>
-    </div>
+    </Card>
   );
 }

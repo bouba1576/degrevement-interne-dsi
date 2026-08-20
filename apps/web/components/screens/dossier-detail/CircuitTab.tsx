@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { WorkflowStepper } from "@pgd/ui";
+import { Card, CardHeader, WorkflowStepper } from "@pgd/ui";
 import type { EtapeDossier, JournalAuditVue } from "@pgd/contracts";
 import { ApiError, journalAuditDemande, listerTachesDemande } from "@/lib/api";
 
@@ -62,18 +62,16 @@ export function CircuitTab({ demandeId }: CircuitTabProps) {
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px] lg:items-start">
-      <div className="rounded-6 border border-gris200 bg-blanc p-5">
+      <Card className="p-5">
         {etapes.length === 0 ? (
           <p className="text-13 text-gris600">Aucune tâche instanciée pour ce dossier.</p>
         ) : (
           <WorkflowStepper etapes={etapes.map((e) => ({ ...e, acteurNom: e.acteurNom ?? undefined }))} />
         )}
-      </div>
-      <div className="rounded-6 border border-gris200 bg-blanc">
-        <div className="border-b border-gris200 p-4">
-          <h3 className="text-14 font-bold">Règle appliquée</h3>
-        </div>
-        <div className="flex flex-col gap-2 p-4 text-13">
+      </Card>
+      <Card>
+        <CardHeader titre="Règle appliquée" />
+        <div className="flex flex-col gap-2 p-5 text-13">
           <div className="flex justify-between">
             <span className="text-gris600">Palier</span>
             <span className="font-bold">{labelPalier ?? "—"}</span>
@@ -93,7 +91,7 @@ export function CircuitTab({ demandeId }: CircuitTabProps) {
             Chaîne déterminée par la matrice de décision consolidée — aucune règle codée en dur.
           </p>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

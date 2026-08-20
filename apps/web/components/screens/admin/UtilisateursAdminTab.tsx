@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Badge, Icon } from "@pgd/ui";
+import { Badge, Button, Card, CardHeader } from "@pgd/ui";
 import type { AnnuaireResultat, DirectionResponsabiliteVue, RoleVue, SousFluxVue, UtilisateurAdminVue } from "@pgd/contracts";
 import {
   ApiError,
@@ -114,16 +114,16 @@ export function UtilisateursAdminTab() {
     <div>
       {erreurListe && <p className="mb-3 text-13 font-semibold text-rouge700">{erreurListe}</p>}
 
-      <button type="button" onClick={ouvrirRecherche} className="mb-3 rounded bg-encre px-3 py-1.5 text-13 font-bold text-blanc">
+      <Button onClick={ouvrirRecherche} variante="sombre" taille="petite" className="mb-3">
         + Nouvel utilisateur
-      </button>
+      </Button>
 
-      <div className="rounded-6 border border-gris200 bg-blanc">
-        <div className="flex items-center gap-2 border-b border-gris200 p-3">
-          <Icon nom="users" taille={17} />
-          <h3 className="text-14 font-bold">Utilisateurs pré-enregistrés</h3>
-          <span className="ml-auto text-12 text-gris600">{utilisateurs.length} compte(s)</span>
-        </div>
+      <Card>
+        <CardHeader
+          icone="users"
+          titre="Utilisateurs pré-enregistrés"
+          action={<span className="ml-auto text-12 text-gris600">{utilisateurs.length} compte(s)</span>}
+        />
 
         <table className="w-full text-13">
           <thead>
@@ -172,7 +172,7 @@ export function UtilisateursAdminTab() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
 
       {modal.type === "recherche" && (
         <AnnuaireRechercheModal

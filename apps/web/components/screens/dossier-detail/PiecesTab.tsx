@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Icon } from "@pgd/ui";
+import { Card, CardHeader, Icon } from "@pgd/ui";
 import type { PieceJointeVue } from "@pgd/contracts";
 import { ApiError, ajouterPiece, supprimerPiece } from "@/lib/api";
 
@@ -52,50 +52,60 @@ export function PiecesTab({ demandeId, pieces, onChange }: PiecesTabProps) {
   }
 
   return (
-    <div className="rounded-6 border border-gris200 bg-blanc p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-14 font-bold">Pièces jointes ({pieces.length})</h3>
-        <label className="rounded bg-encre px-3 py-1.5 text-13 font-bold text-blanc cursor-pointer disabled:opacity-50">
-          {envoi ? "Envoi…" : "Ajouter une pièce"}
-          <input
-            ref={inputRef}
-            type="file"
-            className="hidden"
-            disabled={envoi}
-            onChange={(e) => {
-              const fichier = e.target.files?.[0];
-              if (fichier) void handleFichier(fichier);
-            }}
-          />
-        </label>
-      </div>
+    <Card>
+      <CardHeader
+        titre={`Pièces jointes (${pieces.length})`}
+        action={
+          // Déclencheur d'upload : reste un <label> (pas <Button>, qui ne
+          // rend qu'un <button> réel) — la sémantique HTML d'un input file
+          // caché exige un <label htmlFor>/enfant, jamais un bouton. Couleur
+          // alignée sur la correction bg-noir de Button (variante "sombre") :
+          // même famille de dérive (bg-encre au lieu de var(--black)) que
+          // les 20 fichiers migrés vers <Button>, ici sans pouvoir migrer la
+          // structure elle-même.
+          <label className="cursor-pointer rounded bg-noir px-3 py-1.5 text-13 font-bold text-blanc hover:enabled:bg-gris800 disabled:opacity-45">
+            {envoi ? "Envoi…" : "Ajouter une pièce"}
+            <input
+              ref={inputRef}
+              type="file"
+              className="hidden"
+              disabled={envoi}
+              onChange={(e) => {
+                const fichier = e.target.files?.[0];
+                if (fichier) void handleFichier(fichier);
+              }}
+            />
+          </label>
+        }
+      />
+      <div className="p-5">
+        {erreur && <p className="mb-3 text-13 font-semibold text-rouge700">{erreur}</p>}
 
-      {erreur && <p className="mb-3 text-13 font-semibold text-rouge700">{erreur}</p>}
-
-      {pieces.length === 0 ? (
-        <p className="text-13 text-gris600">Aucune pièce jointe.</p>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {pieces.map((piece) => (
-            <div key={piece.id} className="flex items-center gap-3 rounded border border-gris200 p-3">
-              <Icon nom="doc" taille={18} className="shrink-0 text-gris600" />
-              <div className="flex-1">
-                <div className="text-13 font-semibold">{piece.nomFichier}</div>
-                <div className="text-12 text-gris600">
-                  {piece.typeMime} · {formaterTaille(piece.tailleOctets)}
+        {pieces.length === 0 ? (
+          <p className="text-13 text-gris600">Aucune pièce jointe.</p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {pieces.map((piece) => (
+              <div key={piece.id} className="flex items-center gap-3 rounded border border-gris200 p-3">
+                <Icon nom="doc" taille={18} className="shrink-0 text-gris600" />
+                <div className="flex-1">
+                  <div className="text-13 font-semibold">{piece.nomFichier}</div>
+                  <div className="text-12 text-gris600">
+                    {piece.typeMime} · {formaterTaille(piece.tailleOctets)}
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => handleSupprimer(piece.id)}
+                  className="text-13 font-semibold text-rouge700"
+                >
+                  Supprimer
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => handleSupprimer(piece.id)}
-                className="text-13 font-semibold text-rouge700"
-              >
-                Supprimer
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </Card>
   );
 }

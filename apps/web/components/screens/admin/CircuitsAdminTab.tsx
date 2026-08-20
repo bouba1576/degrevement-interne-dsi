@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Field } from "@pgd/ui";
+import { Button, Card, Field } from "@pgd/ui";
 import type { CircuitVue } from "@pgd/contracts";
 import { ApiError, listerCircuits, modifierCircuit } from "@/lib/api";
 
@@ -53,7 +53,7 @@ export function CircuitsAdminTab() {
     <div className="flex flex-col gap-4">
       {erreur && <p className="text-13 font-semibold text-rouge700">{erreur}</p>}
       {circuits.map((c) => (
-        <div key={c.code} className="rounded-6 border border-gris200 bg-blanc p-4">
+        <Card key={c.code} className="p-5">
           <div className="mb-3 flex items-center gap-2">
             <span className="font-mono text-14 font-bold">{c.code}</span>
             <span className="rounded bg-gris100 px-2 py-0.5 text-12 font-semibold text-gris700">
@@ -76,15 +76,16 @@ export function CircuitsAdminTab() {
               />
             </Field>
           </div>
-          <button
-            type="button"
+          <Button
             onClick={() => enregistrer(c.code)}
             disabled={enregistrementCode === c.code}
-            className="mt-3 rounded bg-encre px-3 py-1.5 text-13 font-bold text-blanc disabled:opacity-50"
+            variante="sombre"
+            taille="petite"
+            className="mt-3"
           >
             {enregistrementCode === c.code ? "Enregistrement…" : "Enregistrer"}
-          </button>
-        </div>
+          </Button>
+        </Card>
       ))}
     </div>
   );

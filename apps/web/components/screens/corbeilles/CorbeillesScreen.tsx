@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Chip } from "@pgd/ui";
 import type { SessionUtilisateur, TacheVue } from "@pgd/contracts";
 import { ApiError, claimTache, listerTachesCorbeille, unclaimTache } from "@/lib/api";
 import { TaskCard } from "./TaskCard";
@@ -76,16 +77,9 @@ export function CorbeillesScreen({ utilisateur, onOuvrirDossier }: CorbeillesScr
     <div>
       <div className="mb-4 flex flex-wrap gap-2">
         {utilisateur.roles.map((role) => (
-          <button
-            key={role}
-            type="button"
-            onClick={() => setRoleActif(role)}
-            className={`rounded-full px-3 py-1.5 text-13 font-semibold ${
-              roleActif === role ? "bg-encre text-blanc" : "border border-gris200 text-gris700"
-            }`}
-          >
+          <Chip key={role} actif={roleActif === role} onClick={() => setRoleActif(role)}>
             {role}
-          </button>
+          </Chip>
         ))}
       </div>
 

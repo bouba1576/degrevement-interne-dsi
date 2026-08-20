@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Modal } from "@pgd/ui";
+import { Button, Modal } from "@pgd/ui";
 import type { EnumTypeRole, RoleVue } from "@pgd/contracts";
 
 export interface RoleModalValeur {
@@ -51,14 +51,9 @@ export function RoleModal({ role, onFermer, onConfirmer, chargement }: RoleModal
           <button type="button" onClick={onFermer} className="rounded border border-gris200 px-3 py-1.5 text-13 font-bold text-gris700">
             Annuler
           </button>
-          <button
-            type="button"
-            disabled={!valide || chargement}
-            onClick={() => onConfirmer(valeur)}
-            className="rounded bg-encre px-3 py-1.5 text-13 font-bold text-blanc disabled:opacity-50"
-          >
+          <Button disabled={!valide || chargement} onClick={() => onConfirmer(valeur)} variante="sombre" taille="petite">
             Confirmer
-          </button>
+          </Button>
         </>
       }
     >

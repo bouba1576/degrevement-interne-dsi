@@ -1,6 +1,6 @@
 "use client";
 
-import { CircuitPill, Empty, Money, StatusBadge, type StatutDemande } from "@pgd/ui";
+import { Card, CircuitPill, Empty, Money, StatusBadge, type StatutDemande } from "@pgd/ui";
 import type { Demande } from "@pgd/contracts";
 
 export interface DossierTableProps {
@@ -37,16 +37,16 @@ const CLE_STATUT: Record<Demande["statut"], StatutDemande> = {
 export function DossierTable({ dossiers, onOuvrir }: DossierTableProps) {
   if (dossiers.length === 0) {
     return (
-      <div className="rounded-6 border border-gris200 bg-blanc p-8">
+      <Card className="p-8">
         <Empty icone="doc" titre="Aucun dossier">
           Aucun résultat ne correspond à ces critères.
         </Empty>
-      </div>
+      </Card>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-6 border border-gris200 bg-blanc">
+    <Card className="overflow-hidden">
       <table className="w-full text-13">
         <thead>
           <tr className="border-b border-gris100 text-left text-12 font-bold text-gris600">
@@ -64,7 +64,7 @@ export function DossierTable({ dossiers, onOuvrir }: DossierTableProps) {
             <tr
               key={d.id}
               onClick={() => onOuvrir(d.id)}
-              className="cursor-pointer border-b border-gris100 last:border-0 hover:bg-gris50"
+              className="cursor-pointer border-b border-gris100 last:border-0 hover:bg-orange50"
             >
               <td className="px-3 py-2 font-mono text-12 font-bold">{d.reference}</td>
               <td className="px-3 py-2">
@@ -88,6 +88,6 @@ export function DossierTable({ dossiers, onOuvrir }: DossierTableProps) {
           ))}
         </tbody>
       </table>
-    </div>
+    </Card>
   );
 }

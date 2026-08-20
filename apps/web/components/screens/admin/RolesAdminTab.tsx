@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Badge, Icon, type TonBadge } from "@pgd/ui";
+import { Badge, Button, Card, CardHeader, type TonBadge } from "@pgd/ui";
 import type { EnumTypeRole, RoleVue } from "@pgd/contracts";
 import { ApiError, creerRole, listerRoles, modifierRole, supprimerRole } from "@/lib/api";
 import { RoleModal, type RoleModalValeur } from "./RoleModal";
@@ -94,22 +94,20 @@ export function RolesAdminTab() {
     <div>
       {erreur && <p className="mb-3 text-13 font-semibold text-rouge700">{erreur}</p>}
 
-      <button
-        type="button"
-        onClick={() => setRoleEnEdition(null)}
-        className="mb-3 rounded bg-encre px-3 py-1.5 text-13 font-bold text-blanc"
-      >
+      <Button onClick={() => setRoleEnEdition(null)} variante="sombre" taille="petite" className="mb-3">
         + Nouveau rôle
-      </button>
+      </Button>
 
-      <div className="rounded-6 border border-gris200 bg-blanc">
-        <div className="flex items-center gap-2 border-b border-gris200 p-3">
-          <Icon nom="users" taille={17} />
-          <h3 className="text-14 font-bold">Rôles &amp; corbeilles</h3>
-          <span className="ml-auto text-12 text-gris600">
-            {nbDansMatrice} dans la matrice · {roles.length} au total
-          </span>
-        </div>
+      <Card>
+        <CardHeader
+          icone="users"
+          titre="Rôles & corbeilles"
+          action={
+            <span className="ml-auto text-12 text-gris600">
+              {nbDansMatrice} dans la matrice · {roles.length} au total
+            </span>
+          }
+        />
 
         <table className="w-full text-13">
           <thead>
@@ -150,7 +148,7 @@ export function RolesAdminTab() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
 
       {roleEnEdition !== undefined && (
         <RoleModal

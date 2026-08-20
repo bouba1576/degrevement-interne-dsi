@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Modal } from "@pgd/ui";
+import { Button, Modal } from "@pgd/ui";
 import type { EnumConstat } from "@pgd/contracts";
 
 export interface ControleModalProps {
@@ -31,14 +31,9 @@ export function ControleModal({ reference, onFermer, onConfirmer, chargement }: 
           <button type="button" onClick={onFermer} className="rounded border border-gris200 px-3 py-1.5 text-13 font-bold text-gris700">
             Annuler
           </button>
-          <button
-            type="button"
-            disabled={!peutConfirmer || chargement}
-            onClick={() => onConfirmer(constat, commentaire.trim())}
-            className="rounded bg-encre px-3 py-1.5 text-13 font-bold text-blanc disabled:opacity-50"
-          >
+          <Button disabled={!peutConfirmer || chargement} onClick={() => onConfirmer(constat, commentaire.trim())} variante="sombre" taille="petite">
             Confirmer
-          </button>
+          </Button>
         </>
       }
     >

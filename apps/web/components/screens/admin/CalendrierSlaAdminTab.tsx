@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Field, Icon } from "@pgd/ui";
+import { Button, Card, Field, Icon } from "@pgd/ui";
 import type { CalendrierSlaVue } from "@pgd/contracts";
 import { ApiError, listerCalendriersSla, modifierCalendrierSla } from "@/lib/api";
 
@@ -136,7 +136,7 @@ export function CalendrierSlaAdminTab() {
         const heuresParJour = Math.max(0, finFraction - debutFraction);
 
         return (
-          <div key={c.id} className="rounded-6 border border-gris200 bg-blanc p-4">
+          <Card key={c.id} className="p-5">
             <div className="mb-3 flex items-center gap-2 border-b border-gris100 pb-3">
               <Icon nom="clock" taille={17} />
               <h3 className="text-14 font-bold">{e.libelle || c.libelle}</h3>
@@ -243,15 +243,16 @@ export function CalendrierSlaAdminTab() {
                   fusion partielle côté serveur. */}
             </div>
 
-            <button
-              type="button"
+            <Button
               onClick={() => enregistrer(c.id)}
               disabled={enregistrementId === c.id}
-              className="mt-3 rounded bg-encre px-3 py-1.5 text-13 font-bold text-blanc disabled:opacity-50"
+              variante="sombre"
+              taille="petite"
+              className="mt-3"
             >
               {enregistrementId === c.id ? "Enregistrement…" : "Enregistrer"}
-            </button>
-          </div>
+            </Button>
+          </Card>
         );
       })}
     </div>
