@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { KpiCarte, tonBadge } from "@pgd/ui";
+import { Card, Empty, KpiCarte, tonBadge } from "@pgd/ui";
 import type { EnumConstat, TacheVue } from "@pgd/contracts";
 import { ApiError, listerTachesControle, soumettreControle } from "@/lib/api";
 import { ControleCard } from "./ControleCard";
@@ -65,7 +65,11 @@ export function ControleScreen({ onOuvrirDossier }: ControleScreenProps) {
       {erreur && <p className="mb-3 text-13 font-semibold text-rouge700">{erreur}</p>}
 
       {taches && (
-        <div className="mb-6 grid grid-cols-3 gap-4">
+        // Une seule carte réelle sur les trois de la maquette (cf. commentaire
+        // ci-dessus) — grid-cols-3 laisserait deux colonnes vides à côté
+        // d'elle ; max-w-[280px] reprend juste la largeur naturelle d'une
+        // KpiCarte plutôt que de forcer une grille pensée pour trois.
+        <div className="mb-6 max-w-[280px]">
           <KpiCarte libelle="À contrôler" valeur={taches.length} icone="shield" couleur={tonBadge.accent.texte} />
         </div>
       )}
@@ -75,7 +79,11 @@ export function ControleScreen({ onOuvrirDossier }: ControleScreenProps) {
       {!taches ? (
         <p className="text-13 text-gris600">Chargement…</p>
       ) : taches.length === 0 ? (
-        <p className="text-13 text-gris600">Aucun contrôle en attente.</p>
+        <Card>
+          <Empty icone="shield" titre="Aucun contrôle en attente">
+            Les dossiers validés apparaîtront ici.
+          </Empty>
+        </Card>
       ) : (
         <div className="flex flex-col gap-3">
           {taches.map((t) => (

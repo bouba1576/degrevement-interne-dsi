@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Chip } from "@pgd/ui";
+import { Chip, Icon } from "@pgd/ui";
 import type { SessionUtilisateur, TacheVue } from "@pgd/contracts";
 import { ApiError, claimTache, listerTachesCorbeille, unclaimTache } from "@/lib/api";
 import { TaskCard } from "./TaskCard";
@@ -22,20 +22,31 @@ export function CorbeillesScreen({ utilisateur, onOuvrirDossier }: CorbeillesScr
   const [taches, setTaches] = useState<TacheVue[] | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [chargementId, setChargementId] = useState<string | null>(null);
+  // Compteur EN_CORBEILLE par rôle (docs/design/screens2.jsx:230-236 — badge
+  // orange sur chaque puce, pas seulement le rôle actif). `listerTachesCorbeille`
+  // n'a pas de variante allégée (limit fixé à 200, pas de comptage seul côté
+  // serveur) — même appel que celui déjà fait pour le rôle actif, répété pour
+  // chacun des rôles de la session (typiquement 1 à 3), jamais un coût
+  // disproportionné qui justifierait d'omettre le badge (cf. correctif
+  // MesDemandesScreen — une commodité d'implémentation n'est jamais une
+  // catégorie de divergence légitime).
+  const [comptes, setComptes] = useState<Record<string, number>>({});
 
   const charger = useCallback(async () => {
     if (!roleActif) return;
     try {
-      const [enCorbeille, reclamees] = await Promise.all([
+      const [enCorbeille, reclamees, ...comptesReponses] = await Promise.all([
         listerTachesCorbeille({ role: roleActif, etat: "EN_CORBEILLE" }),
-        listerTachesCorbeille({ role: roleActif, etat: "RECLAMEE" })
+        listerTachesCorbeille({ role: roleActif, etat: "RECLAMEE" }),
+        ...utilisateur.roles.map((role) => listerTachesCorbeille({ role, etat: "EN_CORBEILLE" }))
       ]);
       setTaches([...enCorbeille.taches, ...reclamees.taches]);
+      setComptes(Object.fromEntries(utilisateur.roles.map((role, i) => [role, comptesReponses[i]!.total])));
       setErreur(null);
     } catch (e) {
       setErreur(e instanceof ApiError ? e.message : "Erreur inattendue.");
     }
-  }, [roleActif]);
+  }, [roleActif, utilisateur.roles]);
 
   useEffect(() => {
     void charger();
@@ -79,8 +90,30 @@ export function CorbeillesScreen({ utilisateur, onOuvrirDossier }: CorbeillesScr
         {utilisateur.roles.map((role) => (
           <Chip key={role} actif={roleActif === role} onClick={() => setRoleActif(role)}>
             {role}
+            {/* Mini-pastille de comptage, taille propre à cet usage imbriqué
+                (maquette : style={{padding:"1px 6px"}}) — le composant Badge
+                standard (px-2.5 py-1) serait visuellement trop lourd niché
+                dans une puce déjà compacte. */}
+            {!!comptes[role] && (
+              <span className="rounded-full bg-orange50 px-1.5 py-px text-11 font-bold text-orangeTexteSurClair">
+                {comptes[role]}
+              </span>
+            )}
           </Chip>
         ))}
+      </div>
+
+      {/* docs/design/screens2.jsx:274-275 (CorbeilleInfo, .alert-blue) — seule
+          la portion sans dépendance à une donnée bloquée est reprise : le
+          reste de CorbeilleInfo (libellé du rôle, groupe AD, avatars des
+          membres) exige GET /api/admin/roles (ADMIN_PGD-only, vérifié) —
+          catégorie 2 confirmée, pas construite. Le texte informatif, lui,
+          n'a aucune dépendance de donnée — l'omettre aurait été la même
+          erreur que MesDemandesScreen : laisser une commodité d'implémentation
+          (« tout ou rien ») décider d'un choix qui n'en est pas un. */}
+      <div className="mb-4 flex items-start gap-2.5 rounded border border-[#c5e6f5] bg-bleuFond p-3 text-13 text-bleu700">
+        <Icon nom="info" taille={14} className="mt-px shrink-0" />
+        <span>Récupérer une tâche pose un verrou de 4 h. Sans action, elle revient automatiquement en corbeille.</span>
       </div>
 
       {erreur && <p className="mb-3 text-13 font-semibold text-rouge700">{erreur}</p>}

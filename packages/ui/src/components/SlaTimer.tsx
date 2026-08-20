@@ -14,7 +14,12 @@ export interface SlaTimerProps {
   maintenant?: () => Date;
 }
 
-function formatDuree(ms: number): string {
+// Exportée pour réutilisation (TaskCard — badge « SLA dépassé · durée »,
+// docs/design/screens2.jsx TaskCard : `E2.fmtDuree(E2.ageHeures(t))`) : même
+// calcul de durée, jamais une seconde implémentation divergente. Le signe de
+// `ms` n'affecte jamais le texte (valeur absolue), seul l'appelant décide du
+// préfixe ("Dépassé +", "SLA dépassé · ", etc.).
+export function formatDuree(ms: number): string {
   const abs = Math.abs(ms);
   const jours = Math.floor(abs / 86400000);
   const heures = Math.floor((abs % 86400000) / 3600000);

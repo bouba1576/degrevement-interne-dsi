@@ -18,6 +18,13 @@ const LIBELLE_NIVEAU: Record<string, string> = {
   CONTROLE_N2: "Contrôle N2"
 };
 
+// Port de docs/design/screens3.jsx:466-477 (ControleScreen, carte de file) —
+// « Voir le dossier » était un lien texte souligné (motif copié de TaskCard,
+// une source différente) ; la maquette de CET écran montre en réalité un
+// bouton fantôme avec icône œil, à côté du bouton Contrôler, jamais un lien.
+// CircuitPill/StatusBadge/motif/« validé il y a » restent absents — catégorie
+// 3 déjà documentée (TacheVue n'a ni circuit, ni statut de la Demande
+// parente, ni motif — vérifié, pas rouvert).
 export function ControleCard({ tache, onControler, onOuvrir }: ControleCardProps) {
   return (
     <Card className="p-5">
@@ -33,14 +40,12 @@ export function ControleCard({ tache, onControler, onOuvrir }: ControleCardProps
           <div className="text-12 text-gris600">Montant TTC</div>
           <Money valeur={tache.montantTtc} fort />
         </div>
-        <div className="flex flex-col gap-2">
-          <Button onClick={onControler} variante="sombre" taille="petite">
-            <Icon nom="shield" taille={15} /> Contrôler
-          </Button>
-          <button type="button" onClick={onOuvrir} className="text-12 font-semibold text-encre underline">
-            Voir le dossier
-          </button>
-        </div>
+        <Button onClick={onOuvrir} variante="fantome" taille="petite">
+          <Icon nom="eye" taille={14} /> Dossier
+        </Button>
+        <Button onClick={onControler} variante="sombre" taille="petite">
+          <Icon nom="shield" taille={15} /> Contrôler
+        </Button>
       </div>
     </Card>
   );
