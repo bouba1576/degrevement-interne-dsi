@@ -152,7 +152,8 @@ export function LoginScreen({ onConnecte }: LoginScreenProps) {
         <div className="w-full max-w-[380px]">
           <div className="mb-6 flex items-center gap-2">
             <StepPip n={1} actif={etape === "identifiants"} fait={etape !== "identifiants"} label="Compte AD" />
-            <div className={`h-0.5 flex-1 self-center ${etape !== "identifiants" ? "bg-vert700" : "bg-gris200"}`} />
+            {/* docs/design/screens_auth.jsx:158 — même dérive vert/vert700 que StepPip ci-dessus */}
+            <div className={`h-0.5 flex-1 self-center ${etape !== "identifiants" ? "bg-vert" : "bg-gris200"}`} />
             <StepPip n={2} actif={etape !== "identifiants"} fait={false} label="MFA" />
           </div>
 
@@ -383,7 +384,12 @@ function StepPip({ n, actif, fait, label }: { n: number; actif: boolean; fait: b
     <div className="flex items-center gap-2">
       <div
         className={`grid h-7 w-7 place-items-center rounded-full text-12 font-bold ${
-          fait ? "bg-vert700 text-blanc" : actif ? "bg-orange text-noir" : "bg-gris200 text-gris600"
+          // docs/design/screens_auth.jsx:213 — `background: done ? "var(--green)" : ...`,
+          // `--green` = #32C832 (styles.css:30) = notre `vert`, jamais `vert700`
+          // (#23901f, réservé au texte-sur-fond-clair, primitives.ts) — même
+          // dérive déjà trouvée et corrigée sur les boutons Rejeter/Approuver
+          // (TacheActionBanner).
+          fait ? "bg-vert text-blanc" : actif ? "bg-orange text-noir" : "bg-gris200 text-gris600"
         }`}
       >
         {fait ? <Icon nom="check" taille={13} couleur="currentColor" /> : n}
