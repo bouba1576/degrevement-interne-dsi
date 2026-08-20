@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Badge, Button, CircuitPill, Icon, Money, TypeActeurBadge } from "@pgd/ui";
+import { Badge, Button, Card, CircuitPill, Empty, Icon, Money, TypeActeurBadge } from "@pgd/ui";
 import type { CircuitVue, EnumCircuit, PalierVue, RoleVue, TrouPalier } from "@pgd/contracts";
 import { ApiError, creerPalier, listerCircuits, listerPaliers, listerRoles, modifierPalier, supprimerPalier } from "@/lib/api";
 import { PalierModal, type PalierModalValeur } from "./PalierModal";
@@ -196,7 +196,14 @@ export function PaliersAdminTab() {
         )}
 
         {paliersDuCircuit.length === 0 && (
-          <p className="text-13 text-gris600">Aucune tranche configurée pour ce processus.</p>
+          // docs/design/screens3.jsx:660 — <Card><Empty icon="flow"
+          // title="Aucune tranche"> ..., même défaut déjà corrigé sur
+          // CorbeillesScreen/ControleScreen/PiecesTab/AuditTab.
+          <Card>
+            <Empty icone="flow" titre="Aucune tranche">
+              Cliquez sur « Nouveau palier » pour composer ce processus.
+            </Empty>
+          </Card>
         )}
 
         {paliersDuCircuit.map((p) => (
