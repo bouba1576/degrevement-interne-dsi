@@ -12,7 +12,7 @@ import {
   obtenirDetailDemande,
   rappelerDemande
 } from "@/lib/api";
-import { ApercuTab } from "./ApercuTab";
+import { ApercuTab, useMotifLibelle } from "./ApercuTab";
 import { CircuitTab } from "./CircuitTab";
 import { PiecesTab } from "./PiecesTab";
 import { AuditTab } from "./AuditTab";
@@ -59,6 +59,11 @@ export function DossierDetailScreen({ dossierId, utilisateur, onRetour }: Dossie
   const [erreur, setErreur] = useState<string | null>(null);
   const [chargementAction, setChargementAction] = useState(false);
   const [modaleModification, setModaleModification] = useState(false);
+  // Avant les retours anticipés ci-dessous (Règles des Hooks) — d'où la
+  // forme tolérante à `undefined` de useMotifLibelle (ApercuTab.tsx).
+  // Partagé entre la ligne d'en-tête (docs/design/screens2.jsx:387,
+  // "{client} · {motif} · {libellé}") et ApercuTab, un seul fetch.
+  const motifLibelle = useMotifLibelle(detail?.demande.circuit, detail?.demande.motifId);
 
   const charger = useCallback(async () => {
     try {
@@ -171,9 +176,10 @@ export function DossierDetailScreen({ dossierId, utilisateur, onRetour }: Dossie
             <CircuitPill code={demande.circuit} />
             <StatusBadge statut={CLE_STATUT[demande.statut]} />
           </div>
+          {/* docs/design/screens2.jsx:387 — "{client} · {motif} · {libellé}",
+              chaque segment optionnel filtré plutôt qu'un "·" orphelin. */}
           <p className="text-13 text-gris600">
-            {demande.nomClient}
-            {demande.libelle ? ` · ${demande.libelle}` : ""}
+            {[demande.nomClient, motifLibelle, demande.libelle].filter(Boolean).join(" · ")}
           </p>
         </div>
         {peutAbandonnerOuRappeler && (
@@ -241,7 +247,9 @@ export function DossierDetailScreen({ dossierId, utilisateur, onRetour }: Dossie
         ))}
       </div>
 
-      {onglet === "apercu" && <ApercuTab demande={demande} lignes={lignes} labelPalier={labelPalier} />}
+      {onglet === "apercu" && (
+        <ApercuTab demande={demande} lignes={lignes} labelPalier={labelPalier} motifLibelle={motifLibelle} />
+      )}
       {onglet === "circuit" && <CircuitTab demandeId={dossierId} labelPalier={labelPalier} />}
       {onglet === "pieces" && (
         <PiecesTab

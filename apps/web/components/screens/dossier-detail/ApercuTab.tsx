@@ -10,6 +10,11 @@ export interface ApercuTabProps {
   // ./labelPalier.ts) et partagé avec CircuitTab — jamais un second fetch
   // dupliqué par onglet.
   labelPalier: string | null;
+  // Calculé une seule fois par DossierDetailScreen (useMotifLibelle,
+  // ci-dessous, exporté) et partagé avec la ligne d'en-tête
+  // "{client} · {motif} · {libellé}" (docs/design/screens2.jsx:387) —
+  // jamais un second fetch dupliqué.
+  motifLibelle: string | null;
 }
 
 // Champs communs, jamais une liste par circuit recopiée de docs/design/
@@ -66,11 +71,17 @@ const LIBELLES_CHAMPS_CIRCUIT: Record<string, string> = {
 // docs/10 remarque FRA #24 — le détail d'un dossier n'affichait que
 // motifId (UUID brut, jamais rendu). MotifVue est déjà consommée par
 // NouvelleDemandeScreen (même route, GET /api/referentiels/motifs?circuit=)
-// — même mécanisme de résolution ici, pas une nouvelle route.
-function useMotifLibelle(circuit: Demande["circuit"], motifId: Demande["motifId"]): string | null {
+// — même mécanisme de résolution ici, pas une nouvelle route. Exportée :
+// DossierDetailScreen l'appelle aussi pour la ligne d'en-tête (même
+// principe de partage qu'extraireLabelPalier, ./labelPalier.ts).
+export function useMotifLibelle(
+  circuit: Demande["circuit"] | undefined,
+  motifId: Demande["motifId"] | undefined
+): string | null {
   const [motifs, setMotifs] = useState<MotifVue[] | null>(null);
   useEffect(() => {
     setMotifs(null);
+    if (!circuit) return;
     void listerMotifsActifs(circuit).then(setMotifs);
   }, [circuit]);
   if (!motifId || !motifs) return null;
@@ -92,8 +103,7 @@ function useCircuitLibelle(circuit: Demande["circuit"]): string | null {
   return circuits?.find((c) => c.code === circuit)?.libelle ?? null;
 }
 
-export function ApercuTab({ demande, lignes, labelPalier }: ApercuTabProps) {
-  const motifLibelle = useMotifLibelle(demande.circuit, demande.motifId);
+export function ApercuTab({ demande, lignes, labelPalier, motifLibelle }: ApercuTabProps) {
   const circuitLibelle = useCircuitLibelle(demande.circuit);
   const lignesCommunes = LIBELLES_COMMUNS.map(
     ([champ, libelle]) =>
