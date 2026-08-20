@@ -250,7 +250,9 @@ export function DossierDetailScreen({ dossierId, utilisateur, onRetour }: Dossie
       {onglet === "apercu" && (
         <ApercuTab demande={demande} lignes={lignes} labelPalier={labelPalier} motifLibelle={motifLibelle} />
       )}
-      {onglet === "circuit" && <CircuitTab demandeId={dossierId} labelPalier={labelPalier} />}
+      {onglet === "circuit" && (
+        <CircuitTab demandeId={dossierId} circuit={demande.circuit} labelPalier={labelPalier} />
+      )}
       {onglet === "pieces" && (
         <PiecesTab
           demandeId={dossierId}

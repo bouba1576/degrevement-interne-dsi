@@ -1,19 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, CardHeader, WorkflowStepper } from "@pgd/ui";
-import type { EtapeDossier } from "@pgd/contracts";
+import { Card, CardHeader, CircuitPill, WorkflowStepper } from "@pgd/ui";
+import type { Demande, EtapeDossier } from "@pgd/contracts";
 import { ApiError, listerTachesDemande } from "@/lib/api";
 
 export interface CircuitTabProps {
   demandeId: string;
+  circuit: Demande["circuit"];
   // Calculé une seule fois par DossierDetailScreen (extraireLabelPalier,
   // ./labelPalier.ts) et partagé avec ApercuTab — jamais un second fetch
   // dupliqué par onglet.
   labelPalier: string | null;
 }
 
-export function CircuitTab({ demandeId, labelPalier }: CircuitTabProps) {
+export function CircuitTab({ demandeId, circuit, labelPalier }: CircuitTabProps) {
   const [etapes, setEtapes] = useState<EtapeDossier[] | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
 
@@ -54,6 +55,12 @@ export function CircuitTab({ demandeId, labelPalier }: CircuitTabProps) {
       <Card>
         <CardHeader titre="Règle appliquée" />
         <div className="flex flex-col gap-2 p-5 text-13">
+          {/* docs/design/screens2.jsx:561 (RoutageInfo) — ligne "Circuit"
+              absente ici jusqu'à ce tour. */}
+          <div className="flex justify-between">
+            <span className="text-gris600">Circuit</span>
+            <CircuitPill code={circuit} />
+          </div>
           <div className="flex justify-between">
             <span className="text-gris600">Palier</span>
             <span className="font-bold">{labelPalier ?? "—"}</span>
