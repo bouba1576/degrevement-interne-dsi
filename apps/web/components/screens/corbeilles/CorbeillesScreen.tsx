@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Chip, Icon } from "@pgd/ui";
+import { Card, Chip, Empty, Icon } from "@pgd/ui";
 import type { SessionUtilisateur, TacheVue } from "@pgd/contracts";
 import { ApiError, claimTache, listerTachesCorbeille, unclaimTache } from "@/lib/api";
 import { TaskCard } from "./TaskCard";
@@ -145,7 +145,11 @@ export function CorbeillesScreen({ utilisateur, onOuvrirDossier }: CorbeillesScr
           <div>
             <h3 className="mb-2 text-14 font-bold">File de la corbeille ({enCorbeille.length})</h3>
             {enCorbeille.length === 0 ? (
-              <p className="text-13 text-gris600">Aucune tâche en attente pour ce rôle.</p>
+              <Card>
+                <Empty icone="inbox" titre="Corbeille vide">
+                  Aucune tâche en attente pour ce rôle.
+                </Empty>
+              </Card>
             ) : (
               <div className="flex flex-col gap-3">
                 {enCorbeille.map((t) => (
