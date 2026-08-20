@@ -33,6 +33,13 @@ export const journalSecuriteVueSchema = z.object({
   succes: z.boolean(),
   facteur: enumFacteurAuth,
   ip: z.string().nullable(),
+  // Détail d'échec (19/08/2026, AdApiProvider/SF-PGD-001) — capturés et
+  // persistés (JournalSecurite.codeEchec/messageEchec, schema.prisma) depuis
+  // ce chantier-là, jamais exposés à l'écran jusqu'ici (CLAUDE.md, Questions
+  // ouvertes). Jamais peuplés sur succes=true ; LdapProvider (annuaire dev)
+  // ne les peuple jamais non plus, cf. commentaire du modèle Prisma.
+  codeEchec: z.string().nullable(),
+  messageEchec: z.string().nullable(),
   horodatage: z.string()
 });
 export type JournalSecuriteVue = z.infer<typeof journalSecuriteVueSchema>;

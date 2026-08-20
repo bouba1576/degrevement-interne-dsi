@@ -161,6 +161,8 @@ export class AuditService {
     succes: boolean;
     facteur: string;
     ip: string | null;
+    codeEchec: string | null;
+    messageEchec: string | null;
     horodatage: Date;
   }): JournalSecuriteVue {
     return {
@@ -171,6 +173,8 @@ export class AuditService {
       succes: e.succes,
       facteur: e.facteur as never,
       ip: e.ip,
+      codeEchec: e.codeEchec,
+      messageEchec: e.messageEchec,
       horodatage: e.horodatage.toISOString()
     };
   }

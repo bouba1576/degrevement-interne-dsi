@@ -19,7 +19,13 @@ const LIBELLE_EVENEMENT: Record<EnumEvenementSecurite, string> = {
   LOGOUT: "Déconnexion",
   MFA_CHALLENGE: "Défi MFA",
   RBAC_REFUS: "Refus RBAC",
-  SOD_REFUS: "Refus SoD"
+  SOD_REFUS: "Refus SoD",
+  // Deux valeurs ajoutées au schéma le 12/08 et le 19/08/2026
+  // (schema.prisma, EnumEvenementSecurite) — absentes ici jusqu'à ce que le
+  // trou dans enumEvenementSecurite (packages/contracts) soit trouvé et
+  // corrigé (cf. commentaire à sa déclaration).
+  ACCES_NON_PROVISIONNE: "Accès non provisionné",
+  TOTP_ENROLEMENT_ADMIN: "Enrôlement TOTP (admin)"
 };
 
 const TON_EVENEMENT: Record<EnumEvenementSecurite, TonBadge> = {
@@ -27,7 +33,9 @@ const TON_EVENEMENT: Record<EnumEvenementSecurite, TonBadge> = {
   LOGOUT: "neutre",
   MFA_CHALLENGE: "accent",
   RBAC_REFUS: "erreur",
-  SOD_REFUS: "erreur"
+  SOD_REFUS: "erreur",
+  ACCES_NON_PROVISIONNE: "erreur",
+  TOTP_ENROLEMENT_ADMIN: "accent"
 };
 
 const LIBELLE_FACTEUR: Record<EnumFacteurAuth, string> = {
@@ -58,6 +66,7 @@ export function JournalSecuriteTable({ entrees }: JournalSecuriteTableProps) {
             <th className="px-3 py-2">Événement</th>
             <th className="px-3 py-2">Facteur</th>
             <th className="px-3 py-2">Résultat</th>
+            <th className="px-3 py-2">Détail</th>
             <th className="px-3 py-2">IP</th>
           </tr>
         </thead>
@@ -82,6 +91,20 @@ export function JournalSecuriteTable({ entrees }: JournalSecuriteTableProps) {
                 <Badge ton={e.succes ? "succes" : "erreur"} pastille>
                   {e.succes ? "Succès" : "Échec"}
                 </Badge>
+              </td>
+              {/* codeEchec/messageEchec (19/08/2026, AdApiProvider) — jamais
+                  peuplés sur succes=true, et LdapProvider (annuaire dev) ne
+                  les peuple jamais non plus : "—" y reste donc la norme, pas
+                  seulement un repli. */}
+              <td className="px-3 py-2 text-12 text-gris700">
+                {e.messageEchec ? (
+                  <>
+                    {e.messageEchec}
+                    {e.codeEchec && <div className="font-mono text-11 text-gris500">{e.codeEchec}</div>}
+                  </>
+                ) : (
+                  (e.codeEchec ?? <span className="text-gris400">—</span>)
+                )}
               </td>
               <td className="px-3 py-2 font-mono text-12 text-gris600">{e.ip ?? "—"}</td>
             </tr>

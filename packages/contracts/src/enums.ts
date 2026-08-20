@@ -36,12 +36,23 @@ export const enumTypeNotification = z.enum([
 ]);
 export const enumUniteKpi = z.enum(["MONTANT", "VOLUME", "TAUX"]);
 export const enumTypeRole = z.enum(["METIER", "PIVOT", "SYSTEME"]);
+// Miroir de EnumEvenementSecurite (schema.prisma) — deux valeurs manquaient
+// ici (ACCES_NON_PROVISIONNE, TOTP_ENROLEMENT_ADMIN, ajoutées au schéma le
+// 12/08 et le 19/08/2026) : trouvé en vérifiant en direct AuditSecuriteScreen
+// après un chantier sans rapport (colonne "Détail" codeEchec/messageEchec) —
+// `z.array(journalSecuriteVueSchema).parse()` (requeteAvecTotal, lib/api.ts)
+// rejette la PAGE ENTIÈRE dès qu'une seule ligne porte une de ces deux
+// valeurs (28 lignes réelles en base au moment du correctif), l'écran entier
+// affichait alors "Erreur inattendue." sans que la cause n'apparaisse nulle
+// part côté client. Bug préexistant, sans rapport avec le chantier en cours.
 export const enumEvenementSecurite = z.enum([
   "LOGIN",
   "LOGOUT",
   "MFA_CHALLENGE",
   "RBAC_REFUS",
-  "SOD_REFUS"
+  "SOD_REFUS",
+  "ACCES_NON_PROVISIONNE",
+  "TOTP_ENROLEMENT_ADMIN"
 ]);
 export const enumFacteurAuth = z.enum(["AD", "DUO", "TOTP", "SESSION"]);
 export const enumStatutLigne = z.enum(["ACTIF", "SUSPENDU", "RESILIE"]);

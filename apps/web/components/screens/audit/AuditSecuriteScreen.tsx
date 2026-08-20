@@ -8,13 +8,21 @@ import { JournalSecuriteTable } from "./JournalSecuriteTable";
 
 const LIMITE = 50;
 
+// Même 7 valeurs que JournalSecuriteTable.LIBELLE_EVENEMENT (les deux
+// dernières ajoutées au même moment, cf. enumEvenementSecurite) — pas de
+// Record partagé entre les deux fichiers : ici une liste ORDONNÉE pour un
+// <select>, là un dictionnaire de rendu, deux formes différentes pour le
+// même référentiel de 7 valeurs fixes (fermé, cf. convention de test Phase 5
+// — pas un référentiel ouvert justifiant une route dédiée).
 const EVENEMENTS: Array<{ valeur: EnumEvenementSecurite | ""; libelle: string }> = [
   { valeur: "", libelle: "Tous les événements" },
   { valeur: "LOGIN", libelle: "Connexion" },
   { valeur: "LOGOUT", libelle: "Déconnexion" },
   { valeur: "MFA_CHALLENGE", libelle: "Défi MFA" },
   { valeur: "RBAC_REFUS", libelle: "Refus RBAC" },
-  { valeur: "SOD_REFUS", libelle: "Refus SoD" }
+  { valeur: "SOD_REFUS", libelle: "Refus SoD" },
+  { valeur: "ACCES_NON_PROVISIONNE", libelle: "Accès non provisionné" },
+  { valeur: "TOTP_ENROLEMENT_ADMIN", libelle: "Enrôlement TOTP (admin)" }
 ];
 
 // Journal de SÉCURITÉ uniquement (connexions, MFA, refus RBAC/SoD) — pas le
