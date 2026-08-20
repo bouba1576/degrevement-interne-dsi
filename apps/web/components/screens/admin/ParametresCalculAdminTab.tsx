@@ -294,9 +294,9 @@ export function ParametresCalculAdminTab() {
           onFermer={() => setConfirmation(null)}
           pied={
             <>
-              <button type="button" onClick={() => setConfirmation(null)} className="rounded border border-gris200 px-3 py-1.5 text-13 font-bold text-gris700">
+              <Button onClick={() => setConfirmation(null)} variante="fantome" taille="petite">
                 Annuler
-              </button>
+              </Button>
               <Button
                 onClick={() => appliquer(confirmation.circuit)}
                 disabled={enregistrement === confirmation.circuit}

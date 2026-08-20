@@ -41,9 +41,9 @@ export function ModifierDemandeModal({ demande, onFermer, onConfirmer, chargemen
       onFermer={onFermer}
       pied={
         <>
-          <button type="button" onClick={onFermer} className="rounded border border-gris200 px-3 py-1.5 text-13 font-bold text-gris700">
+          <Button onClick={onFermer} variante="fantome" taille="petite">
             Annuler
-          </button>
+          </Button>
           <Button disabled={!valide || chargement} onClick={() => onConfirmer(valeur)} variante="sombre" taille="petite">
             {chargement ? "Enregistrement…" : "Confirmer"}
           </Button>

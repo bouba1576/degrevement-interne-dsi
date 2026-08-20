@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
-import { Card, CardHeader, Money, StatutLigneBadge } from "@pgd/ui";
+import { Card, CardHeader, Chip, Money, StatutLigneBadge } from "@pgd/ui";
 import type { CircuitVue, Demande, DemandeLigneVue, MotifVue } from "@pgd/contracts";
 import { listerCircuitsReferentiel, listerMotifsActifs } from "@/lib/api";
 
 export interface ApercuTabProps {
   demande: Demande;
   lignes: DemandeLigneVue[];
+  // Calculé une seule fois par DossierDetailScreen (extraireLabelPalier,
+  // ./labelPalier.ts) et partagé avec CircuitTab — jamais un second fetch
+  // dupliqué par onglet.
+  labelPalier: string | null;
 }
 
 // Champs communs, jamais une liste par circuit recopiée de docs/design/
@@ -88,7 +92,7 @@ function useCircuitLibelle(circuit: Demande["circuit"]): string | null {
   return circuits?.find((c) => c.code === circuit)?.libelle ?? null;
 }
 
-export function ApercuTab({ demande, lignes }: ApercuTabProps) {
+export function ApercuTab({ demande, lignes, labelPalier }: ApercuTabProps) {
   const motifLibelle = useMotifLibelle(demande.circuit, demande.motifId);
   const circuitLibelle = useCircuitLibelle(demande.circuit);
   const lignesCommunes = LIBELLES_COMMUNS.map(
@@ -194,6 +198,14 @@ export function ApercuTab({ demande, lignes }: ApercuTabProps) {
             <span className="text-14 font-bold">Total TTC</span>
             <Money valeur={demande.montantTtc} fort className="text-17 text-orange600" />
           </div>
+          {/* docs/design/screens2.jsx:547 — chip "Tranche X" sous les
+              montants. Palier réellement appliqué (JournalAudit, cf.
+              ./labelPalier.ts), jamais recalculé. */}
+          {labelPalier && (
+            <div className="mt-3">
+              <Chip actif>Tranche {labelPalier}</Chip>
+            </div>
+          )}
         </div>
       </Card>
     </div>

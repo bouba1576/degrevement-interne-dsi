@@ -2,45 +2,27 @@
 
 import { useEffect, useState } from "react";
 import { Card, CardHeader, WorkflowStepper } from "@pgd/ui";
-import type { EtapeDossier, JournalAuditVue } from "@pgd/contracts";
-import { ApiError, journalAuditDemande, listerTachesDemande } from "@/lib/api";
+import type { EtapeDossier } from "@pgd/contracts";
+import { ApiError, listerTachesDemande } from "@/lib/api";
 
 export interface CircuitTabProps {
   demandeId: string;
+  // Calculé une seule fois par DossierDetailScreen (extraireLabelPalier,
+  // ./labelPalier.ts) et partagé avec ApercuTab — jamais un second fetch
+  // dupliqué par onglet.
+  labelPalier: string | null;
 }
 
-// Le palier appliqué (label) N'EST PAS recalculé ici — recalculer via
-// POST /api/demandes/{id}/apercu-routage sur un dossier déjà soumis
-// interrogerait la configuration ACTUELLE des paliers, pas celle qui a
-// réellement routé ce dossier : si un admin modifie un palier après coup
-// (le CRUD existe précisément pour ça), l'écran mentirait silencieusement
-// sur ce qui s'est passé — même défaut que le faux état que WorkflowStepper
-// refuse déjà de fabriquer pour l'escalade. Le palier réellement appliqué
-// EST persisté, mais dans JournalAudit.detail.labelPalier, écrit à chaque
-// "soumission" et "re-routage" (DemandeWorkflowService) — jamais recalculé,
-// une lecture de ce qui s'est produit. On lit la DERNIÈRE de ces deux
-// actions (le re-routage remplace entièrement la chaîne en attente), pas
-// la plus récente entrée du journal tout court.
-function extraireLabelPalier(entrees: JournalAuditVue[]): string | null {
-  const pertinentes = entrees.filter((e) => e.action === "soumission" || e.action === "re-routage");
-  if (pertinentes.length === 0) return null;
-  const derniere = pertinentes.reduce((a, b) => (new Date(b.horodatage) > new Date(a.horodatage) ? b : a));
-  const detail = derniere.detail as { labelPalier?: string | null } | null;
-  return detail?.labelPalier ?? null;
-}
-
-export function CircuitTab({ demandeId }: CircuitTabProps) {
+export function CircuitTab({ demandeId, labelPalier }: CircuitTabProps) {
   const [etapes, setEtapes] = useState<EtapeDossier[] | null>(null);
-  const [labelPalier, setLabelPalier] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
 
   useEffect(() => {
     let annule = false;
-    Promise.all([listerTachesDemande(demandeId), journalAuditDemande(demandeId)])
-      .then(([tachesReponse, audit]) => {
+    listerTachesDemande(demandeId)
+      .then((tachesReponse) => {
         if (annule) return;
         setEtapes(tachesReponse);
-        setLabelPalier(extraireLabelPalier(audit));
       })
       .catch((e: unknown) => {
         if (annule) return;

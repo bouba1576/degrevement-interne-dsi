@@ -103,30 +103,15 @@ export function TacheActionBanner({ etapes, utilisateur, onActionEffectuee }: Ta
 
           {reclameeParMoi && (
             <>
-              <button
-                type="button"
-                disabled={chargement}
-                onClick={() => executer(() => unclaimTache(tache.id))}
-                className="rounded border border-gris200 px-3 py-1.5 text-13 font-bold text-gris700 disabled:opacity-50"
-              >
+              <Button disabled={chargement} onClick={() => executer(() => unclaimTache(tache.id))} variante="fantome" taille="petite">
                 Libérer
-              </button>
-              <button
-                type="button"
-                disabled={chargement}
-                onClick={() => setModalRejet(true)}
-                className="rounded bg-rouge700 px-3 py-1.5 text-13 font-bold text-blanc disabled:opacity-50"
-              >
+              </Button>
+              <Button disabled={chargement} onClick={() => setModalRejet(true)} variante="danger" taille="petite">
                 Rejeter
-              </button>
-              <button
-                type="button"
-                disabled={chargement}
-                onClick={() => executer(() => approuverTache(tache.id, {}))}
-                className="rounded bg-vert700 px-3 py-1.5 text-13 font-bold text-blanc disabled:opacity-50"
-              >
+              </Button>
+              <Button disabled={chargement} onClick={() => executer(() => approuverTache(tache.id, {}))} variante="succes" taille="petite">
                 Approuver
-              </button>
+              </Button>
             </>
           )}
         </div>
@@ -138,15 +123,10 @@ export function TacheActionBanner({ etapes, utilisateur, onActionEffectuee }: Ta
           onFermer={() => setModalRejet(false)}
           pied={
             <>
-              <button
-                type="button"
-                onClick={() => setModalRejet(false)}
-                className="rounded border border-gris200 px-3 py-1.5 text-13 font-bold text-gris700"
-              >
+              <Button onClick={() => setModalRejet(false)} variante="fantome" taille="petite">
                 Annuler
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
                 disabled={
                   motifRejet.trim().length === 0 ||
                   (clore && motifCloture.trim().length === 0) ||
@@ -165,10 +145,11 @@ export function TacheActionBanner({ etapes, utilisateur, onActionEffectuee }: Ta
                     setMotifCloture("");
                   })
                 }
-                className="rounded bg-rouge700 px-3 py-1.5 text-13 font-bold text-blanc disabled:opacity-50"
+                variante="danger"
+                taille="petite"
               >
                 {clore ? "Confirmer le rejet et la clôture" : "Confirmer le rejet et le renvoi"}
-              </button>
+              </Button>
             </>
           }
         >

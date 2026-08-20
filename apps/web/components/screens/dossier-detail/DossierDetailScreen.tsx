@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CircuitPill, Icon, StatusBadge, type StatutDemande } from "@pgd/ui";
+import { Button, CircuitPill, Icon, StatusBadge, type StatutDemande } from "@pgd/ui";
 import type { DemandeDetail, EtapeDossier, JournalAuditVue, SessionUtilisateur } from "@pgd/contracts";
 import {
   ApiError,
@@ -18,6 +18,7 @@ import { PiecesTab } from "./PiecesTab";
 import { AuditTab } from "./AuditTab";
 import { TacheActionBanner } from "./TacheActionBanner";
 import { ModifierDemandeModal, type ModifierDemandeValeur } from "./ModifierDemandeModal";
+import { extraireLabelPalier } from "./labelPalier";
 
 export interface DossierDetailScreenProps {
   dossierId: string;
@@ -108,6 +109,10 @@ export function DossierDetailScreen({ dossierId, utilisateur, onRetour }: Dossie
     ? [...audit].reverse().find((a) => a.action === "cloture")
     : undefined;
   const controleEnAttente = etapes.some((e) => e.typeActeur === "C" && e.dateDecision === null);
+  // Partagé entre ApercuTab (chip "Tranche X", carte Montants) et CircuitTab
+  // (carte "Règle appliquée") — un seul calcul sur `audit` déjà chargé ici,
+  // jamais un second fetch dupliqué par onglet.
+  const labelPalier = audit ? extraireLabelPalier(audit) : null;
 
   async function handleAbandonner() {
     setChargementAction(true);
@@ -174,31 +179,16 @@ export function DossierDetailScreen({ dossierId, utilisateur, onRetour }: Dossie
         {peutAbandonnerOuRappeler && (
           <div className="flex gap-2">
             {peutModifier && (
-              <button
-                type="button"
-                disabled={chargementAction}
-                onClick={() => setModaleModification(true)}
-                className="rounded border border-gris200 px-3 py-1.5 text-13 font-bold text-gris700 disabled:opacity-50"
-              >
+              <Button disabled={chargementAction} onClick={() => setModaleModification(true)} variante="fantome" taille="petite">
                 Modifier
-              </button>
+              </Button>
             )}
-            <button
-              type="button"
-              disabled={chargementAction}
-              onClick={handleRappeler}
-              className="rounded border border-gris200 px-3 py-1.5 text-13 font-bold text-gris700 disabled:opacity-50"
-            >
+            <Button disabled={chargementAction} onClick={handleRappeler} variante="fantome" taille="petite">
               Rappeler
-            </button>
-            <button
-              type="button"
-              disabled={chargementAction}
-              onClick={handleAbandonner}
-              className="rounded border border-gris200 px-3 py-1.5 text-13 font-bold text-gris700 disabled:opacity-50"
-            >
+            </Button>
+            <Button disabled={chargementAction} onClick={handleAbandonner} variante="fantome" taille="petite">
               Abandonner
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -251,8 +241,8 @@ export function DossierDetailScreen({ dossierId, utilisateur, onRetour }: Dossie
         ))}
       </div>
 
-      {onglet === "apercu" && <ApercuTab demande={demande} lignes={lignes} />}
-      {onglet === "circuit" && <CircuitTab demandeId={dossierId} />}
+      {onglet === "apercu" && <ApercuTab demande={demande} lignes={lignes} labelPalier={labelPalier} />}
+      {onglet === "circuit" && <CircuitTab demandeId={dossierId} labelPalier={labelPalier} />}
       {onglet === "pieces" && (
         <PiecesTab
           demandeId={dossierId}
