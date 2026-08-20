@@ -246,7 +246,6 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
   const [directionRespId, setDirectionRespId] = useState("");
   const [serviceRespId, setServiceRespId] = useState("");
   const [localisation, setLocalisation] = useState<EnumLocalisation | "">("");
-  const [canalRemontee, setCanalRemontee] = useState("");
   const [dateReceptionBo, setDateReceptionBo] = useState("");
   const [dateReceptionOci, setDateReceptionOci] = useState("");
   const [numeroAppel, setNumeroAppel] = useState("");
@@ -492,7 +491,6 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
       agentSaisie: agentSaisie.trim() || undefined,
       sousFlux: sousFlux.trim() || undefined,
       localisation: circuit === "DOBB" && localisation ? localisation : undefined,
-      canalRemontee: circuit === "DOBB" ? canalRemontee.trim() || undefined : undefined,
       dateReceptionBo: circuit === "DOBB" ? dateReceptionBo || undefined : undefined,
       dateReceptionOci: circuit === "DOBB" ? dateReceptionOci || undefined : undefined,
       formuleAbonnement: circuit === "DOBB" || circuit === "DXC" ? formuleAbonnement.trim() || undefined : undefined,
@@ -602,7 +600,6 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
     serviceAutreActif,
     responsabiliteServiceAutre,
     localisation,
-    canalRemontee,
     dateReceptionBo,
     dateReceptionOci,
     memoDe,
@@ -940,14 +937,6 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                       className="w-full rounded border border-gris300 px-3 py-2 text-13"
                       value={pointContact}
                       onChange={(e) => setPointContact(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-13 font-bold text-gris800">Canal de remontée</label>
-                    <input
-                      className="w-full rounded border border-gris300 px-3 py-2 text-13"
-                      value={canalRemontee}
-                      onChange={(e) => setCanalRemontee(e.target.value)}
                     />
                   </div>
                   <div>

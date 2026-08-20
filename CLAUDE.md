@@ -264,6 +264,24 @@ Suite directe de SF-PGD-109 ci-dessus, après confirmation métier complète. **
 
 **Reste à faire (P2, pas ce tour)** : le préremplissage n'a d'effet pratique que si un rôle/palier différencie réellement par sous-flux — aujourd'hui seul un rôle générique (`INITIATEUR_DOBB`) existe, aucune chaîne DOBB/DXC ne varie encore selon le sous-flux choisi. Chantier de rôles/paliers différenciés (DOBB : 9 rôles nouveaux + 6 paliers ; DXC : `VER_DXC` comme étape réelle distincte de l'initiateur + 5 rôles + 5 paliers ; DF : renommage cosmétique) confirmé par la personne pilotant le projet, séquencé après ce chantier, pas encore construit.
 
+**RÉVISION (19/08/2026) : sous-flux — et désormais circuit — masqués entièrement à l'écran, plus une présélection éditable.** Décision d'origine ci-dessus (« reste éditable — jamais une valeur figée… aucune présélection, l'initiateur choisit manuellement » si le `sousFluxId` de session ne correspond à aucune entrée du circuit) **inversée sur instruction explicite de la personne pilotant le projet, après consultation métier** : circuit ET sous-flux doivent désormais être déduits silencieusement du profil au moment de la création, jamais affichés ni modifiables sur `NouvelleDemandeScreen`. Raison transmise : consultation métier, non détaillée au-delà de ce terme — pas déduite ici.
+
+**Vérification demandée avant construction — cas multi-rôles initiateurs sur circuits différents** : requête directe contre le socle réel (`membre_role` JOIN `role` WHERE `code LIKE 'INITIATEUR_%'` GROUP BY utilisateur HAVING count > 1) → **0 ligne**. Aucun utilisateur du catalogue actuel ne détient plus d'un rôle `INITIATEUR_<CIRCUIT>` — le cas n'existe pour personne aujourd'hui, non bloquant, conforme à ce que prévoyait la question posée.
+
+**Trouvaille distincte, non demandée explicitement mais directement bloquante pour cette même révision — écart réel entre le circuit déduit et le `sousFluxId` du profil, déjà présent dans le socle réel.** Requête directe (`utilisateur` LEFT JOIN `sous_flux` sur `sous_flux_id`, croisé avec le rôle `INITIATEUR_%` détenu) :
+
+| Identifiant | Rôle initiateur | Circuit du sous-flux du profil | Sous-flux |
+|---|---|---|---|
+| `SDHQ2098` | `INITIATEUR_DXC` | DXC | Réclamation |
+| `jean.kouassi@orange.com` | `INITIATEUR_DOBB` | — | `sousFluxId` **NULL** |
+| `FGGK6451` | `INITIATEUR_DXC` | **DOBB** | ADV |
+
+Deux cas réels, pas hypothétiques, dans le socle actuel :
+1. **`jean.kouassi@orange.com` — `sousFluxId` non renseigné du tout.** Une fois le champ masqué, aucun sous-flux ne peut plus jamais être fourni pour cet utilisateur par cet écran — `POST .../soumettre` exige `SOUS_FLUX_REQUIS` (obligatoire à la soumission, cf. ci-dessus), donc **plus aucune soumission possible** pour ce compte tant que son profil n'a pas de `sousFluxId`, sans recours à l'écran.
+2. **`FGGK6451` — `sousFluxId` pointe vers un sous-flux DOBB (« ADV ») alors que son rôle initiateur est `INITIATEUR_DXC`.** Le circuit déduit pour ce compte sera DXC (seul rôle initiateur détenu) ; son `sousFluxId` de profil appartient à un AUTRE circuit. Une fois la présélection automatique appliquée sans le garde-fou de correspondance de circuit qui existait avant cette révision (« si le sousFluxId ne correspond à aucune entrée du circuit sélectionné, aucune présélection »), deux résultats possibles selon l'implémentation — et rien dans les sources ne tranche lequel est voulu : (a) le libellé « ADV » (un sous-flux DOBB) se retrouve posé tel quel sur un dossier DXC, incohérent avec le référentiel réel du circuit ; ou (b) le même blocage que le cas 1 si on réintroduit un contrôle de correspondance côté silencieux (aucun sous-flux valide trouvé → `sousFluxId` ignoré → `SOUS_FLUX_REQUIS` à la soumission, sans recours).
+
+**Aucune source ne tranche le comportement attendu dans ces deux cas** — remonté plutôt que deviné, conformément à l'instruction. Question posée directement à la personne pilotant le projet (cf. échange), implémentation de cette révision suspendue dans l'attente de la réponse.
+
 ### Fiches d'ajustement — abandon du rattachement à une ligne réelle (R15/R17/R18/R19/R20 abandonnées, décision métier confirmée, 19/08/2026)
 
 **Décision, sans ambiguïté, actée après consultation des directions métier, transmise directement par la personne pilotant le projet — pas une hypothèse à vérifier, une décision à exécuter.** La recherche par ND et le rattachement d'une fiche d'ajustement à une ligne réelle gouvernée (`Ligne`/`Formule`/`DemandeLigne`) sont abandonnés. La recherche se fait désormais par numéro de compte ou numéro de case, uniquement pour préremplir l'identité client (nom, compte) — le montant à ajuster et la formule redeviennent des champs de saisie libre au niveau du dossier, exactement comme le montre la maquette (`docs/design/screens1.jsx`), jamais dérivés d'une somme de lignes retenues.
