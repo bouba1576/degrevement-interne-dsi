@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, Icon } from "@pgd/ui";
+import { Card, Empty, Icon } from "@pgd/ui";
 import type { JournalAuditVue } from "@pgd/contracts";
 import { ApiError, journalAuditDemande } from "@/lib/api";
 
@@ -31,9 +31,14 @@ export function AuditTab({ demandeId }: AuditTabProps) {
   if (!entrees) return <p className="text-13 text-gris600">Chargement…</p>;
 
   return (
-    <Card className="p-5">
+    <Card className={entrees.length === 0 ? undefined : "p-5"}>
       {entrees.length === 0 ? (
-        <p className="text-13 text-gris600">Aucune entrée d&apos;audit.</p>
+        // Absent de la maquette (screens2.jsx:581-597, données de démo
+        // toujours non vides) — un dossier BROUILLON réel n'a en revanche
+        // encore aucune entrée JournalAudit (création/definirLignes n'en
+        // écrivent jamais). Même pattern partagé que PiecesTab/
+        // CorbeillesScreen/ControleScreen.
+        <Empty icone="clock" titre="Aucune entrée d'audit" />
       ) : (
         <div className="flex flex-col gap-3">
           {entrees

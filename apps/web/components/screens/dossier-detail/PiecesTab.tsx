@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Card, CardHeader, Icon } from "@pgd/ui";
+import { Card, CardHeader, Empty, Icon } from "@pgd/ui";
 import type { PieceJointeVue } from "@pgd/contracts";
 import { ApiError, ajouterPiece, supprimerPiece } from "@/lib/api";
 
@@ -82,7 +82,7 @@ export function PiecesTab({ demandeId, pieces, onChange }: PiecesTabProps) {
         {erreur && <p className="mb-3 text-13 font-semibold text-rouge700">{erreur}</p>}
 
         {pieces.length === 0 ? (
-          <p className="text-13 text-gris600">Aucune pièce jointe.</p>
+          <Empty icone="paperclip" titre="Aucune pièce jointe" />
         ) : (
           <div className="flex flex-col gap-2">
             {pieces.map((piece) => (
