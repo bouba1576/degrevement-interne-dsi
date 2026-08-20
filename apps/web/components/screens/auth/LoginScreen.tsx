@@ -94,7 +94,14 @@ export function LoginScreen({ onConnecte }: LoginScreenProps) {
     <div className="grid min-h-screen grid-cols-1 bg-blanc lg:grid-cols-2">
       <div className="relative hidden flex-col justify-between overflow-hidden bg-noir p-12 text-blanc lg:flex">
         <div className="flex items-center gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-lg bg-orange text-blanc font-extrabold">O</div>
+          {/* docs/design/ui.jsx:62-74 (BrandMark) — une fois l'image chargée,
+              le conteneur devient transparent (fond orange = repli seulement
+              si l'image est absente) et l'image REMPLIT le carré size×size
+              (styles.css:90, object-fit: contain) — jamais une icône réduite
+              à l'intérieur d'un fond orange. */}
+          <div className="grid h-11 w-11 shrink-0 place-items-center">
+            <img src="/logo-orange.png" alt="Orange Côte d'Ivoire" className="h-full w-full object-contain" />
+          </div>
           <div>
             <b className="block text-[16px]">Orange Côte d&apos;Ivoire</b>
             <span className="text-11 uppercase tracking-[.1em] text-gris400">DSI · AIP</span>
