@@ -89,6 +89,17 @@ export function HomeScreen({ utilisateur, onNaviguer, compteMesDemandes, compteC
       <div className="mb-6 flex items-end gap-5">
         <div>
           <h2 className="text-[24px] tracking-[-.02em]">Bonjour {prenom}</h2>
+          {/* docs/design/screens1.jsx:44 — sous-titre "{titre} · {libellés de
+              rôles}". `user.titre` (fonction/poste) est une donnée de démo
+              sans contrepartie schéma (SessionUtilisateur n'a ni titre ni
+              fonction, packages/contracts/src/auth.ts) — omis, catégorie 3
+              (DIVERGENCES.md). Les libellés de rôle, eux, existeraient
+              réellement (Role.libelle) mais aucune route ouverte à tout
+              authentifié ne les résout aujourd'hui (admin/roles est
+              ADMIN_PGD-only) — affichage des CODES bruts déjà portés par la
+              session en attendant cette route, plutôt qu'un sous-titre
+              absent. */}
+          <p className="mt-0.5 text-13 text-gris600">{utilisateur.roles.join(" · ")}</p>
         </div>
       </div>
 
