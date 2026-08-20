@@ -57,6 +57,39 @@ const BADGE_FICHE_PAR_CIRCUIT: Record<EnumCircuit, { texte: string; ton: "accent
   DF: { texte: "Soumis au contrôle FRA", ton: "special" }
 };
 
+// Points de contact (DOBB) — Priorité 1.3 (20/08/2026). Liste réelle
+// transcrite depuis `docs/design/data.jsx:211-219` (`POINTS_CONTACT`), pas
+// inventée — vérifiée via le harnais (docs/design, serveur statique) contre
+// le rendu réel de screens1.jsx:386. Constante locale, pas encore un
+// référentiel admin — même statut que Motif/Libellé avant leur promotion
+// (Phase A) ; « Autre » reste une option ordinaire de la liste, aucun champ
+// de saisie manuelle ne lui est associé dans la maquette elle-même.
+const POINTS_CONTACT = [
+  "Service client B2B",
+  "Service client B2C",
+  "Gestionnaire de compte",
+  "Back-office facturation",
+  "Centre d'appel",
+  "Agence commerciale",
+  "Responsable recouvrement",
+  "Service technique / dérangement",
+  "Chargé de clientèle grands comptes",
+  "Recouvrement B2B",
+  "ASCOM",
+  "FACTURATION",
+  "ADV FIXE INTERNET",
+  "AGENCE",
+  "RECOUVREMENT B2C",
+  "ROBOT FORMULAIRE GUIDE",
+  "TELE OPERATEUR MOBILE",
+  "TELE OPERATEUR FI",
+  "ORANGE BUSINESS MAIL",
+  "SAV B2B TECHNIQUE",
+  "COMMERCIAUX",
+  "ASSISTANTE DE DIRECTION",
+  "Autre"
+];
+
 // Convention déjà établie pour Sidebar (packages/ui) : le code de rôle
 // `INITIATEUR_<CIRCUIT>` est le seul indice réel disponible côté client — pas
 // un champ serveur dédié. Simple valeur par défaut ÉDITABLE, jamais une
@@ -521,17 +554,20 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
   // fois le dossier créé (modifierDemandeRequeteSchema omet `circuit`, le
   // routage/segment en dépendent structurellement).
   async function sauvegarderFormulaire() {
-    const { payload, erreur } = construirePayload();
-    if (erreur) {
-      setErreurSauvegarde(erreur);
+    const demandeActuelle = demandeRef.current;
+    // Garde des champs minimaux vérifiée sur l'état BRUT, avant toute
+    // validation de champsCircuit (construirePayload) — bug trouvé en
+    // vérification live (Priorité 1, DF) : valider le mémo DF avant même que
+    // l'utilisateur ait commencé à saisir affichait « Contexte de la
+    // réclamation requis » dès le premier rendu utile (dès que sousFlux se
+    // préremplit depuis le profil), avant que quiconque n'ait rien tapé.
+    if (!demandeActuelle && (!nomClient.trim() || !commentaire.trim() || !montantHt)) {
       return;
     }
 
-    const demandeActuelle = demandeRef.current;
-    if (!demandeActuelle && (!payload.nomClient || !payload.commentaire || !payload.montantHt)) {
-      // Champs minimaux pas encore réunis — aucun brouillon créé tant que ce
-      // n'est pas le cas (même garde-fou qu'avant ce chantier, cf. brouillons
-      // orphelins jamais supprimables).
+    const { payload, erreur } = construirePayload();
+    if (erreur) {
+      setErreurSauvegarde(erreur);
       return;
     }
 
@@ -656,33 +692,37 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
   return (
     <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
       <div className="flex flex-col gap-4">
+        {/* Carte du haut (bloc de « création différée ») retirée — Priorité 1.1
+            (20/08/2026) : jamais dans la maquette. « Nom du client »/« Opérateur »
+            et « Date de demande » reprennent leur emplacement EXACT de la
+            maquette, vérifié via le harnais (docs/design, serveur statique) et
+            screens1.jsx, pas supposé : « Date de demande » est le premier champ
+            de la carte Identification (commune) ; « Nom du client »/« Opérateur »
+            N'EST PAS un champ commun — la maquette le place dans la carte
+            propre à chaque circuit (3ᵉ position DOBB/DXC, juste après le bloc de
+            recherche client et le Numéro Case ; 3ᵉ position DF, juste après
+            « À (destinataire) »), jamais dans Identification. Réf. brouillon et
+            indicateur de sauvegarde silencieuse déplacés dans la carte
+            Identification, seul endroit qui reste toujours visible en tête. */}
+
+        {/* Carte « Identification » — communs aux trois circuits. Motif
+            scopé au circuit courant ; univers/facteur indépendants du
+            circuit. */}
         <div className="rounded-6 border border-gris200 bg-blanc p-5">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Icon nom="doc" taille={17} />
-              <h3 className="text-14 font-bold">
-                {demande ? `Brouillon réf. ${demande.demande.reference}` : "Nouvelle fiche d'ajustement"}
-              </h3>
-              {sauvegardeEnCours && <span className="text-12 font-semibold text-gris600">Enregistrement…</span>}
-            </div>
+          <div className="mb-3 flex items-center gap-2">
+            <Icon nom="building" taille={17} />
+            <h3 className="text-14 font-bold">
+              {demande ? `Brouillon réf. ${demande.demande.reference}` : "Identification"}
+            </h3>
+            {sauvegardeEnCours && <span className="text-12 font-semibold text-gris600">Enregistrement…</span>}
+            {processCode && (
+              <span className="ml-auto">
+                <Badge ton="neutre">{processCode}</Badge>
+              </span>
+            )}
           </div>
           {erreurSauvegarde && <p className="mb-3 text-13 font-semibold text-rouge700">{erreurSauvegarde}</p>}
-
-          {/* Circuit — RÉVISION Priorité 0.2 (19/08/2026) : jamais affiché ni
-              modifiable à l'écran, déduit silencieusement du profil
-              (circuitParDefaut). Décision inversant la sélection manuelle
-              d'origine, sur instruction explicite après consultation métier. */}
-
-          <label className="mb-1 block text-13 font-bold text-gris800">
-            {circuit === "DF" ? "Opérateur" : "Nom du client"} <span className="text-rouge">*</span>
-          </label>
-          <input
-            className="mb-3 w-full rounded border border-gris300 px-3 py-2 text-13"
-            value={nomClient}
-            onChange={(e) => setNomClient(e.target.value)}
-          />
-
-          <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-13 font-bold text-gris800">
                 {circuit === "DF" ? "Date du mémo" : "Date de demande"}
@@ -705,23 +745,6 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                 </p>
               </div>
             )}
-          </div>
-        </div>
-
-        {/* Carte « Identification » — communs aux trois circuits. Motif
-            scopé au circuit courant ; univers/facteur indépendants du
-            circuit. */}
-        <div className="rounded-6 border border-gris200 bg-blanc p-5">
-          <div className="mb-3 flex items-center gap-2">
-            <Icon nom="building" taille={17} />
-            <h3 className="text-14 font-bold">Identification</h3>
-            {processCode && (
-              <span className="ml-auto">
-                <Badge ton="neutre">{processCode}</Badge>
-              </span>
-            )}
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-13 font-bold text-gris800">Agent initiateur</label>
               <input
@@ -813,15 +836,9 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-13 font-bold text-gris800">Compte client</label>
-                <input
-                  className="w-full rounded border border-gris300 px-3 py-2 text-13 font-mono"
-                  value={compteClient}
-                  onChange={(e) => setCompteClient(e.target.value)}
-                  placeholder={circuit === "DOBB" ? "ex. B2B-880142" : "ex. B2C-4471902"}
-                />
-              </div>
+              {/* Ordre exact de la maquette, vérifié via le harnais et
+                  screens1.jsx (Priorité 1.1, 20/08/2026) : Numéro Case → Nom
+                  du client → Compte client — pas l'ordre précédent. */}
               <div>
                 <label className="mb-1 block text-13 font-bold text-gris800">Numéro Case (JADE)</label>
                 <input
@@ -831,6 +848,25 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                   placeholder="ex. CASE-100231"
                 />
                 <p className="mt-1 text-12 text-gris600">Facultatif — à titre indicatif.</p>
+              </div>
+              <div>
+                <label className="mb-1 block text-13 font-bold text-gris800">
+                  Nom du client <span className="text-rouge">*</span>
+                </label>
+                <input
+                  className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                  value={nomClient}
+                  onChange={(e) => setNomClient(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-13 font-bold text-gris800">Compte client</label>
+                <input
+                  className="w-full rounded border border-gris300 px-3 py-2 text-13 font-mono"
+                  value={compteClient}
+                  onChange={(e) => setCompteClient(e.target.value)}
+                  placeholder={circuit === "DOBB" ? "ex. B2B-880142" : "ex. B2C-4471902"}
+                />
               </div>
               <div>
                 <label className="mb-1 block text-13 font-bold text-gris800">
@@ -894,16 +930,31 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                       onChange={(e) => setFinPeriodeContestee(e.target.value)}
                     />
                   </div>
-                  {/* Point de contact — champsCircuit, pas de nouveau
-                      référentiel admin (décision Priorité 2, 19/08/2026),
-                      cohérent avec descriptifContestation ci-dessus. */}
+                  {/* Point de contact — <select>, pas un champ libre (Priorité
+                      1.3, 20/08/2026) : liste réelle trouvée dans la maquette
+                      (docs/design/data.jsx:211-219, POINTS_CONTACT), pas
+                      inventée. Valeur toujours stockée dans champsCircuit —
+                      pas de nouveau référentiel admin (décision Priorité 2,
+                      19/08/2026), cohérent avec descriptifContestation
+                      ci-dessus ; la liste elle-même reste une constante
+                      locale, pas encore un référentiel admin-configurable —
+                      même statut que Motif/Libellé avant leur promotion
+                      (Phase A), à reconsidérer si le métier veut la rendre
+                      configurable. */}
                   <div>
                     <label className="mb-1 block text-13 font-bold text-gris800">Point de contact</label>
-                    <input
+                    <select
                       className="w-full rounded border border-gris300 px-3 py-2 text-13"
                       value={pointContact}
                       onChange={(e) => setPointContact(e.target.value)}
-                    />
+                    >
+                      <option value="">— Choisir —</option>
+                      {POINTS_CONTACT.map((p) => (
+                        <option key={p} value={p}>
+                          {p}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="mb-1 block text-13 font-bold text-gris800">Date réception BO</label>
@@ -993,6 +1044,19 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                   className="w-full rounded border border-gris300 px-3 py-2 text-13"
                   value={memoA}
                   onChange={(e) => setMemoA(e.target.value)}
+                />
+              </div>
+              {/* Ordre exact de la maquette (Priorité 1.1, 20/08/2026) :
+                  Opérateur en 3ᵉ position, juste après « À ». */}
+              <div>
+                <label className="mb-1 block text-13 font-bold text-gris800">
+                  Opérateur <span className="text-rouge">*</span>
+                </label>
+                <input
+                  className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                  value={nomClient}
+                  onChange={(e) => setNomClient(e.target.value)}
+                  placeholder="Nom de l'opérateur"
                 />
               </div>
               <div>
@@ -1348,7 +1412,25 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
           </div>
         )}
 
-        {demande && <ApercuRoutage demandeId={demande.demande.id} declencheur={apercuDeclencheur} />}
+        {/* Priorité 1.7 (20/08/2026) : structure du panneau visible dès le
+            chargement du formulaire, avant toute saisie — vérifié via le
+            harnais, la maquette affiche « Routage prévu » avec le
+            placeholder "Saisissez un montant HT pour visualiser le
+            circuit." dès le premier rendu (screens1.jsx:565), jamais masqué
+            en attendant une donnée. Changement de condition d'affichage
+            seulement : ApercuRoutage lui-même reste 100% server-computed
+            (R11), rien n'est calculé côté client avant que `demande` existe. */}
+        {demande ? (
+          <ApercuRoutage demandeId={demande.demande.id} declencheur={apercuDeclencheur} />
+        ) : (
+          <div className="rounded-6 border border-gris200 bg-blanc p-5">
+            <div className="mb-3 flex items-center gap-2">
+              <Icon nom="flow" taille={17} />
+              <h3 className="text-14 font-bold">Routage prévu</h3>
+            </div>
+            <p className="text-13 text-gris600">Saisissez un montant HT pour visualiser le circuit.</p>
+          </div>
+        )}
 
         {/* Toujours rendu, désactivé tant qu'aucun dossier n'existe — même
             pattern que la maquette (`disabled={!tranche}`, screens1.jsx:569),
@@ -1424,13 +1506,22 @@ function ResponsabiliteFields({
           ))}
         </select>
       </div>
+      {/* Priorité 1.4 (20/08/2026) : PAS une case à cocher « Autre » à côté
+          du select — un <select> UNIQUE dont l'une des options est « Autre »
+          (vérifié via le harnais, screens1.jsx/screens3.jsx : la maquette
+          n'a d'ailleurs elle-même aucun mécanisme de révélation, « Autre »
+          y est une simple option statique — le champ de saisie manuelle est
+          une capacité réelle du système, ajoutée ici, pas montrée par le
+          prototype). Sélectionner cette option déclenche exactement le même
+          mécanisme de masquage/vidage déjà construit (PGD-032/SF-PGD-330,
+          toggleServiceAutre) — seul le déclencheur change. */}
       <div>
         <label className="mb-1 block text-13 font-bold text-gris800">Responsabilité — service</label>
         <select
           className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-          value={serviceRespId}
-          onChange={(e) => choisirServiceReel(e.target.value)}
-          disabled={!directionSelectionnee || serviceAutreActif}
+          value={serviceAutreActif ? "__autre" : serviceRespId}
+          onChange={(e) => (e.target.value === "__autre" ? toggleServiceAutre(true) : choisirServiceReel(e.target.value))}
+          disabled={!directionSelectionnee}
         >
           <option value="">— Choisir —</option>
           {directionSelectionnee?.services.map((s) => (
@@ -1438,14 +1529,8 @@ function ResponsabiliteFields({
               {s.libelle}
             </option>
           ))}
+          <option value="__autre">Autre (non référencé)</option>
         </select>
-      </div>
-
-      <div style={{ gridColumn: "1 / -1" }}>
-        <label className="flex items-center gap-2 text-13">
-          <input type="checkbox" checked={serviceAutreActif} onChange={(e) => toggleServiceAutre(e.target.checked)} />
-          Responsabilité par service : « Autre » (non référencé)
-        </label>
         {serviceAutreActif && (
           <input
             className="mt-2 w-full rounded border border-gris300 px-3 py-2 text-13"
