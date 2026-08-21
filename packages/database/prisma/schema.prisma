@@ -153,6 +153,11 @@ enum EnumFacteurAuth {
   DUO
   TOTP
   SESSION
+  // Architecture Keycloak (20/08/2026) — un flux par redirection qui couvre
+  // AD ET le second facteur en un seul aller-retour, jamais l'un des deux
+  // isolément : aucune des quatre valeurs ci-dessus ne le représente
+  // fidèlement.
+  KEYCLOAK
 
   @@map("enum_facteur_auth")
 }

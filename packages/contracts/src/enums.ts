@@ -54,7 +54,12 @@ export const enumEvenementSecurite = z.enum([
   "ACCES_NON_PROVISIONNE",
   "TOTP_ENROLEMENT_ADMIN"
 ]);
-export const enumFacteurAuth = z.enum(["AD", "DUO", "TOTP", "SESSION"]);
+// KEYCLOAK ajouté le 20/08/2026 (architecture Keycloak, LoginScreen — miroir
+// de EnumFacteurAuth, schema.prisma) — cf. la leçon de enumEvenementSecurite
+// (CLAUDE.md) : un des deux Record<EnumFacteurAuth, ...> exhaustifs
+// (JournalSecuriteTable.tsx, LIBELLE_FACTEUR) DOIT gagner une entrée dans le
+// même changement, sous peine de reproduire exactement le même bug.
+export const enumFacteurAuth = z.enum(["AD", "DUO", "TOTP", "SESSION", "KEYCLOAK"]);
 export const enumStatutLigne = z.enum(["ACTIF", "SUSPENDU", "RESILIE"]);
 export const enumEtatSi = z.enum(["EN_ATTENTE", "ENVOYE", "CONFIRME", "ERREUR"]);
 export const enumMethodeMfa = z.enum(["DUO", "TOTP"]);

@@ -40,6 +40,7 @@ import { SessionService } from "./services/session.service";
 import { RateLimitService } from "./services/rate-limit.service";
 import { JournalSecuriteService } from "./services/journal-securite.service";
 import { RbacResolutionService } from "./services/rbac-resolution.service";
+import { poserCookiesSession, effacerCookiesSession } from "./utils/session-cookies.util";
 
 @ApiTags("auth")
 @Controller("auth")
@@ -123,7 +124,7 @@ export class AuthController {
         roles,
         sousFluxId: utilisateur.sousFluxId
       });
-      this.poserCookiesSession(res, jetons);
+      poserCookiesSession(res, jetons);
       return { requiresMfa: false, methode: null, challengeId: null, redirectUrl: null, totpEnrole: null };
     }
 
@@ -226,7 +227,7 @@ export class AuthController {
       roles,
       sousFluxId: utilisateur.sousFluxId
     });
-    this.poserCookiesSession(res, jetons);
+    poserCookiesSession(res, jetons);
 
     return { requiresMfa: false, methode: "TOTP", challengeId: null, redirectUrl: null, totpEnrole: true };
   }
@@ -273,7 +274,7 @@ export class AuthController {
       roles,
       sousFluxId
     });
-    this.poserCookiesSession(res, jetons);
+    poserCookiesSession(res, jetons);
     res.redirect(env.CORS_ORIGIN);
   }
 
@@ -325,7 +326,7 @@ export class AuthController {
     const jetons = await this.sessionService.rafraichir(refreshToken);
     if (!jetons) throw new UnauthorizedException({ code: "NON_AUTHENTIFIE", message: "Refresh token invalide." });
 
-    this.poserCookiesSession(res, jetons);
+    poserCookiesSession(res, jetons);
     return { rafraichi: true };
   }
 
@@ -338,7 +339,7 @@ export class AuthController {
   ): Promise<{ deconnecte: true }> {
     await this.sessionService.revoquer(utilisateur.jti);
     await this.journal.consigner({ utilisateurId: utilisateur.id, evenement: "LOGOUT", facteur: "SESSION", succes: true });
-    this.effacerCookiesSession(res);
+    effacerCookiesSession(res);
     return { deconnecte: true };
   }
 
@@ -362,26 +363,6 @@ export class AuthController {
     return membres.map((m) => m.roleCode);
   }
 
-  private poserCookiesSession(res: Response, jetons: { accessToken: string; refreshToken: string }): void {
-    const env = loadEnv();
-    res.cookie(env.SESSION_COOKIE_NAME, jetons.accessToken, {
-      httpOnly: true,
-      secure: env.COOKIE_SECURE,
-      sameSite: "lax"
-    });
-    res.cookie(env.REFRESH_COOKIE_NAME, jetons.refreshToken, {
-      httpOnly: true,
-      secure: env.COOKIE_SECURE,
-      sameSite: "lax",
-      path: "/api/auth/refresh"
-    });
-  }
-
-  private effacerCookiesSession(res: Response): void {
-    const env = loadEnv();
-    res.clearCookie(env.SESSION_COOKIE_NAME);
-    res.clearCookie(env.REFRESH_COOKIE_NAME, { path: "/api/auth/refresh" });
-  }
 }
 
 function limiteAtteinte(message: string): HttpException {

@@ -62,6 +62,17 @@ export const envSchema = z.object({
   DUO_API_HOST: z.string().min(1, "DUO_API_HOST est requis"),
   DUO_REDIRECT_URI: z.string().min(1, "DUO_REDIRECT_URI est requis"),
 
+  // --- Keycloak (KeycloakPort — réel, seul chemin de connexion depuis
+  // l'écran, architecture actée le 20/08/2026) ---------------------------
+  // openid-client (ESM) fait sa propre découverte à l'initialisation
+  // (mise en cache par le SDK) — KEYCLOAK_BASE_URL/REALM composent
+  // l'URL du royaume, jamais le chemin .well-known en dur ici.
+  KEYCLOAK_BASE_URL: z.string().min(1, "KEYCLOAK_BASE_URL est requis"),
+  KEYCLOAK_REALM: z.string().min(1, "KEYCLOAK_REALM est requis"),
+  KEYCLOAK_CLIENT_ID: z.string().min(1, "KEYCLOAK_CLIENT_ID est requis"),
+  KEYCLOAK_CLIENT_SECRET: z.string().min(1, "KEYCLOAK_CLIENT_SECRET est requis"),
+  KEYCLOAK_REDIRECT_URI: z.string().min(1, "KEYCLOAK_REDIRECT_URI est requis"),
+
   TOTP_ISSUER: z.string().default("PGD Orange CI"),
   // AES-256-GCM : 32 octets exactement, fournis en hex (64 caractères).
   TOTP_ENCRYPTION_KEY: z

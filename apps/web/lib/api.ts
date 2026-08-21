@@ -115,7 +115,12 @@ import {
 // "include"` sur chaque appel, jamais un jeton porté manuellement côté
 // client. CORS_ORIGIN (apps/api) doit correspondre à l'origine réelle de
 // apps/web pour que le navigateur accepte le cookie cross-origin.
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
+// Exporté (20/08/2026) — LoginScreen construit une redirection plein-page
+// vers /api/auth/keycloak/login, jamais un appel fetch() : ce n'est plus une
+// route JSON comme le reste de ce fichier, le navigateur doit littéralement
+// naviguer vers cette URL. Même base que tout le reste de ce fichier, pas une
+// deuxième source de vérité.
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
 export class ApiError extends Error {
   constructor(

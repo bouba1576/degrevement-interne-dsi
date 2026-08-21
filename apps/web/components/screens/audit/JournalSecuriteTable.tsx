@@ -38,11 +38,15 @@ const TON_EVENEMENT: Record<EnumEvenementSecurite, TonBadge> = {
   TOTP_ENROLEMENT_ADMIN: "accent"
 };
 
+// KEYCLOAK ajouté le 20/08/2026 — vérifié proactivement avant d'écrire le
+// reste du chantier (leçon enumEvenementSecurite, CLAUDE.md) : c'était le
+// seul Record<EnumFacteurAuth, ...> exhaustif du dépôt (recherche dédiée).
 const LIBELLE_FACTEUR: Record<EnumFacteurAuth, string> = {
   AD: "Annuaire (AD)",
   DUO: "DUO",
   TOTP: "TOTP",
-  SESSION: "Session"
+  SESSION: "Session",
+  KEYCLOAK: "Keycloak"
 };
 
 export function JournalSecuriteTable({ entrees }: JournalSecuriteTableProps) {
