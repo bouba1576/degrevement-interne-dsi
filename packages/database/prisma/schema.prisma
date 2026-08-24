@@ -194,6 +194,15 @@ model Utilisateur {
   identifiantAd String    @unique @map("identifiant_ad")
   nom           String
   matricule     String?
+  // Ajouté le 24/08/2026 pour SmtpAdapter (conception en cours, CLAUDE.md
+  // « Envoi d'e-mail réel ») — identifiantAd n'est pas garanti être une
+  // adresse e-mail (comptes réels bruts type c_afofana6/wrtm9736, confirmé
+  // 19/08/2026 « identifiantAd = username brut »), donc pas fiable comme
+  // destinataire d'envoi réel. Nullable, jamais unique imposé (pas de
+  // contrainte métier connue là-dessus) : source de peuplement (saisie
+  // admin, claim Keycloak, ou autre) non tranchée à ce stade — colonne
+  // ajoutée seule, sur demande explicite, rien de plus construit dessus.
+  email         String?
   actif         Boolean   @default(true)
   // Pré-enregistrement (analyse du 12/08/2026, CLAUDE.md « Pré-enregistrement
   // des utilisateurs AD ») — même référentiel que Demande.directionRespId/

@@ -28,7 +28,12 @@ describe("NotificationService (docs/06 §? , PGD-073)", () => {
     snapshotErreurSi = await prisma.parametreGlobal.findUnique({ where: { cle: "destinataire_notification_erreur_si" } });
 
     const [membre, initiateur] = await Promise.all([
-      prisma.utilisateur.create({ data: { identifiantAd: `test.notif-membre-${suffixe}@orange.com`, nom: "Membre Test Notif" } }),
+      // email renseigné — ce fixture sert à prouver que SmtpPort.envoyer()
+      // EST appelé (24/08/2026, Utilisateur.email). initiateur volontairement
+      // SANS email : sert à prouver le cas inverse (cf. test dédié plus bas).
+      prisma.utilisateur.create({
+        data: { identifiantAd: `test.notif-membre-${suffixe}@orange.com`, nom: "Membre Test Notif", email: `test.notif-membre-${suffixe}@exemple.test` }
+      }),
       prisma.utilisateur.create({ data: { identifiantAd: `test.notif-init-${suffixe}@orange.com`, nom: "Initiateur Test Notif" } })
     ]);
     membreId = membre.id;
@@ -96,6 +101,21 @@ describe("NotificationService (docs/06 §? , PGD-073)", () => {
     const notifs = await prisma.notification.findMany({ where: { destinataireId: initiateurId, demandeId } });
     const types = notifs.map((n) => n.type).sort();
     expect(types).toEqual(["AVANCEMENT", "REJET", "VALIDATION"]);
+  });
+
+  // Utilisateur.email (24/08/2026) — identifiantAd n'est pas garanti être une
+  // adresse e-mail (comptes réels bruts, cf. CLAUDE.md). `initiateur` est
+  // créé sans email (ci-dessus) : preuve dans les deux sens que l'absence
+  // d'email ne bloque jamais le canal in-app, et que SmtpPort n'est appelé
+  // que si le destinataire en a un.
+  it("destinataire sans email : notification in-app écrite quand même, SmtpPort jamais appelé pour ce destinataire", async () => {
+    await creerDemandeEtTache();
+
+    await service.traiterAvancement(demandeId);
+
+    const notifs = await prisma.notification.findMany({ where: { destinataireId: initiateurId, demandeId, type: "AVANCEMENT" } });
+    expect(notifs).toHaveLength(1);
+    expect(smtpFactice.envoyer).not.toHaveBeenCalled();
   });
 
   it("traiterEscalade — PARAMETRE_GLOBAL non configuré (roleCode=null) : aucune notification, pas d'erreur", async () => {

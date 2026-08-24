@@ -58,6 +58,21 @@ export const envSchema = z.object({
   GED_STORAGE_PATH: z.string().default("/tmp/pgd-ged"),
   GED_MAX_TAILLE_OCTETS: z.coerce.number().int().positive().default(10_485_760),
 
+  // --- SmtpPort (SF-PGD-110, config réelle reçue le 24/08/2026) ----------
+  // Sélecteur de fournisseur, même mécanique que CRM_PROVIDER/LDAP_PROVIDER
+  // (bouchons commutables, cf. CLAUDE.md « Ports d'intégration ») — défaut
+  // "stub" (SmtpStubAdapter, journalise seulement), jamais un remplacement
+  // non explicite. Le reste est optionnel/vide par défaut : sans objet tant
+  // que SMTP_PROVIDER=stub, et un envoi réel avec un hôte vide échoue de
+  // toute façon côté nodemailer — même discipline d'échec fermé qu'ailleurs,
+  // sans validation dédiée ici.
+  SMTP_PROVIDER: z.enum(["stub", "smtp"]).default("stub"),
+  SMTP_HOST: z.string().default(""),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_USER: z.string().default(""),
+  SMTP_PASSWORD: z.string().default(""),
+  SMTP_FROM: z.string().default(""),
+
   // --- Phase 6 : claim double verrou (SF-PGD-072, PGD-051) ---------------
   // Paramètre opérationnel (durée de détention d'un verrou de claim), pas une
   // règle métier chiffrée — aucune source ne fixe cette valeur ; le

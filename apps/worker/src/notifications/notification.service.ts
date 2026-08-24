@@ -2,8 +2,12 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { PrismaService } from "../infra/prisma/prisma.service";
 import { SMTP_PORT, type SmtpPort } from "./smtp.port";
 
-// PGD-073 (SF-PGD-110) — canal in-app (table Notification) + SmtpPort
-// (bouchon). Deux des six types (ESCALADE, ERREUR_SI) ont un destinataire
+// PGD-073 (SF-PGD-110) — canal in-app (table Notification, source de
+// vérité) + SmtpPort (canal secondaire, réel depuis le 24/08/2026 —
+// SMTP_PROVIDER=smtp, cf. CLAUDE.md « Envoi d'e-mail réel »). Un troisième
+// canal (SMS) est prévu architecturalement (SmsPort/SmsStubAdapter) mais
+// pas encore câblé ici — aucune source de numéro de téléphone sur
+// Utilisateur. Deux des six types (ESCALADE, ERREUR_SI) ont un destinataire
 // non déterminé par les sources (CLAUDE.md « Questions ouvertes ») : le rôle
 // se lit dans PARAMETRE_GLOBAL, jamais deviné dans le code. Si le paramètre
 // n'est pas configuré, la notification n'est simplement PAS émise — un log
@@ -106,8 +110,16 @@ export class NotificationService {
     });
 
     const destinataire = await this.prisma.utilisateur.findUnique({ where: { id: destinataireId } });
-    if (destinataire) {
-      await this.smtp.envoyer({ destinataire: destinataire.identifiantAd, sujet: `PGD — ${sujet}`, corps: sujet });
+    // Utilisateur.email (24/08/2026) — identifiantAd n'est pas garanti être
+    // une adresse e-mail (comptes réels bruts type c_afofana6/wrtm9736,
+    // confirmé 19/08/2026 « identifiantAd = username brut »). Un email
+    // absent n'est pas une erreur : le canal in-app (déjà écrit ci-dessus)
+    // reste la source de vérité, un envoi SMTP secondaire manqué ne bloque
+    // jamais rien.
+    if (destinataire?.email) {
+      await this.smtp.envoyer({ destinataire: destinataire.email, sujet: `PGD — ${sujet}`, corps: sujet });
+    } else if (destinataire) {
+      this.logger.warn(`Notification ${type} : aucun email pour ${destinataire.identifiantAd}, envoi SMTP ignoré.`);
     }
   }
 }
