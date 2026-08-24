@@ -79,7 +79,7 @@ docs/                livrables BMAD 00 → 07
 | `R11` | Aucune règle métier en dur |
 | `R12` | Contrôle **FRA obligatoire** au-delà de 5 000 000 FCFA |
 | `R13` | Pièces obligatoires du motif présentes à la soumission |
-| `R14` | **Commentaire obligatoire** à la soumission |
+| `R14` | **Commentaire obligatoire** à la soumission — DOBB/DXC uniquement, exception DF depuis le 24/08/2026 (cf. « Fiche DF — champs retirés/scindés, R14 assouplie pour DF ») |
 | `R15` | Ligne `RESILIE` → bloquée ou justification renforcée (`PARAMETRE_GLOBAL`) |
 | `R16` | Restitution SI **idempotente** |
 | `R17` | Une **formule** sélectionnée par ligne retenue |
@@ -299,7 +299,20 @@ Deux cas réels, pas hypothétiques, dans le socle actuel :
 
 **Contexte historique, pas une régression** : le bug de fuite de lignes trouvé et corrigé en Phase 9 (une ligne retirée de la sélection qui restait néanmoins comptée dans le montant total agrégé) portait sur exactement le mécanisme abandonné ici — l'agrégation de lignes retenues en un TTC. Il devient sans objet dans la nouvelle architecture (il n'y a plus de somme de lignes à calculer correctement ou non), pas un problème qui aurait resurgi ou qui resterait latent quelque part.
 
-**Chantier associé, construit dans la foulée de cette décision** : `RechercheNd`/`SelecteurLignes` retirés de `NouvelleDemandeScreen` (frontend uniquement — les routes/schémas backend liés aux lignes ne sont pas supprimés, cf. ci-dessus) ; `Demande.montantHt` devient un champ directement acceptable en création/modification (`creerDemandeRequeteSchema`/`modifierDemandeRequeteSchema`) plutôt que dérivé de `DemandeLigneService.definirLignes` ; `DemandeWorkflowService.soumettre()` perd les vérifications `R17_FORMULE_REQUISE` et `R15_LIGNE_RESILIEE`/`R15_JUSTIFICATION_REQUISE`, qui testaient toutes deux `demande.lignes`, structurellement toujours vide pour un dossier créé sous ce nouveau flux. R1 (routage sur le TTC)/R12 (contrôle FRA)/R13 (pièces obligatoires)/R14 (commentaire obligatoire) restent inchangées — elles lisent déjà `demande.montantTtc`/`demande.commentaire` directement, jamais une agrégation de lignes.
+**Chantier associé, construit dans la foulée de cette décision** : `RechercheNd`/`SelecteurLignes` retirés de `NouvelleDemandeScreen` (frontend uniquement — les routes/schémas backend liés aux lignes ne sont pas supprimés, cf. ci-dessus) ; `Demande.montantHt` devient un champ directement acceptable en création/modification (`creerDemandeRequeteSchema`/`modifierDemandeRequeteSchema`) plutôt que dérivé de `DemandeLigneService.definirLignes` ; `DemandeWorkflowService.soumettre()` perd les vérifications `R17_FORMULE_REQUISE` et `R15_LIGNE_RESILIEE`/`R15_JUSTIFICATION_REQUISE`, qui testaient toutes deux `demande.lignes`, structurellement toujours vide pour un dossier créé sous ce nouveau flux. R1 (routage sur le TTC)/R12 (contrôle FRA)/R13 (pièces obligatoires) restent inchangées — elles lisent déjà `demande.montantTtc` directement, jamais une agrégation de lignes. R14 (commentaire obligatoire) restait inchangée à ce moment précis — **gagne une exception pour DF le 24/08/2026, cf. sous-section dédiée juste en dessous.**
+
+#### Fiche DF — champs retirés/scindés, R14 assouplie pour DF (24/08/2026, demande explicite)
+
+Ajustements ciblés à la fiche « Mémo d'ajustement Wholesale » (`NouvelleDemandeScreen.tsx`), demandés directement, pas déduits d'une source — tous scopés à DF, aucun effet sur DOBB/DXC :
+
+- **« Montant en FCFA (optionnel) » retiré** — champ `montantXof` (`champsCircuitDfSchema`) supprimé entièrement (état React, schéma, JSX). N'était de toute façon qu'indicatif (« sans effet sur le montant TTC réel »). `LIBELLES_CHAMPS_CIRCUIT` (`ApercuTab.tsx`) garde l'entrée `montantXof` **uniquement** pour l'affichage des dossiers déjà écrits avec cette clé avant ce chantier — jamais réutilisée par une nouvelle saisie.
+- **« Numéro Case » retiré de la fiche DF uniquement** — reste un champ réel côté DOBB/DXC (même état partagé `numeroCase`, simplement plus rendu dans la carte DF).
+- **« Compte / référence » scindé en deux champs** — « Compte client » (renommage du libellé, même état `compteClient`, colonne dédiée déjà partagée avec DOBB/DXC) et « Référence » (nouveau, `memoReference`, ajouté à `champsCircuitDfSchema` — même sac `champsCircuit` que `memoDe`/`memoA`/etc., aucune colonne dédiée).
+- **R14 (« commentaire obligatoire à la soumission ») assouplie pour DF, uniquement DF** — changement de règle métier réel, côté serveur (`DemandeWorkflowService.soumettre()`, `demande.circuit !== "DF"` ajouté à la condition), pas un simple ajustement visuel : jusqu'ici présentée comme non négociable et appliquée uniformément aux trois circuits, sans aucune distinction par circuit dans le code. Signalé explicitement avant modification (le formulaire se serait dit optionnel puis aurait quand même échoué à la soumission pour DF sinon) — confirmé par la personne pilotant le projet : **« Assouplir R14 pour DF uniquement »**, DOBB/DXC gardent l'obligation sans exception. Motivation retenue : la fiche Mémo Wholesale porte déjà son propre champ obligatoire (« Contexte de la réclamation », `memoContexte`), ce qui rend un second champ obligatoire redondant pour ce circuit précis — pas une règle nouvelle de nature différente, une reconnaissance que DF a déjà son équivalent fonctionnel.
+
+  Frontend (`NouvelleDemandeScreen.tsx`) aligné : astérisque et texte « Obligatoire à la soumission (R14) » masqués pour `circuit === "DF"`, remplacés par « Facultatif pour DF. ».
+
+  **Vérifié en test, dans les deux sens** : `demande-workflow.integration.spec.ts` (« R14 — rejette une soumission sans commentaire », circuit DOBB, inchangé) prouve que DOBB reste bloqué ; nouveau test `df-circuit-palier1.e2e-spec.ts` (« R14 — un dossier DF se soumet sans commentaire ») prouve en HTTP réel qu'un dossier DF sans commentaire soumet et valide normalement jusqu'à `VALIDE`, sans jamais lever `R14_COMMENTAIRE_REQUIS`.
 
 ### Messagerie RabbitMQ (`apps/worker`)
 

@@ -50,7 +50,14 @@ export class DemandeWorkflowService {
 
     const erreurs: ErreurRegleMetier[] = [];
 
-    if (!demande.commentaire || demande.commentaire.trim() === "") {
+    // R14 assouplie pour DF (24/08/2026, demande explicite, confirmée après
+    // signalement du caractère non négociable/uniforme de la règle jusqu'ici
+    // en vigueur) — reste obligatoire pour DOBB/DXC, sans exception : la
+    // fiche « Mémo d'ajustement Wholesale » porte déjà son propre champ
+    // obligatoire (« Contexte de la réclamation », memoContexte dans
+    // champsCircuit), ce qui motive l'exception plutôt qu'un simple confort
+    // de saisie.
+    if (demande.circuit !== "DF" && (!demande.commentaire || demande.commentaire.trim() === "")) {
       erreurs.push({ code: "R14_COMMENTAIRE_REQUIS", message: "Le commentaire est obligatoire à la soumission." });
     }
 

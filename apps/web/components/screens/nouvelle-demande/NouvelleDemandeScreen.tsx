@@ -104,32 +104,26 @@ function circuitParDefaut(roles: string[]): EnumCircuit {
 
 // Carte « Mémo Wholesale » (DF uniquement) — aucun de ces champs n'a de
 // colonne dédiée dans creerDemandeRequeteSchema (vérifié, zéro occurrence de
-// memoDe/memoA/memoObjectif/memoContexte/memoObservation dans packages/
-// contracts/src/demande.ts). Persistés via `champsCircuit` (sac JSON,
-// demande.service.ts — prévu explicitement pour « les champs_circuit non
-// promus en colonnes »). Le stockage non typé côté serveur n'est pas une
+// memoDe/memoA/memoObjectif/memoContexte/memoObservation/memoReference dans
+// packages/contracts/src/demande.ts). Persistés via `champsCircuit` (sac
+// JSON, demande.service.ts — prévu explicitement pour « les champs_circuit
+// non promus en colonnes »). Le stockage non typé côté serveur n'est pas une
 // raison de saisir sans garantie : ce schéma est la SEULE validation de
 // forme sur ces champs avant l'envoi.
+//
+// Mise à jour (24/08/2026, demande explicite) : « Montant en FCFA
+// (optionnel) » et « Numéro Case » retirés de la fiche DF — Numéro Case
+// reste toutefois disponible côté DOBB/DXC (champ partagé, cf. numeroCase
+// plus bas). « Compte / référence » scindé en deux champs distincts :
+// compteClient (colonne dédiée, partagée avec DOBB/DXC) et memoReference
+// (nouveau, même sac champsCircuit que le reste de ce mémo).
 const champsCircuitDfSchema = z.object({
   memoDe: z.string().trim().optional(),
   memoA: z.string().trim().optional(),
   memoObjectif: z.string().trim().optional(),
   memoContexte: z.string().trim().min(1, "Contexte de la réclamation requis (mémo DF)."),
   memoObservation: z.string().trim().optional(),
-  // Catégorie 4 (docs/design/DIVERGENCES.md) — la maquette (screens1.jsx:419)
-  // libelle ce champ "Montant en € (optionnel)" avec un suffixe "€" et un
-  // hint "Référence devise opérateur." Le système n'opère qu'en XOF
-  // (ParametreCalcul.devise, "XOF" par défaut, vérifié en base) : un texte
-  // "€" porté tel quel serait trompeur une fois réel, exactement comme le
-  // pied de page de LoginScreen affirmant une authentification simulée sur
-  // un système qui authentifie réellement. Renommé montantXof / « Montant
-  // en FCFA » — aucun autre champ de ce bloc ne référence l'euro (vérifié,
-  // grep dédié sur tout screens1.jsx : une seule occurrence, ce champ).
-  montantXof: z
-    .string()
-    .optional()
-    .transform((v) => (v?.trim() ? Number(v.trim()) : undefined))
-    .pipe(z.number().nonnegative("Montant invalide.").optional())
+  memoReference: z.string().trim().optional()
 });
 type ChampsCircuitDf = z.infer<typeof champsCircuitDfSchema>;
 
@@ -316,7 +310,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
   const [memoObjectif, setMemoObjectif] = useState("Soumettre l'ajustement au contrôle FRA");
   const [memoContexte, setMemoContexte] = useState("");
   const [memoObservation, setMemoObservation] = useState("");
-  const [montantXof, setMontantXof] = useState("");
+  const [memoReference, setMemoReference] = useState("");
 
   // Carte « Montant à ajuster » — Priorité 2 (19/08/2026, décision métier
   // confirmée) : remplace RechercheNd/SelecteurLignes/Lignes retenues,
@@ -503,7 +497,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
   function construirePayload(): { payload: CreerDemandeRequete; erreur: string | null } {
     let champsCircuit: ChampsCircuitDf | ChampsCircuitDobb | undefined;
     if (circuit === "DF") {
-      const validation = champsCircuitDfSchema.safeParse({ memoDe, memoA, memoObjectif, memoContexte, memoObservation, montantXof });
+      const validation = champsCircuitDfSchema.safeParse({ memoDe, memoA, memoObjectif, memoContexte, memoObservation, memoReference });
       if (!validation.success) {
         return { payload: null as never, erreur: validation.error.issues[0]?.message ?? "Champs du mémo invalides." };
       }
@@ -642,7 +636,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
     memoObjectif,
     memoContexte,
     memoObservation,
-    montantXof,
+    memoReference,
     montantHt
   ]);
 
@@ -869,9 +863,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                 />
               </div>
               <div>
-                <label className="mb-1 block text-13 font-bold text-gris800">
-                  {circuit === "DOBB" ? "Formule d'abonnement" : "Formule Internet"}
-                </label>
+                <label className="mb-1 block text-13 font-bold text-gris800">Formule d'abonnement</label>
                 <input
                   className="w-full rounded border border-gris300 px-3 py-2 text-13"
                   value={formuleAbonnement}
@@ -1038,11 +1030,13 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
           </Card>
         )}
 
-        {/* Carte « Mémo Wholesale » — DF uniquement. Compte/référence et
+        {/* Carte « Mémo Wholesale » — DF uniquement. Compte client et
             Responsabilité direction+service réutilisent les mêmes champs/état
             que la carte DOBB/DXC ci-dessus ; le reste (De/À/Objectif/
-            Contexte/Observation/Montant) passe par champsCircuit — cf.
-            champsCircuitDfSchema plus haut. */}
+            Contexte/Observation/Référence) passe par champsCircuit — cf.
+            champsCircuitDfSchema plus haut. Numéro Case et Montant en FCFA
+            retirés de cette fiche (24/08/2026, demande explicite) — Numéro
+            Case reste disponible côté DOBB/DXC uniquement. */}
         {circuit === "DF" && (
           <Card className="p-5">
             <div className="mb-3 flex items-center gap-2">
@@ -1081,7 +1075,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                 />
               </div>
               <div>
-                <label className="mb-1 block text-13 font-bold text-gris800">Compte / référence</label>
+                <label className="mb-1 block text-13 font-bold text-gris800">Compte client</label>
                 <input
                   className="w-full rounded border border-gris300 px-3 py-2 text-13 font-mono"
                   value={compteClient}
@@ -1090,14 +1084,12 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                 />
               </div>
               <div>
-                <label className="mb-1 block text-13 font-bold text-gris800">Numéro Case (JADE)</label>
+                <label className="mb-1 block text-13 font-bold text-gris800">Référence</label>
                 <input
                   className="w-full rounded border border-gris300 px-3 py-2 text-13 font-mono"
-                  value={numeroCase}
-                  onChange={(e) => setNumeroCase(e.target.value)}
-                  placeholder="ex. CASE-100231"
+                  value={memoReference}
+                  onChange={(e) => setMemoReference(e.target.value)}
                 />
-                <p className="mt-1 text-12 text-gris600">Facultatif — à titre indicatif.</p>
               </div>
               <div style={{ gridColumn: "1 / -1" }}>
                 <label className="mb-1 block text-13 font-bold text-gris800">Objectif</label>
@@ -1127,18 +1119,6 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                   onChange={(e) => setMemoObservation(e.target.value)}
                 />
               </div>
-              <div>
-                <label className="mb-1 block text-13 font-bold text-gris800">Montant en FCFA (optionnel)</label>
-                <input
-                  className="w-full rounded border border-gris300 px-3 py-2 text-13"
-                  type="number"
-                  min="0"
-                  value={montantXof}
-                  onChange={(e) => setMontantXof(e.target.value)}
-                />
-                <p className="mt-1 text-12 text-gris600">Référence, indicative — sans effet sur le montant TTC réel.</p>
-              </div>
-
               <ResponsabiliteFields
                 directions={directions}
                 directionRespId={directionRespId}
@@ -1228,7 +1208,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
             </div>
             <div style={{ gridColumn: "1 / -1" }}>
               <label className="mb-1 block text-13 font-bold text-gris800">
-                Commentaire <span className="text-rouge">*</span>
+                Commentaire {circuit !== "DF" && <span className="text-rouge">*</span>}
               </label>
               <textarea
                 className="w-full rounded border border-gris300 px-3 py-2 text-13"
@@ -1236,7 +1216,11 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
                 value={commentaire}
                 onChange={(e) => setCommentaire(e.target.value)}
               />
-              <p className="mt-1 text-12 text-gris600">Obligatoire à la soumission (R14).</p>
+              {/* R14 assouplie pour DF (24/08/2026) — reste obligatoire pour
+                  DOBB/DXC, cf. demande-workflow.service.ts. */}
+              <p className="mt-1 text-12 text-gris600">
+                {circuit === "DF" ? "Facultatif pour DF." : "Obligatoire à la soumission (R14)."}
+              </p>
             </div>
           </div>
         </Card>
@@ -1448,7 +1432,7 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
             seulement : ApercuRoutage lui-même reste 100% server-computed
             (R11), rien n'est calculé côté client avant que `demande` existe. */}
         {demande ? (
-          <ApercuRoutage demandeId={demande.demande.id} declencheur={apercuDeclencheur} />
+          <ApercuRoutage demandeId={demande.demande.id} declencheur={apercuDeclencheur} circuit={circuit} />
         ) : (
           <Card className="p-5">
             <div className="mb-3 flex items-center gap-2">

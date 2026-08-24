@@ -51,20 +51,23 @@ function formaterValeur(valeur: unknown): string | null {
 }
 
 // Écarts DossierDetailScreen (Phase 10.6quinquies, point 7) — suite directe
-// de la carte mémo DF (Phase 10.6, étape E) : ces six clés sont les seules
-// écrites dans champsCircuit aujourd'hui (NouvelleDemandeScreen.tsx,
-// champsCircuitDfSchema), jamais nommées ici — affichées telles quelles
-// ("memoDe", "memoA"…) au lieu des libellés français du formulaire. Même
-// mécanique que `typeActeur` (packages/ui/tokens/semantic.ts) : une table
-// de correspondance, repli sur la clé brute pour toute clé future non
-// répertoriée (générique par construction, cf. commentaire de
-// LIBELLES_COMMUNS ci-dessus — jamais une structure figée côté client).
+// de la carte mémo DF (Phase 10.6, étape E) : ces clés sont écrites dans
+// champsCircuit (NouvelleDemandeScreen.tsx, champsCircuitDfSchema), jamais
+// nommées ici — affichées telles quelles ("memoDe", "memoA"…) au lieu des
+// libellés français du formulaire. Même mécanique que `typeActeur`
+// (packages/ui/tokens/semantic.ts) : une table de correspondance, repli sur
+// la clé brute pour toute clé future non répertoriée (générique par
+// construction, cf. commentaire de LIBELLES_COMMUNS ci-dessus — jamais une
+// structure figée côté client). `montantXof` retiré de la fiche DF le
+// 24/08/2026 (demande explicite) — gardé ici pour les dossiers existants
+// déjà écrits avec cette clé, jamais réutilisé par de nouvelles saisies.
 const LIBELLES_CHAMPS_CIRCUIT: Record<string, string> = {
   memoDe: "De (émetteur)",
   memoA: "À (destinataire)",
   memoObjectif: "Objectif",
   memoContexte: "Contexte de la réclamation",
   memoObservation: "Observation",
+  memoReference: "Référence",
   montantXof: "Montant en FCFA"
 };
 

@@ -124,4 +124,61 @@ describe("E2E — circuit DF (Wholesale), palier 1 (0–5M), parcours complet en
       .expect(200);
     expect(tachesFinales.body.data.some((t: { roleCode: string }) => t.roleCode === "FRA")).toBe(false);
   });
+
+  // R14 assouplie pour DF (24/08/2026, demande explicite) — reste
+  // obligatoire pour DOBB/DXC (cf. demande-workflow.integration.spec.ts,
+  // « R14 — rejette une soumission sans commentaire », inchangé, circuit
+  // DOBB). Preuve positive ici : un dossier DF sans commentaire soumet et
+  // valide normalement, R14_COMMENTAIRE_REQUIS n'apparaît jamais.
+  it("R14 — un dossier DF se soumet sans commentaire (exception, contrairement à DOBB/DXC)", async () => {
+    const initiateur = await creerActeur("initiateur-r14", []);
+    const responsable = await creerActeur("responsable-r14", ["RESPONSABLE_DF"]);
+    const manager = await creerActeur("manager-r14", ["MANAGER_DF"]);
+    const managerSenior = await creerActeur("manager-senior-r14", ["MANAGER_SENIOR_DF"]);
+
+    const creation = await request(e2e.app.getHttpServer())
+      .post("/api/demandes")
+      .set("Cookie", initiateur.cookie)
+      .send({ circuit: "DF", nomClient: "E2E Opérateur R14 Wholesale", sousFlux: "Réclamation opérateur" })
+      .expect(201);
+    const demandeId = creation.body.data.demande.id as string;
+    demandeIds.push(demandeId);
+    expect(creation.body.data.demande.commentaire).toBeFalsy();
+
+    const ligne = await prisma.ligne.findFirstOrThrow({ where: { nd: LIGNE_ND } });
+    await request(e2e.app.getHttpServer())
+      .put(`/api/demandes/${demandeId}/lignes`)
+      .set("Cookie", initiateur.cookie)
+      .send({ lignes: [{ ligneId: ligne.id, formuleId: ligne.formuleCouranteId, recurrent: 1_500_000, montantHtLigne: 2_000_000 }] })
+      .expect(200);
+
+    const soumission = await request(e2e.app.getHttpServer())
+      .post(`/api/demandes/${demandeId}/soumettre`)
+      .set("Cookie", initiateur.cookie)
+      .expect(200);
+    expect(soumission.body.data.statut).toBe("SOUMIS");
+
+    for (const acteur of [responsable, manager, managerSenior]) {
+      const taches = await request(e2e.app.getHttpServer())
+        .get(`/api/demandes/${demandeId}/taches`)
+        .set("Cookie", acteur.cookie)
+        .expect(200);
+      const tachePendante = taches.body.data.find((t: { etat: string }) => t.etat === "EN_CORBEILLE");
+      await request(e2e.app.getHttpServer())
+        .post(`/api/taches/${tachePendante.id}/claim`)
+        .set("Cookie", acteur.cookie)
+        .expect(200);
+      await request(e2e.app.getHttpServer())
+        .post(`/api/taches/${tachePendante.id}/approuver`)
+        .set("Cookie", acteur.cookie)
+        .send({})
+        .expect(200);
+    }
+
+    const detailFinal = await request(e2e.app.getHttpServer())
+      .get(`/api/demandes/${demandeId}`)
+      .set("Cookie", initiateur.cookie)
+      .expect(200);
+    expect(detailFinal.body.data.demande.statut).toBe("VALIDE");
+  });
 });
