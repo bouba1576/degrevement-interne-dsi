@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-// Miroir exact des 17 énumérations de packages/database/prisma/schema.prisma.
+// Miroir exact des énumérations de packages/database/prisma/schema.prisma.
 // Source unique des types : ne pas dupliquer ces valeurs ailleurs.
 
 export const enumCircuit = z.enum(["DOBB", "DXC", "DF"]);
@@ -62,7 +62,6 @@ export const enumEvenementSecurite = z.enum([
 export const enumFacteurAuth = z.enum(["AD", "DUO", "TOTP", "SESSION", "KEYCLOAK"]);
 export const enumStatutLigne = z.enum(["ACTIF", "SUSPENDU", "RESILIE"]);
 export const enumEtatSi = z.enum(["EN_ATTENTE", "ENVOYE", "CONFIRME", "ERREUR"]);
-export const enumMethodeMfa = z.enum(["DUO", "TOTP"]);
 export const enumAssietteTva = z.enum(["HT", "HT_TSC"]);
 
 export type EnumCircuit = z.infer<typeof enumCircuit>;
@@ -81,5 +80,4 @@ export type EnumEvenementSecurite = z.infer<typeof enumEvenementSecurite>;
 export type EnumFacteurAuth = z.infer<typeof enumFacteurAuth>;
 export type EnumStatutLigne = z.infer<typeof enumStatutLigne>;
 export type EnumEtatSi = z.infer<typeof enumEtatSi>;
-export type EnumMethodeMfa = z.infer<typeof enumMethodeMfa>;
 export type EnumAssietteTva = z.infer<typeof enumAssietteTva>;

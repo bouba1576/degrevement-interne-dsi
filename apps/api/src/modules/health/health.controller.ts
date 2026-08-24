@@ -8,7 +8,6 @@ import { Public } from "../../common/decorators/public.decorator";
 import { PrismaService } from "../../infra/prisma/prisma.service";
 import { CacheService } from "../../infra/redis/cache.service";
 import { KEYCLOAK_PORT, type KeycloakPort } from "../auth/ports/keycloak.port";
-import { DuoProvider } from "../auth/providers/duo.provider";
 
 @ApiTags("santé")
 @Controller("health")
@@ -16,8 +15,7 @@ export class HealthController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cache: CacheService,
-    @Inject(KEYCLOAK_PORT) private readonly keycloak: KeycloakPort,
-    private readonly duo: DuoProvider
+    @Inject(KEYCLOAK_PORT) private readonly keycloak: KeycloakPort
   ) {}
 
   @Public()
@@ -31,17 +29,17 @@ export class HealthController {
   @Get("ready")
   @ApiZodResponse(200, santeDetailSchema)
   async readiness(): Promise<SanteDetail> {
-    const [postgresql, redis, rabbitmq, ad, mfa] = await Promise.all([
+    const [postgresql, redis, rabbitmq, ad] = await Promise.all([
       this.verifierPostgres(),
       this.cache.ping(),
       this.verifierRabbitmq(),
-      this.keycloak.estDisponible(),
-      // TOTP est local (aucune dépendance réseau) ; seul DUO a une disponibilité
-      // à surveiller ici. Ne reflète pas la disponibilité de TOTP par nature.
-      this.duo.estDisponible()
+      // Keycloak résout identité ET second facteur (DUO) en un seul échange
+      // — ce signal couvre donc les deux, aucun champ `mfa` séparé (retiré
+      // le 24/08/2026 avec MfaService/DuoProvider, cf. CLAUDE.md).
+      this.keycloak.estDisponible()
     ]);
 
-    const services = { postgresql, redis, rabbitmq, ad, mfa };
+    const services = { postgresql, redis, rabbitmq, ad };
     const statut = Object.values(services).every(Boolean) ? "ok" : "degrade";
 
     return { statut, services, horodatage: new Date().toISOString() };

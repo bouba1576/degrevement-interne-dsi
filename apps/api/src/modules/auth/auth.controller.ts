@@ -6,13 +6,10 @@ import {
   HttpException,
   HttpStatus,
   Inject,
-  Logger,
   Post,
-  Query,
   Req,
   Res,
-  UnauthorizedException,
-  UnprocessableEntityException
+  UnauthorizedException
 } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 import type { Request, Response } from "express";
@@ -21,10 +18,7 @@ import {
   type ConnexionReponse,
   connexionReponseSchema,
   connexionRequeteSchema,
-  mfaVerifieRequeteSchema,
   sessionUtilisateurSchema,
-  totpEnrollConfirmRequeteSchema,
-  totpEnrollReponseSchema,
   type SessionUtilisateur
 } from "@pgd/contracts";
 import { ApiZodBody, ApiZodResponse } from "../../common/swagger/zod-schema";
@@ -34,22 +28,23 @@ import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import type { UtilisateurRequete } from "../../common/guards/auth.guard";
 import { PrismaService } from "../../infra/prisma/prisma.service";
 import { KEYCLOAK_PORT, type KeycloakPort } from "./ports/keycloak.port";
-import { MfaService } from "./services/mfa.service";
 import { SessionService } from "./services/session.service";
 import { RateLimitService } from "./services/rate-limit.service";
 import { JournalSecuriteService } from "./services/journal-securite.service";
 import { RbacResolutionService } from "./services/rbac-resolution.service";
 import { poserCookiesSession, effacerCookiesSession } from "./utils/session-cookies.util";
 
+// MfaService/TotpProvider/DuoProvider et les routes mfa/* retirés le
+// 24/08/2026 (confirmé par la personne pilotant le projet comme à retirer,
+// pas à conserver en dormance, cf. CLAUDE.md « Architecture Keycloak —
+// source unique ») — Keycloak résout identité et second facteur en un seul
+// échange, PGD ne gère plus aucun second facteur pour aucun chemin.
 @ApiTags("auth")
 @Controller("auth")
 export class AuthController {
-  private readonly logger = new Logger(AuthController.name);
-
   constructor(
     @Inject(KEYCLOAK_PORT) private readonly keycloak: KeycloakPort,
     private readonly rbacResolution: RbacResolutionService,
-    private readonly mfaService: MfaService,
     private readonly sessionService: SessionService,
     private readonly rateLimit: RateLimitService,
     private readonly journal: JournalSecuriteService,
@@ -68,14 +63,8 @@ export class AuthController {
       throw limiteAtteinte("Trop de tentatives. Réessayez plus tard.");
     }
 
-    // Keycloak est la source unique d'authentification (décision actée le
-    // 24/08/2026, cf. CLAUDE.md « Architecture Keycloak — source unique ») —
-    // une réponse AUTHENTIFIE signifie identité ET second facteur (DUO déjà
-    // lié à ce royaume) tous deux résolus côté Keycloak. Aucun appel à
-    // MfaService depuis cette route : le second facteur PGD (mfaMethode,
-    // DUO/TOTP) n'est plus jamais déclenché pour ce chemin — cf. rapport du
-    // 24/08/2026, MfaService reste utilisé ailleurs (mfa/duo/callback,
-    // enroll/totp), jamais retiré, simplement inutilisé ici.
+    // Une réponse AUTHENTIFIE signifie identité ET second facteur (DUO déjà
+    // lié au royaume) tous deux résolus côté Keycloak.
     const resultatAuth = await this.keycloak.authentifier(identifiantAd, motDePasse);
     if (resultatAuth.statut === "ECHEC") {
       const { verrouille } = await this.rateLimit.enregistrerEchec("login", identifiantAd);
@@ -131,151 +120,7 @@ export class AuthController {
       sousFluxId: utilisateur.sousFluxId
     });
     poserCookiesSession(res, jetons);
-    return { requiresMfa: false, methode: null, challengeId: null, redirectUrl: null, totpEnrole: null };
-  }
-
-  @Public()
-  @Post("mfa/verify")
-  @HttpCode(200)
-  @ApiZodBody(mfaVerifieRequeteSchema)
-  @ApiZodResponse(200, connexionReponseSchema)
-  async mfaVerify(@Body() body: unknown, @Res({ passthrough: true }) res: Response): Promise<ConnexionReponse> {
-    const { challengeId, code } = mfaVerifieRequeteSchema.parse(body);
-
-    const challenge = await this.mfaService.recupererChallenge(challengeId);
-    if (!challenge) {
-      throw new UnauthorizedException({ code: "NON_AUTHENTIFIE", message: "Défi MFA expiré ou inconnu." });
-    }
-    if (challenge.methode !== "TOTP") {
-      throw new UnprocessableEntityException({
-        code: "MFA_METHODE_INATTENDUE",
-        message: "Cette route ne valide que le TOTP — DUO se valide par redirection."
-      });
-    }
-
-    if (await this.rateLimit.estVerrouille("mfa", challenge.identifiantAd)) {
-      throw limiteAtteinte("Trop de tentatives.");
-    }
-
-    const utilisateur = await this.prisma.utilisateur.findUniqueOrThrow({ where: { id: challenge.utilisateurId } });
-    const valide = utilisateur.totpSecret ? this.mfaService.verifierCodeTotp(utilisateur.totpSecret, code) : false;
-
-    if (!valide) {
-      const { verrouille } = await this.rateLimit.enregistrerEchec("mfa", challenge.identifiantAd);
-      await this.journal.consigner({
-        utilisateurId: utilisateur.id,
-        evenement: "MFA_CHALLENGE",
-        facteur: "TOTP",
-        succes: false
-      });
-      if (verrouille) {
-        throw limiteAtteinte("Trop de tentatives.");
-      }
-      throw new UnauthorizedException({ code: "NON_AUTHENTIFIE", message: "Code TOTP invalide." });
-    }
-
-    await this.rateLimit.reinitialiser("mfa", challenge.identifiantAd);
-    await this.journal.consigner({
-      utilisateurId: utilisateur.id,
-      evenement: "MFA_CHALLENGE",
-      facteur: "TOTP",
-      succes: true
-    });
-    await this.mfaService.invaliderChallenge(challengeId);
-
-    const roles = await this.rolesDe(utilisateur.id);
-    const jetons = await this.sessionService.creerSession({
-      id: utilisateur.id,
-      identifiantAd: utilisateur.identifiantAd,
-      roles,
-      sousFluxId: utilisateur.sousFluxId
-    });
-    poserCookiesSession(res, jetons);
-
-    return { requiresMfa: false, methode: "TOTP", challengeId: null, redirectUrl: null, totpEnrole: true };
-  }
-
-  // Extension au contrat docs/06 §2 — le Duo Universal Prompt redirige ici le
-  // navigateur avec ?code&state (state = challengeId). Pas d'appel XHR possible
-  // pour ce flux : réponse HTTP de redirection, cookies posés sur cette réponse.
-  @Public()
-  @Get("mfa/duo/callback")
-  async mfaDuoCallback(
-    @Query("code") duoCode: string,
-    @Query("state") challengeId: string,
-    @Res() res: Response
-  ): Promise<void> {
-    const env = loadEnv();
-    const challenge = await this.mfaService.recupererChallenge(challengeId);
-    if (!challenge || challenge.methode !== "DUO") {
-      res.redirect(`${env.CORS_ORIGIN}/login?erreur=mfa_invalide`);
-      return;
-    }
-
-    const valide = await this.mfaService.echangerCodeDuo(duoCode, challenge.identifiantAd);
-    await this.journal.consigner({
-      utilisateurId: challenge.utilisateurId,
-      evenement: "MFA_CHALLENGE",
-      facteur: "DUO",
-      succes: valide
-    });
-
-    if (!valide) {
-      res.redirect(`${env.CORS_ORIGIN}/login?erreur=mfa_invalide`);
-      return;
-    }
-
-    await this.mfaService.invaliderChallenge(challengeId);
-    const roles = await this.rolesDe(challenge.utilisateurId);
-    const { sousFluxId } = await this.prisma.utilisateur.findUniqueOrThrow({
-      where: { id: challenge.utilisateurId },
-      select: { sousFluxId: true }
-    });
-    const jetons = await this.sessionService.creerSession({
-      id: challenge.utilisateurId,
-      identifiantAd: challenge.identifiantAd,
-      roles,
-      sousFluxId
-    });
-    poserCookiesSession(res, jetons);
-    res.redirect(env.CORS_ORIGIN);
-  }
-
-  // docs/06 §2 : ces deux routes sont « authentifié », pas publiques — un
-  // utilisateur enrôle/change son TOTP depuis une session déjà valide.
-  // LIMITE NON RÉSOLUE : un utilisateur dont mfaMethode=TOTP mais qui n'a
-  // jamais enrôlé de secret ne peut donc pas obtenir de session pour venir
-  // enrôler (mfaVerify échoue toujours sans totpSecret). Aucune source ne
-  // décrit de mécanisme de bootstrap pour ce cas — à traiter par provisioning
-  // admin (seed ou future route /api/admin) plutôt qu'inventé ici.
-  @Authenticated()
-  @Post("mfa/enroll/totp")
-  @HttpCode(200)
-  @ApiZodResponse(200, totpEnrollReponseSchema)
-  async enrollTotp(@CurrentUser() utilisateur: UtilisateurRequete) {
-    return this.mfaService.demarrerEnrolementTotp(utilisateur.id, utilisateur.identifiantAd);
-  }
-
-  @Authenticated()
-  @Post("mfa/enroll/totp/confirm")
-  @HttpCode(200)
-  @ApiZodBody(totpEnrollConfirmRequeteSchema)
-  async confirmEnrollTotp(
-    @CurrentUser() utilisateur: UtilisateurRequete,
-    @Body() body: unknown
-  ): Promise<{ confirme: true }> {
-    const { code } = totpEnrollConfirmRequeteSchema.parse(body);
-
-    const secretChiffre = await this.mfaService.confirmerEnrolementTotp(utilisateur.id, code);
-    if (!secretChiffre) {
-      throw new UnprocessableEntityException({ code: "TOTP_CODE_INVALIDE", message: "Code de confirmation invalide." });
-    }
-
-    await this.prisma.utilisateur.update({
-      where: { id: utilisateur.id },
-      data: { totpSecret: secretChiffre, totpActiveLe: new Date() }
-    });
-    return { confirme: true };
+    return { connecte: true };
   }
 
   @Public()
@@ -316,16 +161,9 @@ export class AuthController {
       identifiantAd: enBase.identifiantAd,
       nom: enBase.nom,
       roles: utilisateur.roles,
-      sousFluxId: utilisateur.sousFluxId,
-      mfaMethode: enBase.mfaMethode
+      sousFluxId: utilisateur.sousFluxId
     };
   }
-
-  private async rolesDe(utilisateurId: string): Promise<string[]> {
-    const membres = await this.prisma.membreRole.findMany({ where: { utilisateurId }, select: { roleCode: true } });
-    return membres.map((m) => m.roleCode);
-  }
-
 }
 
 function limiteAtteinte(message: string): HttpException {

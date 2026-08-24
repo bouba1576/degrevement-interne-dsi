@@ -179,27 +179,22 @@ enum EnumEtatSi {
   @@map("enum_etat_si")
 }
 
-enum EnumMethodeMfa {
-  DUO
-  TOTP
-
-  @@map("enum_methode_mfa")
-}
-
 // ============================================================
 // Identité & sécurité
 // ============================================================
 
+// mfaMethode/totpSecret/totpActiveLe/duoUserId (+ EnumMethodeMfa ci-dessus)
+// retirés le 24/08/2026 avec MfaService/TotpProvider/DuoProvider — Keycloak
+// gère l'intégralité du second facteur, plus aucun état MFA à porter côté
+// PGD (cf. CLAUDE.md « Architecture Keycloak — source unique »). duoUserId
+// n'a jamais été lu ni écrit par aucun code (vérifié par recherche
+// exhaustive) — mort depuis toujours, retiré dans le même geste.
 model Utilisateur {
   id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   identifiantAd String    @unique @map("identifiant_ad")
   nom           String
   matricule     String?
-  duoUserId     String?   @map("duo_user_id")
   actif         Boolean   @default(true)
-  mfaMethode    EnumMethodeMfa @default(DUO) @map("mfa_methode")
-  totpSecret    String?   @map("totp_secret")
-  totpActiveLe  DateTime? @map("totp_active_le") @db.Timestamptz
   // Pré-enregistrement (analyse du 12/08/2026, CLAUDE.md « Pré-enregistrement
   // des utilisateurs AD ») — même référentiel que Demande.directionRespId/
   // serviceRespId (DirectionResponsabilite/ServiceResponsabilite), pas une

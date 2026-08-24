@@ -91,8 +91,7 @@ export function UtilisateursAdminTab() {
         roles: valeur.roles,
         directionId: valeur.directionId || undefined,
         serviceId: valeur.serviceId || undefined,
-        sousFluxId: valeur.sousFluxId || undefined,
-        mfaMethode: valeur.mfaMethode
+        sousFluxId: valeur.sousFluxId || undefined
       };
       if (modal.utilisateur) {
         await modifierUtilisateurAdmin(modal.utilisateur.id, { ...payload, actif: valeur.actif });
@@ -132,7 +131,6 @@ export function UtilisateursAdminTab() {
               <th className="px-3 py-2">Identifiant AD</th>
               <th className="px-3 py-2">Rôles</th>
               <th className="px-3 py-2">Direction / service</th>
-              <th className="px-3 py-2">MFA</th>
               <th className="px-3 py-2">Statut</th>
               <th className="px-3 py-2"></th>
             </tr>
@@ -153,12 +151,6 @@ export function UtilisateursAdminTab() {
                 </td>
                 <td className="px-3 py-2 text-12">
                   {u.directionLibelle ? `${u.directionLibelle}${u.serviceLibelle ? " · " + u.serviceLibelle : ""}` : "—"}
-                </td>
-                <td className="px-3 py-2">
-                  <div className="flex flex-wrap gap-1">
-                    <Badge ton={u.mfaMethode === "TOTP" ? "info" : "accent"}>{u.mfaMethode}</Badge>
-                    {u.mfaMethode === "TOTP" && !u.totpEnrole && <Badge ton="erreur">Non enrôlé</Badge>}
-                  </div>
                 </td>
                 <td className="px-3 py-2">
                   {u.actif ? <Badge ton="succes">Actif</Badge> : <Badge ton="neutre">Désactivé</Badge>}
@@ -194,7 +186,6 @@ export function UtilisateursAdminTab() {
           onConfirmer={handleConfirmer}
           chargement={chargementFormulaire}
           erreur={erreurFormulaire}
-          onEnrolementTotpReussi={() => void charger()}
         />
       )}
     </div>

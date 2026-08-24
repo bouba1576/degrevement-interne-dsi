@@ -144,9 +144,9 @@ requis, quelle que soit la solution d'hébergement retenue :
 | RabbitMQ | 3-management (`docker-compose.yml`, dev) | Un vhost dédié (`RABBITMQ_VHOST`), plugin management activé si supervision voulue |
 
 Aucune de ces trois instances ne doit être partagée avec un environnement de
-dev/recette — en particulier `TOTP_ENCRYPTION_KEY` (§4) déchiffrerait les
-secrets TOTP d'un autre environnement en cas de fuite croisée si la même clé
-était réutilisée avec la même base.
+dev/recette — en particulier `JWT_SECRET`/`REFRESH_TOKEN_SECRET` (§4)
+permettraient de forger des sessions valides sur l'autre environnement en cas
+de fuite croisée si la même clé était réutilisée avec la même base.
 
 ---
 
@@ -158,32 +158,24 @@ avec sa contrainte réelle (schéma Zod, `packages/config/src/env.schema.ts`).
 
 Points qui exigent une action, pas une simple copie :
 
-- **Tous les secrets** (`JWT_SECRET`, `REFRESH_TOKEN_SECRET`,
-  `TOTP_ENCRYPTION_KEY`) : générer avec `openssl rand -hex 32`, une valeur
-  **distincte** de tout environnement de dev/recette, jamais copiée d'un
-  exemple.
+- **Tous les secrets** (`JWT_SECRET`, `REFRESH_TOKEN_SECRET`) : générer avec
+  `openssl rand -hex 32`, une valeur **distincte** de tout environnement de
+  dev/recette, jamais copiée d'un exemple.
 - `DATABASE_URL`, `REDIS_URL`, `RABBITMQ_*` : vers les instances du §3.
 - `KEYCLOAK_BASE_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`,
   `KEYCLOAK_CLIENT_SECRET` : royaume Keycloak réel — **SOURCE UNIQUE**
   d'authentification (identité et second facteur DUO, tous deux résolus côté
-  Keycloak, décision actée le 24/08/2026, cf. `CLAUDE.md` « Architecture
-  Keycloak — source unique »). `LdapPort`/`LdapProvider`/`AdApiProvider` et
-  toute leur configuration (`LDAP_*`/`AD_API_*`) sont retirés — l'ancienne
-  question de nature de l'intégration AD (bind LDAP vs endpoint REST) ne se
-  pose plus, Keycloak est le seul point d'authentification. **Reste à
-  confirmer avant un déploiement réel** : la forme exacte de la résolution
-  DUO dans l'échange `/token` (cf. `CLAUDE.md`, même section) — un essai réel
-  avec un compte DUO actif, fait personnellement par la personne pilotant le
-  projet, doit trancher avant de considérer l'authentification pleinement
-  fonctionnelle en prod pour les comptes concernés par DUO.
-- `DUO_CLIENT_ID`, `DUO_CLIENT_SECRET`, `DUO_API_HOST`, `DUO_REDIRECT_URI` :
-  toujours requis par le schéma (MfaService/DuoProvider restent utilisés
-  ailleurs — `mfa/duo/callback`, `enroll/totp` — inutilisés par le chemin de
-  connexion réel via Keycloak, jamais retirés, cf. `CLAUDE.md`) — mais
-  n'affectent plus l'authentification réelle. **Si DUO n'est pas encore
-  disponible au moment du déploiement**, cf. §8 (mesure d'urgence déjà
-  documentée, dont la pertinence pour un compte connecté via Keycloak reste
-  à réévaluer une fois DUO confirmé fonctionner côté royaume).
+  Keycloak — décision actée le 24/08/2026, `MfaService`/`TotpProvider`/
+  `DuoProvider` et tout le mécanisme `mfaMethode` retirés côté PGD le même
+  jour, cf. `CLAUDE.md` « Architecture Keycloak — source unique »).
+  `LdapPort`/`LdapProvider`/`AdApiProvider` et toute leur configuration
+  (`LDAP_*`/`AD_API_*`) sont retirés aussi — Keycloak est le seul point
+  d'authentification, sans exception. **Reste à confirmer avant un
+  déploiement réel** : la forme exacte de la résolution DUO dans l'échange
+  `/token` (cf. `CLAUDE.md`, même section) — un essai réel avec un compte DUO
+  actif, fait personnellement par la personne pilotant le projet, doit
+  trancher avant de considérer l'authentification pleinement fonctionnelle
+  en prod pour les comptes concernés par DUO.
 - `CORS_ORIGIN` : URL publique exacte de `pgd-web` (le cookie de session
   utilise `credentials: true`, une origine inexacte casse l'authentification
   silencieusement côté navigateur).
@@ -240,29 +232,27 @@ Il n'existe aujourd'hui aucune route ni aucun seed pour ce cas précis.
 `apps/api/scripts/bootstrap-premier-admin.ts` — script opérationnel
 **permanent** (pas un jetable "-tmp", à conserver dans le dépôt) — comble ce
 trou : mêmes contraintes que le pré-enregistrement normal (identifiantAd réel
-de l'AD cible, mêmes validations Zod que l'API — `preEnregistrerUtilisateurRequeteSchema`,
-`@pgd/contracts`), même mécanisme d'enrôlement TOTP que
-`MfaService.demarrerEnrolementTotp` si DUO n'est pas encore disponible
-(cf. §8).
+de l'AD cible, mêmes validations Zod que l'API —
+`preEnregistrerUtilisateurRequeteSchema`, `@pgd/contracts`). Simplifié le
+24/08/2026 (retrait du mécanisme MFA côté PGD) : ce script ne fait plus que
+créer le compte et le rôle `ADMIN_PGD` — Keycloak gère l'intégralité de
+l'authentification (identité et second facteur), rien à enrôler côté PGD.
 
 ```bash
 pnpm --filter @pgd/api exec ts-node --compiler-options '{"module":"commonjs"}' \
   scripts/bootstrap-premier-admin.ts \
   --identifiant <identifiant_ad_reel> \
-  --nom "<nom>" \
-  --mfa DUO \
-  # --mfa TOTP --qr-dir <chemin_hors_du_depot>   si DUO indisponible, cf. §8
+  --nom "<nom>"
 ```
 
-Le script refuse tout `--qr-dir` situé à l'intérieur du dépôt (garde-fou
-`verifierRepertoireHorsDepot`, `scripts/lib/enrolement.ts`) — un secret TOTP
-en clair ne doit jamais pouvoir se retrouver dans un `git add` par erreur.
 S'il n'y a rien à faire (le compte existe déjà), le script le dit
 explicitement plutôt que d'échouer silencieusement.
 
 Une fois ce premier compte créé, tout pré-enregistrement suivant peut passer
 par l'écran d'administration normal (recherche annuaire ou saisie manuelle)
-ou par `apps/api/scripts/enrolement-comptes.ts` pour un lot — cf. §8.
+ou par `apps/api/scripts/enrolement-comptes.ts` pour un lot (même mécanisme,
+`--fichier <chemin.json>`, format décrit par
+`apps/api/scripts/exemple-comptes.json`).
 
 ---
 
@@ -291,47 +281,38 @@ curl -f https://<url-api>/api/health
 curl -f https://<url-worker-interne>:3002/health   # généralement pas exposé publiquement
 curl -f https://<url-web>/login
 
-# Readiness — confirme les connexions réelles (Postgres/Redis/RabbitMQ/AD/MFA)
+# Readiness — confirme les connexions réelles (Postgres/Redis/RabbitMQ/
+# Keycloak — identité ET second facteur, un seul champ `ad` couvre les deux
+# depuis le 24/08/2026)
 curl -s https://<url-api>/api/health/ready
 # Attendu : {"data":{"statut":"ok","services":{"postgresql":true,"redis":true,
-#            "rabbitmq":true,"ad":true,"mfa":true}, ...}}
+#            "rabbitmq":true,"ad":true}, ...}}
 # "degrade" sur un des services signale une dépendance externe injoignable —
 # ne pas considérer le déploiement terminé tant que "statut" n'est pas "ok".
 ```
 
 Puis un parcours de connexion réel avec le premier compte admin créé au §5.3,
 jusqu'à l'écran d'administration — seule vérification qui confirme que
-l'AD/MFA réels (pas seulement `health/ready`) fonctionnent de bout en bout.
+Keycloak (identité + DUO, pas seulement `health/ready`) fonctionne de bout en
+bout.
 
 ---
 
-## 8. Repli MFA si DUO n'est pas encore disponible au déploiement
+## 8. Retrait du mécanisme MFA côté PGD (24/08/2026)
 
-Situation déjà rencontrée et documentée dans `CLAUDE.md`, section
-« Déploiement V1 — bascule MFA d'urgence + pré-enregistrement sans annuaire » :
-si DUO n'est pas configuré au moment du déploiement, basculer
-`Utilisateur.mfaMethode` à `TOTP` (changement de données, jamais un
-contournement de code) et enrôler chaque compte en TOTP — même mécanisme que
-le socle de test (`otplib` + chiffrement AES-256-GCM identique à
-`TotpProvider`/`chiffrerSecretTotp` + QR individuel par personne, jamais un
-fichier groupé).
+`MfaService`/`TotpProvider`/`DuoProvider` et tout le mécanisme `mfaMethode`
+(colonnes `Utilisateur.mfaMethode`/`totpSecret`/`totpActiveLe`, variables
+`DUO_*`/`TOTP_*`) sont retirés — confirmé par la personne pilotant le projet
+comme à retirer, pas à conserver en dormance, cf. `CLAUDE.md` « Architecture
+Keycloak — source unique ». Keycloak gère l'intégralité du second facteur ;
+la mesure d'urgence « bascule MFA » qui occupait cette section (§8, avant le
+24/08/2026) n'a donc plus d'objet — il n'existe plus de bascule DUO↔TOTP côté
+PGD à effectuer en cas d'indisponibilité DUO, cette question relève
+désormais entièrement de la configuration du royaume Keycloak.
 
-Deux scripts opérationnels **permanents** couvrent ce besoin (`apps/api/scripts/`,
-partagent la même logique via `scripts/lib/enrolement.ts`) :
-
-- `bootstrap-premier-admin.ts` — le tout premier compte (§5.3).
-- `enrolement-comptes.ts` — un lot de comptes à partir d'un fichier JSON
-  (`--fichier <chemin.json> --qr-dir <chemin_hors_du_depot>`, format décrit
-  par `apps/api/scripts/exemple-comptes.json`). Chaque `directionLibelle`/
-  `serviceLibelle`/`sousFluxLibelle` doit correspondre exactement à un
-  libellé déjà seedé — le script échoue explicitement sinon, ligne par
-  ligne, sans jamais créer de référentiel à la volée. `mfaMethode` est
-  paramétrable par personne dans le JSON (`"DUO"` ou `"TOTP"`, défaut
-  `TOTP`) — reste utilisable tel quel une fois DUO revenu, pas seulement
-  pendant la fenêtre de repli.
-
-Le fichier JSON d'entrée contenant les identifiants réels **ne doit jamais
-être commité** — seul `exemple-comptes.json` (données fictives) l'est.
+`bootstrap-premier-admin.ts`/`enrolement-comptes.ts` restent les deux
+scripts opérationnels **permanents** pour créer des comptes (§5.3) — ils ne
+gèrent plus aucun secret ni QR, seulement le compte et ses rôles.
 
 ---
 
@@ -369,8 +350,9 @@ Le fichier JSON d'entrée contenant les identifiants réels **ne doit jamais
    le projet, doit trancher avant un déploiement réel pour les comptes
    concernés.
 4. Disponibilité du tenant DUO **côté royaume Keycloak** au moment du
-   déploiement (§8) — distinct de `DUO_CLIENT_ID`/`DUO_API_HOST` (schéma
-   PGD, désormais sans effet sur l'authentification réelle via Keycloak).
+   déploiement — entièrement une question de configuration du royaume
+   depuis le 24/08/2026, PGD ne porte plus aucune configuration DUO propre
+   (`DUO_*` retirés avec `MfaService`/`DuoProvider`, cf. §8).
 5. Séparation référentiels/démo du script de seed (§5.2) — pas encore faite
    dans le dépôt.
 6. Dimensionnement serveur (§1).

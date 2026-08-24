@@ -183,22 +183,17 @@ services:
       SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-pgd_session}
       REFRESH_COOKIE_NAME: ${REFRESH_COOKIE_NAME:-pgd_refresh}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
-      DUO_CLIENT_ID: ${DUO_CLIENT_ID:?DUO_CLIENT_ID doit être défini dans .env.prod}
-      DUO_CLIENT_SECRET: ${DUO_CLIENT_SECRET:?DUO_CLIENT_SECRET doit être défini dans .env.prod}
-      DUO_API_HOST: ${DUO_API_HOST:?DUO_API_HOST doit être défini dans .env.prod}
-      DUO_REDIRECT_URI: ${DUO_REDIRECT_URI:?DUO_REDIRECT_URI doit être défini dans .env.prod}
-      # Keycloak — SOURCE UNIQUE d'authentification (décision actée le
-      # 24/08/2026, remplace LdapPort/LdapProvider/AdApiProvider/OpenLDAP
-      # retirés dans le même chantier — cf. CLAUDE.md « Architecture Keycloak
-      # — source unique »). Aucun conteneur Keycloak ici : royaume réel,
+      # Keycloak — SOURCE UNIQUE d'authentification, identité ET second
+      # facteur (décision actée le 24/08/2026, remplace LdapPort/
+      # LdapProvider/AdApiProvider/OpenLDAP ET MfaService/TotpProvider/
+      # DuoProvider, tous retirés — cf. CLAUDE.md « Architecture Keycloak —
+      # source unique »). Aucun conteneur Keycloak ici : royaume réel,
       # jamais celui, éphémère, d'un éventuel service de dev.
       KEYCLOAK_BASE_URL: ${KEYCLOAK_BASE_URL:?KEYCLOAK_BASE_URL doit être défini dans .env.prod}
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:?KEYCLOAK_REALM doit être défini dans .env.prod}
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:?KEYCLOAK_CLIENT_ID doit être défini dans .env.prod}
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:?KEYCLOAK_CLIENT_SECRET doit être défini dans .env.prod}
       KEYCLOAK_TIMEOUT_MS: ${KEYCLOAK_TIMEOUT_MS:-60000}
-      TOTP_ISSUER: ${TOTP_ISSUER:-PGD Orange CI}
-      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:?TOTP_ENCRYPTION_KEY doit être défini dans .env.prod}
       RATE_LIMIT_LOGIN_MAX_TENTATIVES: ${RATE_LIMIT_LOGIN_MAX_TENTATIVES:-5}
       RATE_LIMIT_LOGIN_FENETRE_SECONDES: ${RATE_LIMIT_LOGIN_FENETRE_SECONDES:-300}
       RATE_LIMIT_LOGIN_VERROUILLAGE_SECONDES: ${RATE_LIMIT_LOGIN_VERROUILLAGE_SECONDES:-900}
@@ -231,16 +226,11 @@ services:
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
       REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET:?REFRESH_TOKEN_SECRET doit être défini dans .env.prod}
       REFRESH_TOKEN_EXPIRES_IN: ${REFRESH_TOKEN_EXPIRES_IN:-7d}
-      DUO_CLIENT_ID: ${DUO_CLIENT_ID:?DUO_CLIENT_ID doit être défini dans .env.prod}
-      DUO_CLIENT_SECRET: ${DUO_CLIENT_SECRET:?DUO_CLIENT_SECRET doit être défini dans .env.prod}
-      DUO_API_HOST: ${DUO_API_HOST:?DUO_API_HOST doit être défini dans .env.prod}
-      DUO_REDIRECT_URI: ${DUO_REDIRECT_URI:?DUO_REDIRECT_URI doit être défini dans .env.prod}
       KEYCLOAK_BASE_URL: ${KEYCLOAK_BASE_URL:?KEYCLOAK_BASE_URL doit être défini dans .env.prod}
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:?KEYCLOAK_REALM doit être défini dans .env.prod}
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:?KEYCLOAK_CLIENT_ID doit être défini dans .env.prod}
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:?KEYCLOAK_CLIENT_SECRET doit être défini dans .env.prod}
       KEYCLOAK_TIMEOUT_MS: ${KEYCLOAK_TIMEOUT_MS:-60000}
-      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:?TOTP_ENCRYPTION_KEY doit être défini dans .env.prod}
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
       RABBITMQ_MANAGEMENT_PORT: 15672

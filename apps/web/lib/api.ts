@@ -38,7 +38,6 @@ import {
   sousFluxVueSchema,
   tacheVueSchema,
   tachesListeReponseSchema,
-  totpSecretAdminVueSchema,
   utilisateurAdminVueSchema,
   type AnnuaireResultat,
   type ApercuRoutageReponse,
@@ -73,7 +72,6 @@ import {
   type LibelleAjustementVue,
   type LigneAvecContexte,
   type ModifierCalendrierSlaRequete,
-  type MfaVerifieRequete,
   type ModifierCircuitRequete,
   type ModifierDemandeRequete,
   type ModifierLibelleAjustementRequete,
@@ -106,7 +104,6 @@ import {
   type SousFluxVue,
   type TacheVue,
   type TachesListeReponse,
-  type TotpSecretAdminVue,
   type UniversFmiVue,
   type UtilisateurAdminVue
 } from "@pgd/contracts";
@@ -215,18 +212,13 @@ export function deconnecter(): Promise<{ deconnecte: true }> {
   return requete("/api/auth/logout", z.object({ deconnecte: z.literal(true) }), { method: "POST" });
 }
 
-// --- LoginScreen (Phase 9.2) — @Public() sur ces deux routes -----------
+// --- LoginScreen (Phase 9.2) — @Public() -------------------------------
+// Keycloak résout identité ET second facteur (DUO) en un seul échange
+// (décision actée le 24/08/2026) — un seul appel, jamais de second facteur
+// géré côté PGD, cf. CLAUDE.md « Architecture Keycloak — source unique ».
 
 export function login(donnees: ConnexionRequete): Promise<ConnexionReponse> {
   return requete("/api/auth/login", connexionReponseSchema, {
-    method: "POST",
-    headers: JSON_HEADERS,
-    body: JSON.stringify(donnees)
-  });
-}
-
-export function verifierMfa(donnees: MfaVerifieRequete): Promise<ConnexionReponse> {
-  return requete("/api/auth/mfa/verify", connexionReponseSchema, {
     method: "POST",
     headers: JSON_HEADERS,
     body: JSON.stringify(donnees)
@@ -552,14 +544,6 @@ export function modifierUtilisateurAdmin(id: string, donnees: ModifierUtilisateu
     method: "PATCH",
     headers: JSON_HEADERS,
     body: JSON.stringify(donnees)
-  });
-}
-
-// Génère/régénère un secret TOTP (Priorité 1) — le secret/QR retournés ne
-// sont jamais rejouables : à afficher immédiatement, jamais mis en cache.
-export function genererSecretTotpAdmin(id: string): Promise<TotpSecretAdminVue> {
-  return requete(`/api/admin/utilisateurs/${id}/totp-secret`, totpSecretAdminVueSchema, {
-    method: "POST"
   });
 }
 

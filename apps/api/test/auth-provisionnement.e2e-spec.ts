@@ -96,7 +96,7 @@ describe("E2E — POST /api/auth/login, refus d'un compte non pré-enregistré",
     expect(entreeJournal).not.toBeNull();
   });
 
-  it("accorde une session (ou un défi MFA) pour un Utilisateur pré-enregistré avec au moins un MembreRole", async () => {
+  it("accorde une session pour un Utilisateur pré-enregistré avec au moins un MembreRole", async () => {
     const roleTest = `TEST_E2E_LOGIN_${suffixe}`;
     await prisma.role.create({
       data: { code: roleTest, libelle: roleTest, groupeAd: `GG-${roleTest}`, niveau: 1, type: "METIER", requiertMfa: false }
@@ -114,7 +114,7 @@ describe("E2E — POST /api/auth/login, refus d'un compte non pré-enregistré",
         .send({ identifiantAd: identifiantProvisionne, motDePasse: "peu importe" })
         .expect(200);
 
-      expect(reponse.body.data.requiresMfa).toBe(false);
+      expect(reponse.body.data.connecte).toBe(true);
       expect(reponse.headers["set-cookie"]).toBeDefined();
     } finally {
       // MembreRole (FK sur Role.code) doit être retiré avant Role — l'afterEach

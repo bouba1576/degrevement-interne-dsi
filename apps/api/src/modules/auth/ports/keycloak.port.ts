@@ -50,8 +50,9 @@ export interface KeycloakPort {
    * mot de passe transmis tels quels, jamais transformés. Une réponse 200
    * avec jeton exploitable signifie authentification ET second facteur
    * (DUO déjà lié à ce royaume) tous deux résolus côté Keycloak : PGD ne
-   * déclenche, ne vérifie, ni n'interprète plus aucun second facteur pour
-   * ce chemin (MfaService reste utilisé ailleurs, jamais depuis ici).
+   * déclenche, ne vérifie, ni n'interprète plus aucun second facteur —
+   * MfaService/TotpProvider/DuoProvider sont retirés (24/08/2026), plus
+   * aucun chemin ne les utilise.
    */
   authentifier(identifiantAd: string, motDePasse: string): Promise<ResultatAuthentificationAd>;
 

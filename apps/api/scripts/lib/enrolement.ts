@@ -2,18 +2,12 @@
 // scripts opérationnels PERMANENTS (pas des scripts jetables "-tmp"), à
 // conserver dans le dépôt et réutiliser à chaque vague d'onboarding réel.
 //
-// Reprend exactement le mécanisme déjà utilisé pour le socle de test et pour
-// la bascule d'urgence du 18/08/2026 (CLAUDE.md, « Déploiement V1 ») :
-// secret otplib réel, chiffrement AES-256-GCM via la même fonction que
-// l'application (import direct, jamais une réimplémentation — une seule
-// source de vérité pour ce chiffrement), QR individuel par personne, jamais
-// un fichier groupé.
+// Simplifié le 24/08/2026 (CLAUDE.md « Architecture Keycloak — source
+// unique ») : plus de secret TOTP/QR à produire ici — Keycloak est la
+// source unique d'authentification, identité ET second facteur. Ce script
+// ne fait plus que créer le compte et ses rôles.
 import type { PrismaClient } from "@pgd/database";
-import { authenticator } from "otplib";
-import * as QRCode from "qrcode";
-import { resolve, sep } from "node:path";
 import { preEnregistrerUtilisateurRequeteSchema } from "@pgd/contracts";
-import { chiffrerSecretTotp } from "../../src/modules/auth/providers/totp-secret-crypto";
 
 export interface EntreeCompte {
   nom: string;
@@ -22,34 +16,11 @@ export interface EntreeCompte {
   directionLibelle?: string;
   serviceLibelle?: string;
   sousFluxLibelle?: string;
-  /** Défaut TOTP — cohérent avec la posture actée le 18/08/2026 tant que DUO
-   *  n'est pas confirmé disponible. Passer "DUO" explicitement une fois le
-   *  tenant réel en place. */
-  mfaMethode?: "DUO" | "TOTP";
 }
 
 export interface ResultatEnrolement {
   identifiantAd: string;
   cree: boolean; // false si le compte existait déjà (skip, jamais un doublon)
-  qrGenere: string | null; // chemin du fichier QR, null si DUO ou déjà existant
-}
-
-/**
- * Refuse tout répertoire de sortie situé DANS ce dépôt — un secret TOTP en
- * clair (le QR encode le secret, pas seulement son affichage) ne doit jamais
- * pouvoir finir dans un `git add .` par erreur. Même principe que l'incident
- * .dockerignore/.gitignore déjà documenté dans CLAUDE.md, appliqué en amont
- * plutôt qu'en correctif après coup.
- */
-export function verifierRepertoireHorsDepot(dir: string): void {
-  const racineDepot = resolve(__dirname, "../../../..");
-  const cible = resolve(dir);
-  if (cible === racineDepot || cible.startsWith(racineDepot + sep)) {
-    throw new Error(
-      `Répertoire de sortie refusé : "${dir}" est à l'intérieur du dépôt (${racineDepot}). ` +
-        `Choisir un chemin hors du dépôt — les QR encodent des secrets TOTP en clair.`
-    );
-  }
 }
 
 async function resoudreReferentiel(
@@ -67,20 +38,11 @@ async function resoudreReferentiel(
 }
 
 /**
- * Crée un compte + ses rôles, enrôle un secret TOTP réel si demandé (jamais
- * pour DUO — le second facteur est alors géré entièrement côté tenant Duo).
- * Échoue explicitement sur tout référentiel/rôle inconnu — jamais de
- * création silencieuse (règle non négociable 1 : rien en dur, rien deviné).
+ * Crée un compte + ses rôles. Échoue explicitement sur tout référentiel/rôle
+ * inconnu — jamais de création silencieuse (règle non négociable 1 : rien
+ * en dur, rien deviné).
  */
-export async function creerCompteEtEnroler(
-  prisma: PrismaClient,
-  entree: EntreeCompte,
-  qrDir: string | undefined,
-  issuer: string,
-  cleTotpHex: string
-): Promise<ResultatEnrolement> {
-  const mfaMethode = entree.mfaMethode ?? "TOTP";
-
+export async function creerCompteEtEnroler(prisma: PrismaClient, entree: EntreeCompte): Promise<ResultatEnrolement> {
   const rolesConnus = await prisma.role.findMany({ where: { code: { in: entree.roles } }, select: { code: true } });
   const inconnus = entree.roles.filter((r) => !rolesConnus.some((rc) => rc.code === r));
   if (inconnus.length > 0) {
@@ -100,21 +62,12 @@ export async function creerCompteEtEnroler(
     roles: entree.roles,
     directionId,
     serviceId,
-    sousFluxId,
-    mfaMethode
+    sousFluxId
   });
 
   const existant = await prisma.utilisateur.findUnique({ where: { identifiantAd: valide.identifiantAd } });
   if (existant) {
-    return { identifiantAd: valide.identifiantAd, cree: false, qrGenere: null };
-  }
-
-  let totpSecretChiffre: string | undefined;
-  let otpauthUrl: string | undefined;
-  if (mfaMethode === "TOTP") {
-    const secretBase32 = authenticator.generateSecret();
-    otpauthUrl = authenticator.keyuri(valide.identifiantAd, issuer, secretBase32);
-    totpSecretChiffre = chiffrerSecretTotp(secretBase32, cleTotpHex);
+    return { identifiantAd: valide.identifiantAd, cree: false };
   }
 
   await prisma.$transaction(async (tx) => {
@@ -124,24 +77,11 @@ export async function creerCompteEtEnroler(
         nom: valide.nom,
         directionId: valide.directionId,
         serviceId: valide.serviceId,
-        sousFluxId: valide.sousFluxId,
-        mfaMethode,
-        totpSecret: totpSecretChiffre,
-        totpActiveLe: totpSecretChiffre ? new Date() : undefined
+        sousFluxId: valide.sousFluxId
       }
     });
     await tx.membreRole.createMany({ data: valide.roles.map((roleCode) => ({ utilisateurId: cree.id, roleCode })) });
   });
 
-  let qrGenere: string | null = null;
-  if (otpauthUrl && qrDir) {
-    verifierRepertoireHorsDepot(qrDir);
-    const nomFichier = `qr-${valide.identifiantAd.replace(/[^a-z0-9.]+/gi, "-")}.png`;
-    qrGenere = resolve(qrDir, nomFichier);
-    await QRCode.toFile(qrGenere, otpauthUrl);
-  } else if (otpauthUrl && !qrDir) {
-    throw new Error(`${valide.identifiantAd} : mfaMethode=TOTP mais --qr-dir absent — impossible de produire le QR.`);
-  }
-
-  return { identifiantAd: valide.identifiantAd, cree: true, qrGenere };
+  return { identifiantAd: valide.identifiantAd, cree: true };
 }

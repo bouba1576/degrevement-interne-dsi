@@ -1,10 +1,10 @@
 import { z } from "zod";
 
 // Variables validées au démarrage — une seule fois, au bootstrap de chaque app.
-// Périmètre Phase 1 + Phase 2 (socle, DB, cache, messagerie, ports HTTP, AD, MFA,
-// session). Les variables des phases suivantes (ports SI/GED/SMTP/CRM/JADE)
-// seront ajoutées quand leurs modules seront écrits — ne pas les anticiper ici
-// (cf. CLAUDE.md, règle 1 : rien en dur avant d'exister).
+// Périmètre Phase 1 + Phase 2 (socle, DB, cache, messagerie, ports HTTP,
+// authentification, session). Les variables des phases suivantes (ports
+// SI/GED/SMTP/CRM/JADE) seront ajoutées quand leurs modules seront écrits —
+// ne pas les anticiper ici (cf. CLAUDE.md, règle 1 : rien en dur avant d'exister).
 export const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 
@@ -34,17 +34,6 @@ export const envSchema = z.object({
   REFRESH_COOKIE_NAME: z.string().default("pgd_refresh"),
   COOKIE_SECURE: z.coerce.boolean().default(true),
 
-  // --- Phase 2 : MFA (MfaPort — réel, SF-PGD-002, ADR-08) ----------------
-  // Injecté ici même si le chemin de connexion réel (Keycloak, ci-dessous)
-  // ne l'appelle plus jamais depuis login() — MfaService/DuoProvider restent
-  // utilisés ailleurs (mfa/duo/callback, enroll/totp), cf. CLAUDE.md
-  // « Architecture Keycloak — source unique » (24/08/2026), constat, pas
-  // un retrait décidé dans ce chantier.
-  DUO_CLIENT_ID: z.string().min(1, "DUO_CLIENT_ID est requis"),
-  DUO_CLIENT_SECRET: z.string().min(1, "DUO_CLIENT_SECRET est requis"),
-  DUO_API_HOST: z.string().min(1, "DUO_API_HOST est requis"),
-  DUO_REDIRECT_URI: z.string().min(1, "DUO_REDIRECT_URI est requis"),
-
   // --- Keycloak (KeycloakPort — réel, SOURCE UNIQUE d'authentification,
   // décision actée le 24/08/2026, remplace LdapPort/LdapProvider/
   // AdApiProvider/OpenLDAP retirés dans le même chantier) -----------------
@@ -59,12 +48,6 @@ export const envSchema = z.object({
   // provisoire (60s), jamais vérifiée contre un vrai délai d'attente DUO —
   // à ajuster une fois la forme réelle de la résolution DUO confirmée.
   KEYCLOAK_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
-
-  TOTP_ISSUER: z.string().default("PGD Orange CI"),
-  // AES-256-GCM : 32 octets exactement, fournis en hex (64 caractères).
-  TOTP_ENCRYPTION_KEY: z
-    .string()
-    .regex(/^[0-9a-fA-F]{64}$/, "TOTP_ENCRYPTION_KEY doit être 32 octets en hexadécimal (64 caractères)"),
 
   // --- Phase 2 : rate limiting anti-bruteforce (SF-PGD-005) --------------
   RATE_LIMIT_LOGIN_MAX_TENTATIVES: z.coerce.number().int().positive().default(5),
