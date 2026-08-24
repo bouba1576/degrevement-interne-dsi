@@ -33,8 +33,7 @@ import { Authenticated } from "../../common/decorators/authenticated.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import type { UtilisateurRequete } from "../../common/guards/auth.guard";
 import { PrismaService } from "../../infra/prisma/prisma.service";
-import type { ChallengeDemarre } from "./ports/mfa.port";
-import { LDAP_PORT, type LdapPort } from "./ports/ldap.port";
+import { KEYCLOAK_PORT, type KeycloakPort } from "./ports/keycloak.port";
 import { MfaService } from "./services/mfa.service";
 import { SessionService } from "./services/session.service";
 import { RateLimitService } from "./services/rate-limit.service";
@@ -48,7 +47,7 @@ export class AuthController {
   private readonly logger = new Logger(AuthController.name);
 
   constructor(
-    @Inject(LDAP_PORT) private readonly ldap: LdapPort,
+    @Inject(KEYCLOAK_PORT) private readonly keycloak: KeycloakPort,
     private readonly rbacResolution: RbacResolutionService,
     private readonly mfaService: MfaService,
     private readonly sessionService: SessionService,
@@ -69,40 +68,47 @@ export class AuthController {
       throw limiteAtteinte("Trop de tentatives. Réessayez plus tard.");
     }
 
-    const resultatAd = await this.ldap.authentifier(identifiantAd, motDePasse);
-    if (resultatAd.statut === "ECHEC") {
+    // Keycloak est la source unique d'authentification (décision actée le
+    // 24/08/2026, cf. CLAUDE.md « Architecture Keycloak — source unique ») —
+    // une réponse AUTHENTIFIE signifie identité ET second facteur (DUO déjà
+    // lié à ce royaume) tous deux résolus côté Keycloak. Aucun appel à
+    // MfaService depuis cette route : le second facteur PGD (mfaMethode,
+    // DUO/TOTP) n'est plus jamais déclenché pour ce chemin — cf. rapport du
+    // 24/08/2026, MfaService reste utilisé ailleurs (mfa/duo/callback,
+    // enroll/totp), jamais retiré, simplement inutilisé ici.
+    const resultatAuth = await this.keycloak.authentifier(identifiantAd, motDePasse);
+    if (resultatAuth.statut === "ECHEC") {
       const { verrouille } = await this.rateLimit.enregistrerEchec("login", identifiantAd);
       // codeEchec/messageEchec : détail interne (JOURNAL_SECURITE
       // uniquement, jamais renvoyé au client HTTP ci-dessous — même
       // discipline que le message générique "Identifiants invalides.", qui
-      // ne distingue jamais identifiant inconnu de mot de passe invalide).
-      // undefined pour LdapProvider (annuaire dev), qui n'a pas cette notion
-      // — consigner() les écrit alors comme NULL, pas comme un défaut.
+      // ne distingue jamais identifiant inconnu de mot de passe invalide,
+      // ni un DUO refusé d'un mot de passe erroné).
       await this.journal.consigner({
         evenement: "LOGIN",
-        facteur: "AD",
+        facteur: "KEYCLOAK",
         succes: false,
-        codeEchec: resultatAd.codeEchec,
-        messageEchec: resultatAd.messageEchec
+        codeEchec: resultatAuth.codeEchec,
+        messageEchec: resultatAuth.messageEchec
       });
       if (verrouille) {
         throw limiteAtteinte("Trop de tentatives. Compte temporairement verrouillé.");
       }
       throw new UnauthorizedException({ code: "NON_AUTHENTIFIE", message: "Identifiants invalides." });
     }
-    const utilisateurAd = resultatAd.utilisateur;
+    const utilisateurAd = resultatAuth.utilisateur;
     await this.rateLimit.reinitialiser("login", identifiantAd);
 
     const resolution = await this.rbacResolution.resoudre(utilisateurAd);
     if (resolution.statut === "NON_PROVISIONNE") {
       // Pré-enregistrement des utilisateurs AD, Temps 2 (12/08/2026) — un
-      // identifiant/mot de passe AD valides ne suffisent plus : distinct d'un
-      // échec d'authentification (évènement/message dédiés), jamais une
-      // session dégradée à zéro rôle (comportement JIT retiré, cf. CLAUDE.md).
+      // identifiant/mot de passe valides côté Keycloak ne suffisent plus :
+      // distinct d'un échec d'authentification (évènement/message dédiés),
+      // jamais une session dégradée à zéro rôle (JIT retiré, cf. CLAUDE.md).
       await this.journal.consigner({
         utilisateurId: resolution.utilisateurId ?? undefined,
         evenement: "ACCES_NON_PROVISIONNE",
-        facteur: "AD",
+        facteur: "KEYCLOAK",
         succes: false
       });
       throw new UnauthorizedException({
@@ -111,64 +117,21 @@ export class AuthController {
       });
     }
     const { utilisateur, roles } = resolution;
-    await this.journal.consigner({ utilisateurId: utilisateur.id, evenement: "LOGIN", facteur: "AD", succes: true });
-
-    const rolesExigentMfa = await this.prisma.role.count({
-      where: { code: { in: roles }, requiertMfa: true }
-    });
-
-    if (rolesExigentMfa === 0) {
-      const jetons = await this.sessionService.creerSession({
-        id: utilisateur.id,
-        identifiantAd,
-        roles,
-        sousFluxId: utilisateur.sousFluxId
-      });
-      poserCookiesSession(res, jetons);
-      return { requiresMfa: false, methode: null, challengeId: null, redirectUrl: null, totpEnrole: null };
-    }
-
-    let challengeId: string;
-    let challenge: ChallengeDemarre;
-    try {
-      ({ challengeId, challenge } = await this.mfaService.demarrerChallenge({
-        id: utilisateur.id,
-        identifiantAd,
-        mfaMethode: utilisateur.mfaMethode
-      }));
-    } catch (erreur) {
-      // Ne se produit qu'en environnement où le fournisseur MFA sélectionné
-      // n'est pas correctement configuré (ex. DUO_CLIENT_ID placeholder en dev,
-      // cf. .env.example) — erreur explicite plutôt qu'un 500 générique.
-      this.logger.warn(`Échec du démarrage du défi MFA (${utilisateur.mfaMethode}) : ${(erreur as Error).message}`);
-      await this.journal.consigner({
-        utilisateurId: utilisateur.id,
-        evenement: "MFA_CHALLENGE",
-        facteur: utilisateur.mfaMethode,
-        succes: false
-      });
-      throw new HttpException(
-        {
-          code: "MFA_INDISPONIBLE",
-          message: `Le second facteur (${utilisateur.mfaMethode}) est actuellement indisponible.`
-        },
-        HttpStatus.SERVICE_UNAVAILABLE
-      );
-    }
     await this.journal.consigner({
       utilisateurId: utilisateur.id,
-      evenement: "MFA_CHALLENGE",
-      facteur: utilisateur.mfaMethode,
+      evenement: "LOGIN",
+      facteur: "KEYCLOAK",
       succes: true
     });
 
-    return {
-      requiresMfa: true,
-      methode: challenge.methode,
-      challengeId,
-      redirectUrl: challenge.redirectUrl ?? null,
-      totpEnrole: challenge.methode === "TOTP" ? utilisateur.totpSecret !== null : null
-    };
+    const jetons = await this.sessionService.creerSession({
+      id: utilisateur.id,
+      identifiantAd,
+      roles,
+      sousFluxId: utilisateur.sousFluxId
+    });
+    poserCookiesSession(res, jetons);
+    return { requiresMfa: false, methode: null, challengeId: null, redirectUrl: null, totpEnrole: null };
   }
 
   @Public()

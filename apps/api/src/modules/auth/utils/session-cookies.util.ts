@@ -3,11 +3,13 @@ import { loadEnv } from "@pgd/config";
 import type { PaireJetons } from "../services/session.service";
 
 // Extrait d'AuthController (poserCookiesSession/effacerCookiesSession,
-// privées à l'origine) le 20/08/2026 — KeycloakController a besoin
-// exactement du même comportement (mêmes noms de cookie, mêmes drapeaux
-// httpOnly/secure/sameSite/path) pour poser la session à la fin du callback
-// Keycloak. Une seule source de vérité plutôt que deux copies qui
-// pourraient diverger sur un détail de sécurité (secure/sameSite).
+// privées à l'origine) le 20/08/2026 — à l'époque pour KeycloakController
+// (flux authorization_code, retiré le 24/08/2026, cf. CLAUDE.md
+// « Architecture Keycloak — source unique »). Conservé en fichier séparé
+// malgré le retrait de ce second appelant : un seul point de vérité pour les
+// drapeaux de cookie de session (httpOnly/secure/sameSite/path) reste
+// préférable à une réintégration dans AuthController, si un futur appelant
+// (ex. un flux de connexion supplémentaire) en a de nouveau besoin.
 export function poserCookiesSession(res: Response, jetons: PaireJetons): void {
   const env = loadEnv();
   res.cookie(env.SESSION_COOKIE_NAME, jetons.accessToken, {

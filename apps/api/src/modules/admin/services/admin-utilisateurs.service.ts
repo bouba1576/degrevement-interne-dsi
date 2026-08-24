@@ -8,7 +8,7 @@ import type {
   UtilisateurAdminVue
 } from "@pgd/contracts";
 import { PrismaService } from "../../../infra/prisma/prisma.service";
-import { LDAP_PORT, type LdapPort } from "../../auth/ports/ldap.port";
+import { KEYCLOAK_PORT, type KeycloakPort } from "../../auth/ports/keycloak.port";
 import { TotpProvider } from "../../auth/providers/totp.provider";
 import { chiffrerSecretTotp } from "../../auth/providers/totp-secret-crypto";
 import { JournalSecuriteService } from "../../auth/services/journal-securite.service";
@@ -34,14 +34,18 @@ const INCLUSION_COMPLETE = {
 export class AdminUtilisateursService {
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(LDAP_PORT) private readonly ldap: LdapPort,
+    @Inject(KEYCLOAK_PORT) private readonly keycloak: KeycloakPort,
     private readonly totpProvider: TotpProvider,
     private readonly journalSecurite: JournalSecuriteService
   ) {}
 
-  // Longueur minimale pour éviter un joker LDAP quasi-vide (`cn=*a*`) qui
-  // matcherait une part significative de l'annuaire — LdapProvider borne
-  // déjà le nombre de résultats (sizeLimit), ceci évite l'aller-retour inutile.
+  // KeycloakPort.rechercher() renvoie toujours [] à ce jour (aucune capacité
+  // de recherche construite, cf. CLAUDE.md « Architecture Keycloak — source
+  // unique », rapport du 24/08/2026) — AnnuaireRechercheModal (apps/web)
+  // couvre déjà ce cas par sa bascule « Saisir manuellement » (construite en
+  // son temps pour AdApiProvider, même situation). Le seuil de 2 caractères
+  // reste une garde-fou générique contre une recherche trop large, pas
+  // spécifique à un fournisseur particulier.
   async rechercherAnnuaire(motCle: string): Promise<AnnuaireResultat[]> {
     const nettoye = motCle.trim();
     if (nettoye.length < 2) {
@@ -50,7 +54,7 @@ export class AdminUtilisateursService {
         message: "Saisissez au moins 2 caractères."
       });
     }
-    const resultats = await this.ldap.rechercher(nettoye);
+    const resultats = await this.keycloak.rechercher(nettoye);
     return resultats.map((r) => ({ identifiantAd: r.identifiantAd, nom: r.nom, groupesAd: r.groupes }));
   }
 

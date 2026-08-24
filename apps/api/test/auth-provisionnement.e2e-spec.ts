@@ -1,17 +1,19 @@
 import request from "supertest";
 import { PrismaService } from "../src/infra/prisma/prisma.service";
-import { LdapProvider } from "../src/modules/auth/providers/ldap.provider";
-import type { ResultatAuthentificationAd, UtilisateurAd } from "../src/modules/auth/ports/ldap.port";
+import { KeycloakDirectGrantProvider } from "../src/modules/auth/providers/keycloak-direct-grant.provider";
+import type { ResultatAuthentificationAd, UtilisateurAd } from "../src/modules/auth/ports/keycloak.port";
 import { demarrerAppE2e, type AppE2e } from "./helpers/e2e-app";
 
 // Pré-enregistrement des utilisateurs AD, Temps 2 (12/08/2026, CLAUDE.md) —
-// exerce POST /api/auth/login en HTTP réel, LdapProvider remplacé par un
-// faux (authentifier() toujours réussi) pour ne dépendre d'aucune identité
-// LDAP réelle : ce test porte sur ce que fait le SERVEUR une fois l'AD
-// franchi, pas sur l'authentification AD elle-même (déjà couverte par
-// ldap-provider.integration.spec.ts). Écrit AVANT le changement de
-// comportement, pour prouver — pas supposer — que la route refuse
-// aujourd'hui de refuser (elle accorde une session à rôles vides).
+// exerce POST /api/auth/login en HTTP réel, KeycloakDirectGrantProvider
+// remplacé par un faux (authentifier() toujours réussi) pour ne dépendre
+// d'aucun royaume Keycloak réel : ce test porte sur ce que fait le SERVEUR
+// une fois l'authentification franchie (Keycloak, décision du 24/08/2026,
+// remplace LdapProvider — cf. CLAUDE.md « Architecture Keycloak — source
+// unique »), pas sur l'authentification elle-même (couverte par
+// keycloak-direct-grant-provider.spec.ts). Écrit AVANT le changement de
+// comportement (Temps 2, historique), pour prouver — pas supposer — que la
+// route refuse aujourd'hui de refuser un compte non pré-enregistré.
 describe("E2E — POST /api/auth/login, refus d'un compte non pré-enregistré", () => {
   let e2e: AppE2e;
   let prisma: PrismaService;
@@ -19,7 +21,7 @@ describe("E2E — POST /api/auth/login, refus d'un compte non pré-enregistré",
   const identifiantInconnu = `e2e.non-provisionne.${suffixe}@orange.com`;
   const utilisateurIds: string[] = [];
 
-  const ldapFaux: Pick<LdapProvider, "authentifier" | "estDisponible" | "rechercher"> = {
+  const keycloakFaux: Pick<KeycloakDirectGrantProvider, "authentifier" | "estDisponible" | "rechercher"> = {
     async authentifier(identifiantAd: string): Promise<ResultatAuthentificationAd> {
       return { statut: "AUTHENTIFIE", utilisateur: { identifiantAd, nom: "E2E Non Provisionné", groupes: [] } };
     },
@@ -32,7 +34,7 @@ describe("E2E — POST /api/auth/login, refus d'un compte non pré-enregistré",
   };
 
   beforeAll(async () => {
-    e2e = await demarrerAppE2e([{ provider: LdapProvider, useValue: ldapFaux }]);
+    e2e = await demarrerAppE2e([{ provider: KeycloakDirectGrantProvider, useValue: keycloakFaux }]);
     prisma = e2e.app.get(PrismaService);
   });
 

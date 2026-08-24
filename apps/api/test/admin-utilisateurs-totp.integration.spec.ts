@@ -1,4 +1,4 @@
-import type { LdapPort } from "../src/modules/auth/ports/ldap.port";
+import type { KeycloakPort } from "../src/modules/auth/ports/keycloak.port";
 import { PrismaService } from "../src/infra/prisma/prisma.service";
 import { TotpProvider } from "../src/modules/auth/providers/totp.provider";
 import { dechiffrerSecretTotp } from "../src/modules/auth/providers/totp-secret-crypto";
@@ -14,12 +14,17 @@ describe("AdminUtilisateursService.genererSecretTotp — Priorité 1", () => {
   const prisma = new PrismaService();
   // rechercher()/estDisponible() ne sont jamais appelés par genererSecretTotp
   // — faux minimal, seule authentifier() n'a même pas besoin d'exister ici.
-  const ldapFactice: LdapPort = {
+  const keycloakFactice: KeycloakPort = {
     authentifier: async () => ({ statut: "ECHEC" }),
     estDisponible: async () => true,
     rechercher: async () => []
   };
-  const service = new AdminUtilisateursService(prisma, ldapFactice, new TotpProvider(), new JournalSecuriteService(prisma));
+  const service = new AdminUtilisateursService(
+    prisma,
+    keycloakFactice,
+    new TotpProvider(),
+    new JournalSecuriteService(prisma)
+  );
 
   const identifiantMarqueur = `TEST_TOTP_ADMIN_${Date.now()}@orange.com`;
   let utilisateurId: string;

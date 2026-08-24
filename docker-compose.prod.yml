@@ -183,31 +183,20 @@ services:
       SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-pgd_session}
       REFRESH_COOKIE_NAME: ${REFRESH_COOKIE_NAME:-pgd_refresh}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
-      # Prod : AD réel Orange CI (LDAPS attendu si LDAP_PROVIDER=ldap).
-      # Aucun conteneur openldap ici — celui de docker-compose.override.yml
-      # est strictement dev.
-      LDAP_URL: ${LDAP_URL:?LDAP_URL doit être défini dans .env.prod}
-      LDAP_BIND_DN: ${LDAP_BIND_DN:?LDAP_BIND_DN doit être défini dans .env.prod}
-      LDAP_BIND_PASSWORD: ${LDAP_BIND_PASSWORD:?LDAP_BIND_PASSWORD doit être défini dans .env.prod}
-      LDAP_BASE_DN: ${LDAP_BASE_DN:?LDAP_BASE_DN doit être défini dans .env.prod}
-      # orange.com confirmé (18/08/2026) comme le domaine réel de l'AD Orange
-      # CI — orange.ci reste le domaine du seul socle de test dev (OpenLDAP
-      # éphémère), jamais celui de la production. Variable actuellement non
-      # lue par le code applicatif (LDAP_USER_DOMAIN absent de apps/*/src et
-      # packages/*, vérifié par recherche) — conservée pour cohérence avec
-      # packages/config/src/env.schema.ts, pas pour un usage réel aujourd'hui.
-      LDAP_USER_DOMAIN: ${LDAP_USER_DOMAIN:-orange.com}
-      # AdApiProvider (SF-PGD-001, 19/08/2026) — coexistence avec LdapProvider
-      # ci-dessus, jamais un remplacement. LDAP_PROVIDER=ad-api requiert
-      # AD_API_URL ; contrat et premier login réel confirmés, cf. CLAUDE.md
-      # « Intégration réelle de l'API AD ».
-      LDAP_PROVIDER: ${LDAP_PROVIDER:-ldap}
-      AD_API_URL: ${AD_API_URL:-}
-      AD_API_TIMEOUT_MS: ${AD_API_TIMEOUT_MS:-5000}
       DUO_CLIENT_ID: ${DUO_CLIENT_ID:?DUO_CLIENT_ID doit être défini dans .env.prod}
       DUO_CLIENT_SECRET: ${DUO_CLIENT_SECRET:?DUO_CLIENT_SECRET doit être défini dans .env.prod}
       DUO_API_HOST: ${DUO_API_HOST:?DUO_API_HOST doit être défini dans .env.prod}
       DUO_REDIRECT_URI: ${DUO_REDIRECT_URI:?DUO_REDIRECT_URI doit être défini dans .env.prod}
+      # Keycloak — SOURCE UNIQUE d'authentification (décision actée le
+      # 24/08/2026, remplace LdapPort/LdapProvider/AdApiProvider/OpenLDAP
+      # retirés dans le même chantier — cf. CLAUDE.md « Architecture Keycloak
+      # — source unique »). Aucun conteneur Keycloak ici : royaume réel,
+      # jamais celui, éphémère, d'un éventuel service de dev.
+      KEYCLOAK_BASE_URL: ${KEYCLOAK_BASE_URL:?KEYCLOAK_BASE_URL doit être défini dans .env.prod}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:?KEYCLOAK_REALM doit être défini dans .env.prod}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:?KEYCLOAK_CLIENT_ID doit être défini dans .env.prod}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:?KEYCLOAK_CLIENT_SECRET doit être défini dans .env.prod}
+      KEYCLOAK_TIMEOUT_MS: ${KEYCLOAK_TIMEOUT_MS:-60000}
       TOTP_ISSUER: ${TOTP_ISSUER:-PGD Orange CI}
       TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:?TOTP_ENCRYPTION_KEY doit être défini dans .env.prod}
       RATE_LIMIT_LOGIN_MAX_TENTATIVES: ${RATE_LIMIT_LOGIN_MAX_TENTATIVES:-5}
@@ -242,14 +231,15 @@ services:
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
       REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET:?REFRESH_TOKEN_SECRET doit être défini dans .env.prod}
       REFRESH_TOKEN_EXPIRES_IN: ${REFRESH_TOKEN_EXPIRES_IN:-7d}
-      LDAP_URL: ${LDAP_URL:?LDAP_URL doit être défini dans .env.prod}
-      LDAP_BIND_DN: ${LDAP_BIND_DN:?LDAP_BIND_DN doit être défini dans .env.prod}
-      LDAP_BIND_PASSWORD: ${LDAP_BIND_PASSWORD:?LDAP_BIND_PASSWORD doit être défini dans .env.prod}
-      LDAP_BASE_DN: ${LDAP_BASE_DN:?LDAP_BASE_DN doit être défini dans .env.prod}
       DUO_CLIENT_ID: ${DUO_CLIENT_ID:?DUO_CLIENT_ID doit être défini dans .env.prod}
       DUO_CLIENT_SECRET: ${DUO_CLIENT_SECRET:?DUO_CLIENT_SECRET doit être défini dans .env.prod}
       DUO_API_HOST: ${DUO_API_HOST:?DUO_API_HOST doit être défini dans .env.prod}
       DUO_REDIRECT_URI: ${DUO_REDIRECT_URI:?DUO_REDIRECT_URI doit être défini dans .env.prod}
+      KEYCLOAK_BASE_URL: ${KEYCLOAK_BASE_URL:?KEYCLOAK_BASE_URL doit être défini dans .env.prod}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:?KEYCLOAK_REALM doit être défini dans .env.prod}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:?KEYCLOAK_CLIENT_ID doit être défini dans .env.prod}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:?KEYCLOAK_CLIENT_SECRET doit être défini dans .env.prod}
+      KEYCLOAK_TIMEOUT_MS: ${KEYCLOAK_TIMEOUT_MS:-60000}
       TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:?TOTP_ENCRYPTION_KEY doit être défini dans .env.prod}
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672

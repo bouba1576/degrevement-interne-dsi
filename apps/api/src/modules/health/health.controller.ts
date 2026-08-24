@@ -7,7 +7,7 @@ import { ApiZodResponse } from "../../common/swagger/zod-schema";
 import { Public } from "../../common/decorators/public.decorator";
 import { PrismaService } from "../../infra/prisma/prisma.service";
 import { CacheService } from "../../infra/redis/cache.service";
-import { LDAP_PORT, type LdapPort } from "../auth/ports/ldap.port";
+import { KEYCLOAK_PORT, type KeycloakPort } from "../auth/ports/keycloak.port";
 import { DuoProvider } from "../auth/providers/duo.provider";
 
 @ApiTags("santé")
@@ -16,7 +16,7 @@ export class HealthController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cache: CacheService,
-    @Inject(LDAP_PORT) private readonly ldap: LdapPort,
+    @Inject(KEYCLOAK_PORT) private readonly keycloak: KeycloakPort,
     private readonly duo: DuoProvider
   ) {}
 
@@ -35,7 +35,7 @@ export class HealthController {
       this.verifierPostgres(),
       this.cache.ping(),
       this.verifierRabbitmq(),
-      this.ldap.estDisponible(),
+      this.keycloak.estDisponible(),
       // TOTP est local (aucune dépendance réseau) ; seul DUO a une disponibilité
       // à surveiller ici. Ne reflète pas la disponibilité de TOTP par nature.
       this.duo.estDisponible()

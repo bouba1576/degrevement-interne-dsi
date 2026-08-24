@@ -4,10 +4,9 @@ import { AuthModule } from "../auth/auth.module";
 import { DuoProvider } from "../auth/providers/duo.provider";
 
 @Module({
-  // AuthModule importé pour LDAP_PORT (readiness doit sonder le fournisseur
-  // AD réellement sélectionné — LdapProvider ou AdApiProvider selon
-  // LDAP_PROVIDER — jamais une instance séparée qui divergerait de celle
-  // utilisée par le flux de connexion réel).
+  // AuthModule importé pour KEYCLOAK_PORT (readiness doit sonder le même
+  // fournisseur que celui réellement utilisé par le flux de connexion réel,
+  // jamais une instance séparée qui pourrait diverger).
   imports: [AuthModule],
   controllers: [HealthController],
   providers: [DuoProvider]

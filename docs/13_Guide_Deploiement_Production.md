@@ -163,17 +163,27 @@ Points qui exigent une action, pas une simple copie :
   **distincte** de tout environnement de dev/recette, jamais copiée d'un
   exemple.
 - `DATABASE_URL`, `REDIS_URL`, `RABBITMQ_*` : vers les instances du §3.
-- `LDAP_URL`, `LDAP_BIND_DN`, `LDAP_BIND_PASSWORD`, `LDAP_BASE_DN` : AD réel
-  Orange CI. **Vérifier avant de renseigner** : `CLAUDE.md`, section « API AD
-  réelle », documente que l'API communiquée à ce jour est en réalité un
-  endpoint REST (`POST .../authenticate`), pas un bind LDAP classique — le
-  schéma `LdapPort`/`LdapProvider` actuel (bind LDAP/LDAPS réel) peut ne pas
-  être le bon adaptateur pour ce qui sera réellement déployé. À confirmer
-  avant de considérer l'authentification fonctionnelle en prod.
+- `KEYCLOAK_BASE_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`,
+  `KEYCLOAK_CLIENT_SECRET` : royaume Keycloak réel — **SOURCE UNIQUE**
+  d'authentification (identité et second facteur DUO, tous deux résolus côté
+  Keycloak, décision actée le 24/08/2026, cf. `CLAUDE.md` « Architecture
+  Keycloak — source unique »). `LdapPort`/`LdapProvider`/`AdApiProvider` et
+  toute leur configuration (`LDAP_*`/`AD_API_*`) sont retirés — l'ancienne
+  question de nature de l'intégration AD (bind LDAP vs endpoint REST) ne se
+  pose plus, Keycloak est le seul point d'authentification. **Reste à
+  confirmer avant un déploiement réel** : la forme exacte de la résolution
+  DUO dans l'échange `/token` (cf. `CLAUDE.md`, même section) — un essai réel
+  avec un compte DUO actif, fait personnellement par la personne pilotant le
+  projet, doit trancher avant de considérer l'authentification pleinement
+  fonctionnelle en prod pour les comptes concernés par DUO.
 - `DUO_CLIENT_ID`, `DUO_CLIENT_SECRET`, `DUO_API_HOST`, `DUO_REDIRECT_URI` :
-  tenant Duo réel requis — les placeholders de `.env.example` (dev) ne
-  fonctionnent jamais. **Si DUO n'est pas encore disponible au moment du
-  déploiement**, cf. §8.
+  toujours requis par le schéma (MfaService/DuoProvider restent utilisés
+  ailleurs — `mfa/duo/callback`, `enroll/totp` — inutilisés par le chemin de
+  connexion réel via Keycloak, jamais retirés, cf. `CLAUDE.md`) — mais
+  n'affectent plus l'authentification réelle. **Si DUO n'est pas encore
+  disponible au moment du déploiement**, cf. §8 (mesure d'urgence déjà
+  documentée, dont la pertinence pour un compte connecté via Keycloak reste
+  à réévaluer une fois DUO confirmé fonctionner côté royaume).
 - `CORS_ORIGIN` : URL publique exacte de `pgd-web` (le cookie de session
   utilise `credentials: true`, une origine inexacte casse l'authentification
   silencieusement côté navigateur).
@@ -353,10 +363,14 @@ Le fichier JSON d'entrée contenant les identifiants réels **ne doit jamais
    objet si `docker-compose.prod.build.yml` est retenu** (build local,
    aucun registre requis).
 2. Hébergement réel de PostgreSQL/Redis/RabbitMQ (§3).
-3. Nature exacte de l'intégration AD réelle (bind LDAP vs endpoint REST,
-   cf. §4 et `CLAUDE.md` « API AD réelle ») — un écart ici invaliderait
-   l'authentification malgré une configuration en apparence correcte.
-4. Disponibilité du tenant DUO au moment du déploiement (§8).
+3. Forme exacte de la résolution DUO dans l'échange Keycloak `/token` (§4 et
+   `CLAUDE.md` « Architecture Keycloak — source unique ») — un essai réel
+   avec un compte DUO actif, fait personnellement par la personne pilotant
+   le projet, doit trancher avant un déploiement réel pour les comptes
+   concernés.
+4. Disponibilité du tenant DUO **côté royaume Keycloak** au moment du
+   déploiement (§8) — distinct de `DUO_CLIENT_ID`/`DUO_API_HOST` (schéma
+   PGD, désormais sans effet sur l'authentification réelle via Keycloak).
 5. Séparation référentiels/démo du script de seed (§5.2) — pas encore faite
    dans le dépôt.
 6. Dimensionnement serveur (§1).

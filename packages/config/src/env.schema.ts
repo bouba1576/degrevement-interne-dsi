@@ -34,44 +34,31 @@ export const envSchema = z.object({
   REFRESH_COOKIE_NAME: z.string().default("pgd_refresh"),
   COOKIE_SECURE: z.coerce.boolean().default(true),
 
-  // --- Phase 2 : Active Directory (LdapPort — réel, SF-PGD-001) ---------
-  LDAP_URL: z.string().min(1, "LDAP_URL est requis (ldap:// ou ldaps://)"),
-  LDAP_BIND_DN: z.string().min(1, "LDAP_BIND_DN est requis"),
-  LDAP_BIND_PASSWORD: z.string().min(1, "LDAP_BIND_PASSWORD est requis"),
-  LDAP_BASE_DN: z.string().min(1, "LDAP_BASE_DN est requis"),
-  LDAP_USER_DOMAIN: z.string().default("orange.com"),
-
-  // --- Intégration réelle API AD (AdApiProvider, 19/08/2026) -------------
-  // Sélecteur de fournisseur LdapPort, même mécanique que CRM_PROVIDER/
-  // GED_PROVIDER/SMTP_PROVIDER (bouchons commutables, cf. CLAUDE.md « Ports
-  // d'intégration ») — jamais un remplacement de LdapProvider (dev,
-  // OpenLDAP), qui reste le défaut et reste pleinement fonctionnel.
-  LDAP_PROVIDER: z.enum(["ldap", "ad-api"]).default("ldap"),
-  // Base uniquement (schéma+hôte+port) — le chemin documenté
-  // (/ci.orange.ldap/rs-interface/authenticate) est fixe, ajouté par
-  // AdApiProvider, pas paramétrable ici. Vide par défaut : sans objet tant
-  // que LDAP_PROVIDER=ldap (défaut), et un appel avec une base vide échoue
-  // de toute façon côté fetch — la même discipline d'échec fermé s'applique
-  // sans code de validation dédié.
-  AD_API_URL: z.string().default(""),
-  AD_API_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
-
   // --- Phase 2 : MFA (MfaPort — réel, SF-PGD-002, ADR-08) ----------------
+  // Injecté ici même si le chemin de connexion réel (Keycloak, ci-dessous)
+  // ne l'appelle plus jamais depuis login() — MfaService/DuoProvider restent
+  // utilisés ailleurs (mfa/duo/callback, enroll/totp), cf. CLAUDE.md
+  // « Architecture Keycloak — source unique » (24/08/2026), constat, pas
+  // un retrait décidé dans ce chantier.
   DUO_CLIENT_ID: z.string().min(1, "DUO_CLIENT_ID est requis"),
   DUO_CLIENT_SECRET: z.string().min(1, "DUO_CLIENT_SECRET est requis"),
   DUO_API_HOST: z.string().min(1, "DUO_API_HOST est requis"),
   DUO_REDIRECT_URI: z.string().min(1, "DUO_REDIRECT_URI est requis"),
 
-  // --- Keycloak (KeycloakPort — réel, seul chemin de connexion depuis
-  // l'écran, architecture actée le 20/08/2026) ---------------------------
-  // openid-client (ESM) fait sa propre découverte à l'initialisation
-  // (mise en cache par le SDK) — KEYCLOAK_BASE_URL/REALM composent
-  // l'URL du royaume, jamais le chemin .well-known en dur ici.
+  // --- Keycloak (KeycloakPort — réel, SOURCE UNIQUE d'authentification,
+  // décision actée le 24/08/2026, remplace LdapPort/LdapProvider/
+  // AdApiProvider/OpenLDAP retirés dans le même chantier) -----------------
   KEYCLOAK_BASE_URL: z.string().min(1, "KEYCLOAK_BASE_URL est requis"),
   KEYCLOAK_REALM: z.string().min(1, "KEYCLOAK_REALM est requis"),
   KEYCLOAK_CLIENT_ID: z.string().min(1, "KEYCLOAK_CLIENT_ID est requis"),
   KEYCLOAK_CLIENT_SECRET: z.string().min(1, "KEYCLOAK_CLIENT_SECRET est requis"),
-  KEYCLOAK_REDIRECT_URI: z.string().min(1, "KEYCLOAK_REDIRECT_URI est requis"),
+  // Généreux et distinct d'un timeout réseau classique (cf.
+  // KeycloakDirectGrantProvider) : si la résolution DUO côté Keycloak
+  // bloque la réponse /token le temps d'une approbation Duo Mobile, un
+  // timeout court couperait une authentification légitime en cours. Valeur
+  // provisoire (60s), jamais vérifiée contre un vrai délai d'attente DUO —
+  // à ajuster une fois la forme réelle de la résolution DUO confirmée.
+  KEYCLOAK_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
 
   TOTP_ISSUER: z.string().default("PGD Orange CI"),
   // AES-256-GCM : 32 octets exactement, fournis en hex (64 caractères).

@@ -1,6 +1,6 @@
 import { PrismaService } from "../src/infra/prisma/prisma.service";
 import { RbacResolutionService } from "../src/modules/auth/services/rbac-resolution.service";
-import type { UtilisateurAd } from "../src/modules/auth/ports/ldap.port";
+import type { UtilisateurAd } from "../src/modules/auth/ports/keycloak.port";
 
 // Pré-enregistrement des utilisateurs AD, Temps 2 (12/08/2026, CLAUDE.md) —
 // écrit AVANT le changement de comportement (discipline actée par

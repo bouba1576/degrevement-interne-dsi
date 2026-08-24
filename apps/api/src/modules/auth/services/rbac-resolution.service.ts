@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import type { Utilisateur } from "@pgd/database";
 import { PrismaService } from "../../../infra/prisma/prisma.service";
-import type { UtilisateurAd } from "../ports/ldap.port";
+import type { UtilisateurAd } from "../ports/keycloak.port";
 
 export type ResolutionRbac =
   | { statut: "AUTORISE"; utilisateur: Utilisateur; roles: string[] }
@@ -11,7 +11,7 @@ export type ResolutionRbac =
 // remplace l'ancien provisionnement JIT (upsert Utilisateur + resynchronisation
 // continue de MembreRole depuis les groupes AD à chaque connexion). resoudre()
 // devient une simple LECTURE : l'authentification AD est déjà passée (appelant
-// unique, AuthController.login(), après LdapPort.authentifier() réussi) — ce
+// unique, AuthController.login(), après KeycloakPort.authentifier() réussi) — ce
 // service ne décide plus « quels rôles cette personne a-t-elle selon l'AD »,
 // il vérifie « cette personne a-t-elle été pré-enregistrée par un admin ».
 //

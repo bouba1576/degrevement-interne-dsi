@@ -7,30 +7,11 @@ services:
     ports:
       - "6379:6379"
 
-  # Annuaire de DEV uniquement — jamais en recette/prod, où LDAP_URL pointe
-  # vers l'AD réel Orange CI. N'existe pas dans docker-compose.yml (base).
-  openldap:
-    image: osixia/openldap:1.5.0
-    environment:
-      LDAP_ORGANISATION: PGD Orange CI Dev
-      LDAP_DOMAIN: pgd.orange.com
-      LDAP_ADMIN_PASSWORD: admin
-    ports:
-      - "3890:389"
-    # Pas de bind-mount vers le dossier de bootstrap LDIF de l'image : son
-    # propre entrypoint tente un rm -rf de ce dossier après usage, ce qui
-    # échoue toujours sur un point de montage ("Device or resource busy"),
-    # que ce soit un fichier seul ou le dossier entier. Seed appliqué une fois
-    # le conteneur démarré via `ldapadd` (cf. docker/openldap/README.md).
-
   api:
     build:
       target: deps
     environment:
       NODE_ENV: development
-      LDAP_URL: ldap://openldap:389
-    depends_on:
-      - openldap
     volumes:
       - .:/repo
       - pgd_node_modules_root:/repo/node_modules
@@ -49,9 +30,6 @@ services:
       target: deps
     environment:
       NODE_ENV: development
-      LDAP_URL: ldap://openldap:389
-    depends_on:
-      - openldap
     volumes:
       - .:/repo
       - pgd_node_modules_root:/repo/node_modules
