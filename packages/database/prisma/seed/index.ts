@@ -11,6 +11,7 @@ import { seedKpiDefinitions } from "./referentiels/kpi.seed";
 import { seedParametresGlobaux } from "./referentiels/parametres-globaux.seed";
 import { seedCalendrierSla } from "./referentiels/calendrier.seed";
 import { seedModules } from "./referentiels/modules.seed";
+import { seedAdmins } from "./admin/admins.seed";
 import { seedDemo } from "./demo/demo.seed";
 
 const prisma = new PrismaClient();
@@ -29,6 +30,9 @@ async function main() {
   await seedParametresGlobaux(prisma);
   await seedCalendrierSla(prisma);
   await seedModules(prisma);
+
+  console.log("[seed] comptes ADMIN_PGD réels…");
+  await seedAdmins(prisma);
 
   console.log("[seed] jeu de démonstration (SF-PGD-303)…");
   await seedDemo(prisma);

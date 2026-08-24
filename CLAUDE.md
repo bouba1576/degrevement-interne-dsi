@@ -876,6 +876,23 @@ Sweep complet revérifié après le chantier (hôte, `worker` arrêté pour la d
 
 ---
 
+## Comptes ADMIN_PGD réels (24/08/2026)
+
+**Distincts de la table « Identités de test persistantes » ci-dessus — deux personnes réelles, pas des identités dev.** Créés sur demande directe de la personne pilotant le projet, après vérification qu'aucun des deux n'existait déjà (`c_afofana6` existait déjà — créé antérieurement, cf. section « API AD réelle — identifiantAd = username brut », déjà `ADMIN_PGD` ; `wrtm9736` n'existait pas, créé via `bootstrap-premier-admin.ts`).
+
+| Identifiant | Nom | Rôle |
+|---|---|---|
+| `c_afofana6` | Abou Fofana | `ADMIN_PGD` |
+| `wrtm9736` | Yaya Diomandé | `ADMIN_PGD` |
+
+**Incident trouvé et corrigé en créant `wrtm9736` — encodage, pas une erreur de script.** `bootstrap-premier-admin.ts --nom "Yaya Diomandé"` a persisté un nom corrompu (`Yaya Diomand├®`, 14 caractères/17 octets au lieu de 13/14) — le `é` accentué passé en argument CLI a traversé un mauvais mappage de codepage Windows avant d'atteindre `process.argv` de Node, puis a été réencodé en UTF-8 par-dessus une décodification déjà fautive (double encodage). Corrigé par une requête SQL écrite directement dans un fichier (jamais retapée en ligne de commande) et injectée via **stdin** à `psql` (`cat fichier.sql | docker compose exec -T postgres psql ...`) — un flux d'octets ne traverse jamais le décodage de la console Windows, contrairement à un argument de ligne de commande. Vérifié après coup par `length()`/`octet_length()` (13 caractères/14 octets, cohérent avec un `é` UTF-8 à 2 octets) — jamais supposé corrigé sur la seule foi de l'affichage terminal, qui peut lui-même mal rendre un contenu correct ou bien rendre un contenu incorrect selon le codepage actif. **Leçon générale, à réappliquer** : tout nom contenant un caractère accentué passé en argument à un script Node sur ce poste (Windows, invoqué depuis PowerShell ou Git Bash) est suspect — vérifier `octet_length()` après coup plutôt que de faire confiance à l'affichage, et préférer un flux stdin à un argument CLI quand c'est possible.
+
+**Ajoutés à `pnpm db:seed`, pas seulement créés à la main** — `packages/database/prisma/seed/admin/admins.seed.ts` (`seedAdmins`, appelé depuis `seed/index.ts` entre les référentiels et `seedDemo`), idempotent (`upsert` par `identifiantAd`, `update: {}` — jamais d'écrasement d'un champ déjà modifié en base, même convention que `referentiels/roles.seed.ts`). **Conséquence à ne pas manquer, signalée explicitement plutôt que découverte plus tard** : contrairement à `bootstrap-premier-admin.ts`/`enrolement-comptes.ts` (scripts manuels, jamais exécutés automatiquement), ce module tourne à **chaque** `pnpm db:seed` — dev, la CI (`.github/workflows/ci.yml` l'exécute avant les tests), et un futur déploiement réel tant que la séparation référentiels/démo documentée dans `docs/13_Guide_Deploiement_Production.md` §5.2 n'est pas faite. Ajouté sur demande directe, pas déduit — mais la conséquence (ces deux comptes réels se retrouvent provisionnés automatiquement partout où `db:seed` tourne, CI comprise) doit rester visible pour une relecture future plutôt que découverte par surprise.
+
+Vérifié en direct : `pnpm --filter @pgd/database typecheck`/`lint` verts ; `pnpm db:seed` rejoué contre la base de dev réelle (les deux comptes existaient déjà) — aucun doublon, aucun écrasement, `nb_membre_role=1` pour chacun après coup.
+
+---
+
 ## Codes d'erreur
 
 | Code | Usage |
