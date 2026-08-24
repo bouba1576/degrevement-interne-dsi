@@ -72,17 +72,13 @@
                         },
                         "ad": {
                           "type": "boolean"
-                        },
-                        "mfa": {
-                          "type": "boolean"
                         }
                       },
                       "required": [
                         "postgresql",
                         "redis",
                         "rabbitmq",
-                        "ad",
-                        "mfa"
+                        "ad"
                       ],
                       "additionalProperties": false
                     },
@@ -143,227 +139,20 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "requiresMfa": {
-                      "type": "boolean"
-                    },
-                    "methode": {
-                      "type": "string",
-                      "enum": [
-                        "DUO",
-                        "TOTP"
-                      ],
-                      "nullable": true
-                    },
-                    "challengeId": {
-                      "type": "string",
-                      "nullable": true
-                    },
-                    "redirectUrl": {
-                      "type": "string",
-                      "format": "uri",
-                      "nullable": true
-                    },
-                    "totpEnrole": {
+                    "connecte": {
                       "type": "boolean",
-                      "nullable": true
-                    }
-                  },
-                  "required": [
-                    "requiresMfa",
-                    "methode",
-                    "challengeId",
-                    "redirectUrl",
-                    "totpEnrole"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/auth/mfa/verify": {
-      "post": {
-        "operationId": "AuthController_mfaVerify",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "challengeId": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "code": {
-                    "type": "string",
-                    "minLength": 6,
-                    "maxLength": 6
-                  }
-                },
-                "required": [
-                  "challengeId",
-                  "code"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "requiresMfa": {
-                      "type": "boolean"
-                    },
-                    "methode": {
-                      "type": "string",
                       "enum": [
-                        "DUO",
-                        "TOTP"
-                      ],
-                      "nullable": true
-                    },
-                    "challengeId": {
-                      "type": "string",
-                      "nullable": true
-                    },
-                    "redirectUrl": {
-                      "type": "string",
-                      "format": "uri",
-                      "nullable": true
-                    },
-                    "totpEnrole": {
-                      "type": "boolean",
-                      "nullable": true
+                        true
+                      ]
                     }
                   },
                   "required": [
-                    "requiresMfa",
-                    "methode",
-                    "challengeId",
-                    "redirectUrl",
-                    "totpEnrole"
+                    "connecte"
                   ],
                   "additionalProperties": false
                 }
               }
             }
-          }
-        },
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/auth/mfa/duo/callback": {
-      "get": {
-        "operationId": "AuthController_mfaDuoCallback",
-        "parameters": [
-          {
-            "name": "code",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "state",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/auth/mfa/enroll/totp": {
-      "post": {
-        "operationId": "AuthController_enrollTotp",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "secretBase32": {
-                      "type": "string"
-                    },
-                    "qrCodeDataUrl": {
-                      "type": "string"
-                    },
-                    "issuer": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "secretBase32",
-                    "qrCodeDataUrl",
-                    "issuer"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/auth/mfa/enroll/totp/confirm": {
-      "post": {
-        "operationId": "AuthController_confirmEnrollTotp",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "code": {
-                    "type": "string",
-                    "minLength": 6,
-                    "maxLength": 6
-                  }
-                },
-                "required": [
-                  "code"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": ""
           }
         },
         "tags": [
@@ -427,12 +216,10 @@
                         "type": "string"
                       }
                     },
-                    "mfaMethode": {
+                    "sousFluxId": {
                       "type": "string",
-                      "enum": [
-                        "DUO",
-                        "TOTP"
-                      ]
+                      "format": "uuid",
+                      "nullable": true
                     }
                   },
                   "required": [
@@ -440,7 +227,7 @@
                     "identifiantAd",
                     "nom",
                     "roles",
-                    "mfaMethode"
+                    "sousFluxId"
                   ],
                   "additionalProperties": false
                 }
@@ -1986,6 +1773,13 @@
                     "tvaActiveDefaut": {
                       "type": "boolean"
                     },
+                    "assietteTvaDefaut": {
+                      "type": "string",
+                      "enum": [
+                        "HT",
+                        "HT_TSC"
+                      ]
+                    },
                     "devise": {
                       "type": "string"
                     }
@@ -1996,6 +1790,7 @@
                     "tauxTva",
                     "tscActiveDefaut",
                     "tvaActiveDefaut",
+                    "assietteTvaDefaut",
                     "devise"
                   ],
                   "additionalProperties": false
@@ -2041,6 +1836,13 @@
                   "tvaActiveDefaut": {
                     "type": "boolean"
                   },
+                  "assietteTvaDefaut": {
+                    "type": "string",
+                    "enum": [
+                      "HT",
+                      "HT_TSC"
+                    ]
+                  },
                   "devise": {
                     "type": "string"
                   }
@@ -2081,6 +1883,13 @@
                         "tvaActiveDefaut": {
                           "type": "boolean"
                         },
+                        "assietteTvaDefaut": {
+                          "type": "string",
+                          "enum": [
+                            "HT",
+                            "HT_TSC"
+                          ]
+                        },
                         "devise": {
                           "type": "string"
                         }
@@ -2091,6 +1900,7 @@
                         "tauxTva",
                         "tscActiveDefaut",
                         "tvaActiveDefaut",
+                        "assietteTvaDefaut",
                         "devise"
                       ],
                       "additionalProperties": false
@@ -2948,6 +2758,512 @@
         ]
       }
     },
+    "/api/admin/libelles-ajustement": {
+      "get": {
+        "operationId": "AdminLibellesAjustementController_lister",
+        "parameters": [
+          {
+            "name": "circuit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "AdminLibellesAjustementController_creer",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "circuit": {
+                    "type": "string",
+                    "enum": [
+                      "DOBB",
+                      "DXC",
+                      "DF"
+                    ]
+                  },
+                  "libelle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "actif": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "circuit",
+                  "libelle"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "circuit": {
+                      "type": "string",
+                      "enum": [
+                        "DOBB",
+                        "DXC",
+                        "DF"
+                      ]
+                    },
+                    "libelle": {
+                      "type": "string"
+                    },
+                    "actif": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "circuit",
+                    "libelle",
+                    "actif"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/libelles-ajustement/{id}": {
+      "get": {
+        "operationId": "AdminLibellesAjustementController_trouver",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "circuit": {
+                      "type": "string",
+                      "enum": [
+                        "DOBB",
+                        "DXC",
+                        "DF"
+                      ]
+                    },
+                    "libelle": {
+                      "type": "string"
+                    },
+                    "actif": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "circuit",
+                    "libelle",
+                    "actif"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      },
+      "patch": {
+        "operationId": "AdminLibellesAjustementController_modifier",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "circuit": {
+                    "type": "string",
+                    "enum": [
+                      "DOBB",
+                      "DXC",
+                      "DF"
+                    ]
+                  },
+                  "libelle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "actif": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "circuit": {
+                      "type": "string",
+                      "enum": [
+                        "DOBB",
+                        "DXC",
+                        "DF"
+                      ]
+                    },
+                    "libelle": {
+                      "type": "string"
+                    },
+                    "actif": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "circuit",
+                    "libelle",
+                    "actif"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      },
+      "delete": {
+        "operationId": "AdminLibellesAjustementController_supprimer",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/sous-flux": {
+      "get": {
+        "operationId": "AdminSousFluxController_lister",
+        "parameters": [
+          {
+            "name": "circuit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "AdminSousFluxController_creer",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "circuit": {
+                    "type": "string",
+                    "enum": [
+                      "DOBB",
+                      "DXC",
+                      "DF"
+                    ]
+                  },
+                  "libelle": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "circuit",
+                  "libelle"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "circuit": {
+                      "type": "string",
+                      "enum": [
+                        "DOBB",
+                        "DXC",
+                        "DF"
+                      ]
+                    },
+                    "libelle": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "circuit",
+                    "libelle"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/sous-flux/{id}": {
+      "get": {
+        "operationId": "AdminSousFluxController_trouver",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "circuit": {
+                      "type": "string",
+                      "enum": [
+                        "DOBB",
+                        "DXC",
+                        "DF"
+                      ]
+                    },
+                    "libelle": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "circuit",
+                    "libelle"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      },
+      "patch": {
+        "operationId": "AdminSousFluxController_modifier",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "circuit": {
+                    "type": "string",
+                    "enum": [
+                      "DOBB",
+                      "DXC",
+                      "DF"
+                    ]
+                  },
+                  "libelle": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "circuit": {
+                      "type": "string",
+                      "enum": [
+                        "DOBB",
+                        "DXC",
+                        "DF"
+                      ]
+                    },
+                    "libelle": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "circuit",
+                    "libelle"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      },
+      "delete": {
+        "operationId": "AdminSousFluxController_supprimer",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/admin/parametres-globaux": {
       "get": {
         "operationId": "AdminParametresGlobauxController_lister",
@@ -3454,6 +3770,473 @@
         ]
       }
     },
+    "/api/admin/utilisateurs/annuaire": {
+      "get": {
+        "operationId": "AdminUtilisateursController_rechercherAnnuaire",
+        "parameters": [
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "identifiantAd": {
+                      "type": "string"
+                    },
+                    "nom": {
+                      "type": "string"
+                    },
+                    "groupesAd": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "identifiantAd",
+                    "nom",
+                    "groupesAd"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/utilisateurs": {
+      "get": {
+        "operationId": "AdminUtilisateursController_lister",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "AdminUtilisateursController_creer",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "identifiantAd": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "nom": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "roles": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "minItems": 1
+                  },
+                  "directionId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "serviceId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "sousFluxId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "identifiantAd",
+                  "nom",
+                  "roles"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "identifiantAd": {
+                      "type": "string"
+                    },
+                    "nom": {
+                      "type": "string"
+                    },
+                    "matricule": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "actif": {
+                      "type": "boolean"
+                    },
+                    "directionId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "nullable": true
+                    },
+                    "directionLibelle": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "serviceId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "nullable": true
+                    },
+                    "serviceLibelle": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "sousFluxId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "nullable": true
+                    },
+                    "sousFluxLibelle": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "roles": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "libelle": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "libelle"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "identifiantAd",
+                    "nom",
+                    "matricule",
+                    "actif",
+                    "directionId",
+                    "directionLibelle",
+                    "serviceId",
+                    "serviceLibelle",
+                    "sousFluxId",
+                    "sousFluxLibelle",
+                    "roles"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/utilisateurs/{id}": {
+      "get": {
+        "operationId": "AdminUtilisateursController_trouver",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "identifiantAd": {
+                      "type": "string"
+                    },
+                    "nom": {
+                      "type": "string"
+                    },
+                    "matricule": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "actif": {
+                      "type": "boolean"
+                    },
+                    "directionId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "nullable": true
+                    },
+                    "directionLibelle": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "serviceId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "nullable": true
+                    },
+                    "serviceLibelle": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "sousFluxId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "nullable": true
+                    },
+                    "sousFluxLibelle": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "roles": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "libelle": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "libelle"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "identifiantAd",
+                    "nom",
+                    "matricule",
+                    "actif",
+                    "directionId",
+                    "directionLibelle",
+                    "serviceId",
+                    "serviceLibelle",
+                    "sousFluxId",
+                    "sousFluxLibelle",
+                    "roles"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      },
+      "patch": {
+        "operationId": "AdminUtilisateursController_modifier",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "nom": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "roles": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "minItems": 1
+                  },
+                  "directionId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "serviceId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "sousFluxId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "actif": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "identifiantAd": {
+                      "type": "string"
+                    },
+                    "nom": {
+                      "type": "string"
+                    },
+                    "matricule": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "actif": {
+                      "type": "boolean"
+                    },
+                    "directionId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "nullable": true
+                    },
+                    "directionLibelle": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "serviceId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "nullable": true
+                    },
+                    "serviceLibelle": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "sousFluxId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "nullable": true
+                    },
+                    "sousFluxLibelle": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "roles": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "libelle": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "libelle"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "identifiantAd",
+                    "nom",
+                    "matricule",
+                    "actif",
+                    "directionId",
+                    "directionLibelle",
+                    "serviceId",
+                    "serviceLibelle",
+                    "sousFluxId",
+                    "sousFluxLibelle",
+                    "roles"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/demandes": {
       "post": {
         "operationId": "DemandesController_creer",
@@ -3473,6 +4256,9 @@
                       "DF"
                     ]
                   },
+                  "dateDemande": {
+                    "type": "string"
+                  },
                   "sousFlux": {
                     "type": "string"
                   },
@@ -3481,6 +4267,9 @@
                     "minLength": 1
                   },
                   "compteClient": {
+                    "type": "string"
+                  },
+                  "numeroCase": {
                     "type": "string"
                   },
                   "agentInitiateur": {
@@ -3521,7 +4310,8 @@
                     "type": "string"
                   },
                   "recurrentMensuel": {
-                    "type": "boolean"
+                    "type": "number",
+                    "minimum": 0
                   },
                   "libelle": {
                     "type": "string"
@@ -3552,6 +4342,10 @@
                   },
                   "commentaire": {
                     "type": "string"
+                  },
+                  "montantHt": {
+                    "type": "number",
+                    "minimum": 0
                   },
                   "champsCircuit": {
                     "type": "object",
@@ -3604,6 +4398,10 @@
                           "type": "string"
                         },
                         "compteClient": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "numeroCase": {
                           "type": "string",
                           "nullable": true
                         },
@@ -3660,7 +4458,7 @@
                           "nullable": true
                         },
                         "recurrentMensuel": {
-                          "type": "boolean"
+                          "type": "number"
                         },
                         "champsCircuit": {
                           "type": "object",
@@ -3689,6 +4487,27 @@
                         },
                         "tauxTva": {
                           "type": "number"
+                        },
+                        "assietteTva": {
+                          "type": "string",
+                          "enum": [
+                            "HT",
+                            "HT_TSC"
+                          ]
+                        },
+                        "tscManuelle": {
+                          "type": "boolean"
+                        },
+                        "montantTscManuel": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "tvaManuelle": {
+                          "type": "boolean"
+                        },
+                        "montantTvaManuel": {
+                          "type": "number",
+                          "nullable": true
                         },
                         "libelle": {
                           "type": "string",
@@ -3740,6 +4559,9 @@
                           "format": "uuid"
                         },
                         "dateDemande": {
+                          "type": "string"
+                        },
+                        "creeLe": {
                           "type": "string"
                         },
                         "dateSoumission": {
@@ -3795,6 +4617,7 @@
                         "sousFlux",
                         "nomClient",
                         "compteClient",
+                        "numeroCase",
                         "agentInitiateur",
                         "matriculeInitiateur",
                         "agentSaisie",
@@ -3817,6 +4640,11 @@
                         "tvaActive",
                         "tauxTsc",
                         "tauxTva",
+                        "assietteTva",
+                        "tscManuelle",
+                        "montantTscManuel",
+                        "tvaManuelle",
+                        "montantTvaManuel",
                         "libelle",
                         "motifId",
                         "universFmiCode",
@@ -3828,6 +4656,7 @@
                         "etapeCourante",
                         "initiateurId",
                         "dateDemande",
+                        "creeLe",
                         "dateSoumission",
                         "dateCloture",
                         "commentaire",
@@ -4118,6 +4947,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "numeroCase": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "agentInitiateur": {
                           "type": "string",
                           "nullable": true
@@ -4171,7 +5004,7 @@
                           "nullable": true
                         },
                         "recurrentMensuel": {
-                          "type": "boolean"
+                          "type": "number"
                         },
                         "champsCircuit": {
                           "type": "object",
@@ -4200,6 +5033,27 @@
                         },
                         "tauxTva": {
                           "type": "number"
+                        },
+                        "assietteTva": {
+                          "type": "string",
+                          "enum": [
+                            "HT",
+                            "HT_TSC"
+                          ]
+                        },
+                        "tscManuelle": {
+                          "type": "boolean"
+                        },
+                        "montantTscManuel": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "tvaManuelle": {
+                          "type": "boolean"
+                        },
+                        "montantTvaManuel": {
+                          "type": "number",
+                          "nullable": true
                         },
                         "libelle": {
                           "type": "string",
@@ -4251,6 +5105,9 @@
                           "format": "uuid"
                         },
                         "dateDemande": {
+                          "type": "string"
+                        },
+                        "creeLe": {
                           "type": "string"
                         },
                         "dateSoumission": {
@@ -4306,6 +5163,7 @@
                         "sousFlux",
                         "nomClient",
                         "compteClient",
+                        "numeroCase",
                         "agentInitiateur",
                         "matriculeInitiateur",
                         "agentSaisie",
@@ -4328,6 +5186,11 @@
                         "tvaActive",
                         "tauxTsc",
                         "tauxTva",
+                        "assietteTva",
+                        "tscManuelle",
+                        "montantTscManuel",
+                        "tvaManuelle",
+                        "montantTvaManuel",
                         "libelle",
                         "motifId",
                         "universFmiCode",
@@ -4339,6 +5202,7 @@
                         "etapeCourante",
                         "initiateurId",
                         "dateDemande",
+                        "creeLe",
                         "dateSoumission",
                         "dateCloture",
                         "commentaire",
@@ -4517,6 +5381,9 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "dateDemande": {
+                    "type": "string"
+                  },
                   "sousFlux": {
                     "type": "string"
                   },
@@ -4525,6 +5392,9 @@
                     "minLength": 1
                   },
                   "compteClient": {
+                    "type": "string"
+                  },
+                  "numeroCase": {
                     "type": "string"
                   },
                   "agentInitiateur": {
@@ -4565,7 +5435,8 @@
                     "type": "string"
                   },
                   "recurrentMensuel": {
-                    "type": "boolean"
+                    "type": "number",
+                    "minimum": 0
                   },
                   "libelle": {
                     "type": "string"
@@ -4596,6 +5467,10 @@
                   },
                   "commentaire": {
                     "type": "string"
+                  },
+                  "montantHt": {
+                    "type": "number",
+                    "minimum": 0
                   },
                   "champsCircuit": {
                     "type": "object",
@@ -4644,6 +5519,10 @@
                           "type": "string"
                         },
                         "compteClient": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "numeroCase": {
                           "type": "string",
                           "nullable": true
                         },
@@ -4700,7 +5579,7 @@
                           "nullable": true
                         },
                         "recurrentMensuel": {
-                          "type": "boolean"
+                          "type": "number"
                         },
                         "champsCircuit": {
                           "type": "object",
@@ -4729,6 +5608,27 @@
                         },
                         "tauxTva": {
                           "type": "number"
+                        },
+                        "assietteTva": {
+                          "type": "string",
+                          "enum": [
+                            "HT",
+                            "HT_TSC"
+                          ]
+                        },
+                        "tscManuelle": {
+                          "type": "boolean"
+                        },
+                        "montantTscManuel": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "tvaManuelle": {
+                          "type": "boolean"
+                        },
+                        "montantTvaManuel": {
+                          "type": "number",
+                          "nullable": true
                         },
                         "libelle": {
                           "type": "string",
@@ -4780,6 +5680,9 @@
                           "format": "uuid"
                         },
                         "dateDemande": {
+                          "type": "string"
+                        },
+                        "creeLe": {
                           "type": "string"
                         },
                         "dateSoumission": {
@@ -4835,6 +5738,7 @@
                         "sousFlux",
                         "nomClient",
                         "compteClient",
+                        "numeroCase",
                         "agentInitiateur",
                         "matriculeInitiateur",
                         "agentSaisie",
@@ -4857,6 +5761,11 @@
                         "tvaActive",
                         "tauxTsc",
                         "tauxTva",
+                        "assietteTva",
+                        "tscManuelle",
+                        "montantTscManuel",
+                        "tvaManuelle",
+                        "montantTvaManuel",
                         "libelle",
                         "motifId",
                         "universFmiCode",
@@ -4868,6 +5777,7 @@
                         "etapeCourante",
                         "initiateurId",
                         "dateDemande",
+                        "creeLe",
                         "dateSoumission",
                         "dateCloture",
                         "commentaire",
@@ -5030,6 +5940,496 @@
         ]
       }
     },
+    "/api/demandes/{id}/taxes": {
+      "patch": {
+        "operationId": "DemandesController_modifierTaxes",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "tscActive": {
+                    "type": "boolean"
+                  },
+                  "tvaActive": {
+                    "type": "boolean"
+                  },
+                  "assietteTva": {
+                    "type": "string",
+                    "enum": [
+                      "HT",
+                      "HT_TSC"
+                    ]
+                  },
+                  "tscManuelle": {
+                    "type": "boolean"
+                  },
+                  "montantTscManuel": {
+                    "type": "number",
+                    "minimum": 0,
+                    "nullable": true
+                  },
+                  "tvaManuelle": {
+                    "type": "boolean"
+                  },
+                  "montantTvaManuel": {
+                    "type": "number",
+                    "minimum": 0,
+                    "nullable": true
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "demande": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "reference": {
+                          "type": "string"
+                        },
+                        "circuit": {
+                          "type": "string",
+                          "enum": [
+                            "DOBB",
+                            "DXC",
+                            "DF"
+                          ]
+                        },
+                        "segment": {
+                          "type": "string"
+                        },
+                        "sousFlux": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "nomClient": {
+                          "type": "string"
+                        },
+                        "compteClient": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "numeroCase": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "agentInitiateur": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "matriculeInitiateur": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "agentSaisie": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "localisation": {
+                          "type": "string",
+                          "enum": [
+                            "NATIONAL",
+                            "INTERNATIONAL"
+                          ],
+                          "nullable": true
+                        },
+                        "canalRemontee": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "dateReceptionBo": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "dateReceptionOci": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "formuleAbonnement": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "numeroAppel": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "debutPeriodeContestee": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "finPeriodeContestee": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "periodeContesteeJours": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "recurrentMensuel": {
+                          "type": "number"
+                        },
+                        "champsCircuit": {
+                          "type": "object",
+                          "additionalProperties": {}
+                        },
+                        "montantHt": {
+                          "type": "number"
+                        },
+                        "montantTsc": {
+                          "type": "number"
+                        },
+                        "montantTva": {
+                          "type": "number"
+                        },
+                        "montantTtc": {
+                          "type": "number"
+                        },
+                        "tscActive": {
+                          "type": "boolean"
+                        },
+                        "tvaActive": {
+                          "type": "boolean"
+                        },
+                        "tauxTsc": {
+                          "type": "number"
+                        },
+                        "tauxTva": {
+                          "type": "number"
+                        },
+                        "assietteTva": {
+                          "type": "string",
+                          "enum": [
+                            "HT",
+                            "HT_TSC"
+                          ]
+                        },
+                        "tscManuelle": {
+                          "type": "boolean"
+                        },
+                        "montantTscManuel": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "tvaManuelle": {
+                          "type": "boolean"
+                        },
+                        "montantTvaManuel": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "libelle": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "motifId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "nullable": true
+                        },
+                        "universFmiCode": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "facteurCode": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "directionRespId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "nullable": true
+                        },
+                        "serviceRespId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "nullable": true
+                        },
+                        "agentResponsable": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "statut": {
+                          "type": "string",
+                          "enum": [
+                            "BROUILLON",
+                            "SOUMIS",
+                            "EN_COURS",
+                            "VALIDE",
+                            "REJETE",
+                            "ABANDONNE"
+                          ]
+                        },
+                        "etapeCourante": {
+                          "type": "number"
+                        },
+                        "initiateurId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "dateDemande": {
+                          "type": "string"
+                        },
+                        "creeLe": {
+                          "type": "string"
+                        },
+                        "dateSoumission": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "dateCloture": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "commentaire": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "responsabiliteServiceAutre": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "siEtat": {
+                          "type": "string",
+                          "enum": [
+                            "EN_ATTENTE",
+                            "ENVOYE",
+                            "CONFIRME",
+                            "ERREUR"
+                          ]
+                        },
+                        "siRef": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "siHorodatage": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "siMessage": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "siTentatives": {
+                          "type": "number"
+                        },
+                        "siAdaptateur": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "reference",
+                        "circuit",
+                        "segment",
+                        "sousFlux",
+                        "nomClient",
+                        "compteClient",
+                        "numeroCase",
+                        "agentInitiateur",
+                        "matriculeInitiateur",
+                        "agentSaisie",
+                        "localisation",
+                        "canalRemontee",
+                        "dateReceptionBo",
+                        "dateReceptionOci",
+                        "formuleAbonnement",
+                        "numeroAppel",
+                        "debutPeriodeContestee",
+                        "finPeriodeContestee",
+                        "periodeContesteeJours",
+                        "recurrentMensuel",
+                        "champsCircuit",
+                        "montantHt",
+                        "montantTsc",
+                        "montantTva",
+                        "montantTtc",
+                        "tscActive",
+                        "tvaActive",
+                        "tauxTsc",
+                        "tauxTva",
+                        "assietteTva",
+                        "tscManuelle",
+                        "montantTscManuel",
+                        "tvaManuelle",
+                        "montantTvaManuel",
+                        "libelle",
+                        "motifId",
+                        "universFmiCode",
+                        "facteurCode",
+                        "directionRespId",
+                        "serviceRespId",
+                        "agentResponsable",
+                        "statut",
+                        "etapeCourante",
+                        "initiateurId",
+                        "dateDemande",
+                        "creeLe",
+                        "dateSoumission",
+                        "dateCloture",
+                        "commentaire",
+                        "responsabiliteServiceAutre",
+                        "siEtat",
+                        "siRef",
+                        "siHorodatage",
+                        "siMessage",
+                        "siTentatives",
+                        "siAdaptateur"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "lignes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "ligneId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "nd": {
+                            "type": "string"
+                          },
+                          "formuleId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "recurrent": {
+                            "type": "number"
+                          },
+                          "recurrentModifie": {
+                            "type": "boolean"
+                          },
+                          "statutLigne": {
+                            "type": "string",
+                            "enum": [
+                              "ACTIF",
+                              "SUSPENDU",
+                              "RESILIE"
+                            ]
+                          },
+                          "montantHtLigne": {
+                            "type": "number"
+                          },
+                          "debutPeriodeContestee": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "finPeriodeContestee": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "periodeContesteeJours": {
+                            "type": "number",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "ligneId",
+                          "nd",
+                          "formuleId",
+                          "recurrent",
+                          "recurrentModifie",
+                          "statutLigne",
+                          "montantHtLigne",
+                          "debutPeriodeContestee",
+                          "finPeriodeContestee",
+                          "periodeContesteeJours"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "pieces": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "pieceAfferenteId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
+                          },
+                          "nomFichier": {
+                            "type": "string"
+                          },
+                          "typeMime": {
+                            "type": "string"
+                          },
+                          "tailleOctets": {
+                            "type": "number"
+                          },
+                          "gedRef": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "dateAjout": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "pieceAfferenteId",
+                          "nomFichier",
+                          "typeMime",
+                          "tailleOctets",
+                          "gedRef",
+                          "dateAjout"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "demande",
+                    "lignes",
+                    "pieces"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "demandes"
+        ]
+      }
+    },
     "/api/demandes/{id}/lignes": {
       "put": {
         "operationId": "DemandesController_definirLignes",
@@ -5133,6 +6533,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "numeroCase": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "agentInitiateur": {
                           "type": "string",
                           "nullable": true
@@ -5186,7 +6590,7 @@
                           "nullable": true
                         },
                         "recurrentMensuel": {
-                          "type": "boolean"
+                          "type": "number"
                         },
                         "champsCircuit": {
                           "type": "object",
@@ -5215,6 +6619,27 @@
                         },
                         "tauxTva": {
                           "type": "number"
+                        },
+                        "assietteTva": {
+                          "type": "string",
+                          "enum": [
+                            "HT",
+                            "HT_TSC"
+                          ]
+                        },
+                        "tscManuelle": {
+                          "type": "boolean"
+                        },
+                        "montantTscManuel": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "tvaManuelle": {
+                          "type": "boolean"
+                        },
+                        "montantTvaManuel": {
+                          "type": "number",
+                          "nullable": true
                         },
                         "libelle": {
                           "type": "string",
@@ -5266,6 +6691,9 @@
                           "format": "uuid"
                         },
                         "dateDemande": {
+                          "type": "string"
+                        },
+                        "creeLe": {
                           "type": "string"
                         },
                         "dateSoumission": {
@@ -5321,6 +6749,7 @@
                         "sousFlux",
                         "nomClient",
                         "compteClient",
+                        "numeroCase",
                         "agentInitiateur",
                         "matriculeInitiateur",
                         "agentSaisie",
@@ -5343,6 +6772,11 @@
                         "tvaActive",
                         "tauxTsc",
                         "tauxTva",
+                        "assietteTva",
+                        "tscManuelle",
+                        "montantTscManuel",
+                        "tvaManuelle",
+                        "montantTvaManuel",
                         "libelle",
                         "motifId",
                         "universFmiCode",
@@ -5354,6 +6788,7 @@
                         "etapeCourante",
                         "initiateurId",
                         "dateDemande",
+                        "creeLe",
                         "dateSoumission",
                         "dateCloture",
                         "commentaire",
@@ -5546,6 +6981,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "numeroCase": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "agentInitiateur": {
                           "type": "string",
                           "nullable": true
@@ -5599,7 +7038,7 @@
                           "nullable": true
                         },
                         "recurrentMensuel": {
-                          "type": "boolean"
+                          "type": "number"
                         },
                         "champsCircuit": {
                           "type": "object",
@@ -5628,6 +7067,27 @@
                         },
                         "tauxTva": {
                           "type": "number"
+                        },
+                        "assietteTva": {
+                          "type": "string",
+                          "enum": [
+                            "HT",
+                            "HT_TSC"
+                          ]
+                        },
+                        "tscManuelle": {
+                          "type": "boolean"
+                        },
+                        "montantTscManuel": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "tvaManuelle": {
+                          "type": "boolean"
+                        },
+                        "montantTvaManuel": {
+                          "type": "number",
+                          "nullable": true
                         },
                         "libelle": {
                           "type": "string",
@@ -5679,6 +7139,9 @@
                           "format": "uuid"
                         },
                         "dateDemande": {
+                          "type": "string"
+                        },
+                        "creeLe": {
                           "type": "string"
                         },
                         "dateSoumission": {
@@ -5734,6 +7197,7 @@
                         "sousFlux",
                         "nomClient",
                         "compteClient",
+                        "numeroCase",
                         "agentInitiateur",
                         "matriculeInitiateur",
                         "agentSaisie",
@@ -5756,6 +7220,11 @@
                         "tvaActive",
                         "tauxTsc",
                         "tauxTva",
+                        "assietteTva",
+                        "tscManuelle",
+                        "montantTscManuel",
+                        "tvaManuelle",
+                        "montantTvaManuel",
                         "libelle",
                         "motifId",
                         "universFmiCode",
@@ -5767,6 +7236,7 @@
                         "etapeCourante",
                         "initiateurId",
                         "dateDemande",
+                        "creeLe",
                         "dateSoumission",
                         "dateCloture",
                         "commentaire",
@@ -5942,6 +7412,9 @@
                           "roleCode": {
                             "type": "string"
                           },
+                          "roleLibelle": {
+                            "type": "string"
+                          },
                           "typeActeur": {
                             "type": "string"
                           },
@@ -5955,6 +7428,7 @@
                         "required": [
                           "ordre",
                           "roleCode",
+                          "roleLibelle",
                           "typeActeur",
                           "bloquant",
                           "slaHeures"
@@ -7083,6 +8557,14 @@
                   "motif": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "clore": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "motifCloture": {
+                    "type": "string",
+                    "minLength": 1
                   }
                 },
                 "required": [
@@ -7406,7 +8888,9 @@
                 "LOGOUT",
                 "MFA_CHALLENGE",
                 "RBAC_REFUS",
-                "SOD_REFUS"
+                "SOD_REFUS",
+                "ACCES_NON_PROVISIONNE",
+                "TOTP_ENROLEMENT_ADMIN"
               ]
             }
           },
@@ -7734,6 +9218,465 @@
         },
         "tags": [
           "notifications"
+        ]
+      }
+    },
+    "/api/referentiels/circuits": {
+      "get": {
+        "operationId": "ReferentielsController_listerCircuits",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "enum": [
+                          "DOBB",
+                          "DXC",
+                          "DF"
+                        ]
+                      },
+                      "libelle": {
+                        "type": "string"
+                      },
+                      "segment": {
+                        "type": "string"
+                      },
+                      "processCode": {
+                        "type": "string",
+                        "nullable": true
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "libelle",
+                      "segment",
+                      "processCode"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "referentiels"
+        ]
+      }
+    },
+    "/api/referentiels/motifs": {
+      "get": {
+        "operationId": "ReferentielsController_listerMotifs",
+        "parameters": [
+          {
+            "name": "circuit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "DOBB",
+                "DXC",
+                "DF"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "circuit": {
+                        "type": "string",
+                        "enum": [
+                          "DOBB",
+                          "DXC",
+                          "DF"
+                        ]
+                      },
+                      "libelle": {
+                        "type": "string"
+                      },
+                      "actif": {
+                        "type": "boolean"
+                      },
+                      "piecesAfferentes": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "libelle": {
+                              "type": "string"
+                            },
+                            "obligatoire": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "libelle",
+                            "obligatoire"
+                          ],
+                          "additionalProperties": false
+                        }
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "circuit",
+                      "libelle",
+                      "actif",
+                      "piecesAfferentes"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "referentiels"
+        ]
+      }
+    },
+    "/api/referentiels/libelles-ajustement": {
+      "get": {
+        "operationId": "ReferentielsController_listerLibellesAjustement",
+        "parameters": [
+          {
+            "name": "circuit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "DOBB",
+                "DXC",
+                "DF"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "circuit": {
+                        "type": "string",
+                        "enum": [
+                          "DOBB",
+                          "DXC",
+                          "DF"
+                        ]
+                      },
+                      "libelle": {
+                        "type": "string"
+                      },
+                      "actif": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "circuit",
+                      "libelle",
+                      "actif"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "referentiels"
+        ]
+      }
+    },
+    "/api/referentiels/sous-flux": {
+      "get": {
+        "operationId": "ReferentielsController_listerSousFlux",
+        "parameters": [
+          {
+            "name": "circuit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "DOBB",
+                "DXC",
+                "DF"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "circuit": {
+                        "type": "string",
+                        "enum": [
+                          "DOBB",
+                          "DXC",
+                          "DF"
+                        ]
+                      },
+                      "libelle": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "circuit",
+                      "libelle"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "referentiels"
+        ]
+      }
+    },
+    "/api/referentiels/univers-fmi": {
+      "get": {
+        "operationId": "ReferentielsController_listerUniversFmi",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "libelle": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "libelle"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "referentiels"
+        ]
+      }
+    },
+    "/api/referentiels/facteurs": {
+      "get": {
+        "operationId": "ReferentielsController_listerFacteurs",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "libelle": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "libelle"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "referentiels"
+        ]
+      }
+    },
+    "/api/referentiels/directions": {
+      "get": {
+        "operationId": "ReferentielsController_listerDirections",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "libelle": {
+                        "type": "string"
+                      },
+                      "services": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "libelle": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "libelle"
+                          ],
+                          "additionalProperties": false
+                        }
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "libelle",
+                      "services"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "referentiels"
+        ]
+      }
+    },
+    "/api/referentiels/parametres-calcul/{circuit}": {
+      "get": {
+        "operationId": "ReferentielsController_parametresCalcul",
+        "parameters": [
+          {
+            "name": "circuit",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tauxTsc": {
+                      "type": "number"
+                    },
+                    "tauxTva": {
+                      "type": "number"
+                    },
+                    "tscActiveDefaut": {
+                      "type": "boolean"
+                    },
+                    "tvaActiveDefaut": {
+                      "type": "boolean"
+                    },
+                    "assietteTvaDefaut": {
+                      "type": "string",
+                      "enum": [
+                        "HT",
+                        "HT_TSC"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "tauxTsc",
+                    "tauxTva",
+                    "tscActiveDefaut",
+                    "tvaActiveDefaut",
+                    "assietteTvaDefaut"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "referentiels"
         ]
       }
     }

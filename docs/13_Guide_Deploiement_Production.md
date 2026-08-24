@@ -325,11 +325,34 @@ gèrent plus aucun secret ni QR, seulement le compte et ses rôles.
 - **Migrations** : toujours `prisma migrate deploy` avant de redémarrer les
   conteneurs applicatifs sur une nouvelle version qui en dépend — jamais
   l'inverse (une image plus récente attendant un schéma pas encore migré).
-- **Rotation de secrets** (JWT/REFRESH/TOTP) : suivre exactement la procédure
-  déjà exécutée et documentée dans `CLAUDE.md` (section « Incident — secrets
-  exposés dans l'historique Git ») — génération, mise à jour de `.env.prod`,
-  `docker compose ... up -d --force-recreate` (jamais un simple `restart`,
-  qui ne relit pas l'interpolation `.env`).
+- **Rotation de secrets** (`JWT_SECRET`/`REFRESH_TOKEN_SECRET` — `TOTP_ENCRYPTION_KEY`
+  n'existe plus depuis le retrait du mécanisme MFA côté PGD, 24/08/2026) :
+  suivre exactement la procédure déjà exécutée et documentée dans `CLAUDE.md`
+  (section « Incident — secrets exposés dans l'historique Git ») —
+  génération, mise à jour de `.env.prod`, `docker compose ... up -d
+  --force-recreate` (jamais un simple `restart`, qui ne relit pas
+  l'interpolation `.env`).
+- **`docs/openapi.json`** : artefact versionné (committé), pas régénéré à la
+  demande — régénérer après tout changement de contrat/contrôleur qui
+  affecte une route documentée, avant de commiter (cf. `CLAUDE.md`, Phase
+  10.5). Depuis l'hôte :
+  ```bash
+  # PowerShell — charger .env dans le process, puis exporter via cmd (le
+  # parseur d'arguments de pnpm.ps1 mangle --compiler-options {"module":...}
+  # différemment de pnpm.cmd/bash) :
+  Get-Content .env | ForEach-Object { ... }   # cf. CLAUDE.md pour la boucle complète
+  cd apps/api
+  cmd /c 'npx ts-node --compiler-options "{\"module\":\"commonjs\"}" scripts/export-openapi.ts'
+  ```
+  Vérifier après coup que les routes attendues sont présentes (et les
+  routes retirées, absentes) plutôt que supposer la régénération correcte.
+- **Recréer les conteneurs dev après un changement de dépendances/contrat**
+  (`docker compose up -d --force-recreate api worker web`, jamais un simple
+  `restart` — cf. incident déjà documenté dans `CLAUDE.md`) : nécessaire
+  après tout changement de `package.json` ou de variables d'environnement
+  lues par `packages/config`. Un simple retrait de dépendances (jamais un
+  ajout) ne demande pas de `pnpm install` supplémentaire dans le conteneur —
+  vérifié en direct, 24/08/2026.
 - **Logs** : `docker compose -f docker-compose.prod.yml logs -f <service>`.
   Aucune agrégation centralisée n'est configurée dans ce dépôt — à mettre en
   place séparément si nécessaire.
