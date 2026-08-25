@@ -15,6 +15,10 @@ export interface ApercuTabProps {
   // "{client} · {motif} · {libellé}" (docs/design/screens2.jsx:387) —
   // jamais un second fetch dupliqué.
   motifLibelle: string | null;
+  // Idem (25/08/2026) — useCircuitLibelle levé dans DossierDetailScreen,
+  // partagé avec TacheActionBanner (modal d'examen). N'est plus appelé ici
+  // directement, pour ne jamais dupliquer ce fetch.
+  circuitLibelle: string | null;
 }
 
 // Champs communs, jamais une liste par circuit recopiée de docs/design/
@@ -98,7 +102,12 @@ export function useMotifLibelle(
 // maquette ("Direction Wholesale & Opérateurs (DF · Wholesale)") — la
 // donnée réelle fait foi, pas la reformulation du prototype (même principe
 // que le reste de docs/design/DIVERGENCES.md).
-function useCircuitLibelle(circuit: Demande["circuit"]): string | null {
+//
+// Exportée (25/08/2026, modal d'examen) — même principe de partage que
+// useMotifLibelle : DossierDetailScreen lève ce hook une seule fois et le
+// distribue à ApercuTab ET TacheActionBanner, jamais un second fetch
+// dupliqué par consommateur.
+export function useCircuitLibelle(circuit: Demande["circuit"] | undefined): string | null {
   const [circuits, setCircuits] = useState<CircuitVue[] | null>(null);
   useEffect(() => {
     void listerCircuitsReferentiel().then(setCircuits);
@@ -106,14 +115,36 @@ function useCircuitLibelle(circuit: Demande["circuit"]): string | null {
   return circuits?.find((c) => c.code === circuit)?.libelle ?? null;
 }
 
-export function ApercuTab({ demande, lignes, labelPalier, motifLibelle }: ApercuTabProps) {
-  const circuitLibelle = useCircuitLibelle(demande.circuit);
+// Extraites le 25/08/2026 (modal d'examen, TacheActionBanner/ExaminerModal)
+// — mêmes deux listes que le rendu ci-dessous, jamais dupliquées : la revue
+// « champ par champ » du validateur (SF-PGD-080/081) doit montrer
+// exactement ce que l'onglet Aperçu montre déjà, pas une seconde
+// construction qui pourrait diverger silencieusement. Deux fonctions
+// séparées (pas une seule liste fusionnée) : ApercuTab garde son sous-titre
+// « Champs spécifiques au circuit » entre les deux sections, ExaminerModal
+// les concatène pour sa propre liste plate.
+export function construireLignesCommunes(
+  demande: Demande,
+  motifLibelle: string | null,
+  circuitLibelle: string | null
+): Array<[string, string]> {
   const lignesCommunes = LIBELLES_COMMUNS.map(
     ([champ, libelle]) =>
       [libelle, champ === "circuit" && circuitLibelle ? circuitLibelle : formaterValeur(demande[champ])] as const
-  ).filter(([, v]) => v !== null);
+  ).filter((ligne): ligne is [string, string] => ligne[1] !== null);
   if (motifLibelle) lignesCommunes.splice(2, 0, ["Motif", motifLibelle]);
-  const champsCircuit = Object.entries(demande.champsCircuit ?? {}).filter(([, v]) => v != null && v !== "");
+  return lignesCommunes;
+}
+
+export function construireChampsCircuit(demande: Demande): Array<[string, string]> {
+  return Object.entries(demande.champsCircuit ?? {})
+    .filter(([, v]) => v != null && v !== "")
+    .map(([cle, valeur]): [string, string] => [LIBELLES_CHAMPS_CIRCUIT[cle] ?? cle, formaterValeur(valeur) ?? "—"]);
+}
+
+export function ApercuTab({ demande, lignes, labelPalier, motifLibelle, circuitLibelle }: ApercuTabProps) {
+  const lignesCommunes = construireLignesCommunes(demande, motifLibelle, circuitLibelle);
+  const champsCircuit = construireChampsCircuit(demande);
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px] lg:items-start">

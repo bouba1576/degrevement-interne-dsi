@@ -27,6 +27,7 @@ import {
   notificationSchema,
   paliersListeReponseSchema,
   palierVueSchema,
+  membreRoleVueSchema,
   parametreCalculVueSchema,
   parametresCalculPublicVueSchema,
   parametreGlobalVueSchema,
@@ -85,6 +86,7 @@ import {
   type ModifierSousFluxRequete,
   type ModifierTaxesRequete,
   type ModifierUtilisateurAdminRequete,
+  type MembreRoleVue,
   type ModuleVue,
   type MotifVue,
   type NotificationVue,
@@ -274,6 +276,14 @@ export function listerDirectionsReferentiel(): Promise<DirectionResponsabiliteVu
   return requete("/api/referentiels/directions", z.array(directionResponsabiliteVueSchema));
 }
 
+// GET /api/referentiels/roles/:roleCode/membres (25/08/2026, bouton
+// Déléguer) — l'appelant ne peut interroger que la composition d'un rôle
+// qu'il détient lui-même (403 sinon, vérifié côté serveur) : jamais un
+// annuaire général, cf. ReferentielsController.
+export function listerMembresRole(roleCode: string): Promise<MembreRoleVue[]> {
+  return requete(`/api/referentiels/roles/${encodeURIComponent(roleCode)}/membres`, z.array(membreRoleVueSchema));
+}
+
 // Projection à 4 champs (jamais ParametreCalculVue au complet, 6 champs
 // admin dont `devise`) — cf. ReferentielsService.parametresCalcul(),
 // packages/contracts/src/referentiel.ts. Nom distinct de
@@ -453,7 +463,15 @@ export function rejeterTache(tacheId: string, donnees: RejeterRequete): Promise<
   });
 }
 
-export function deleguerTache(tacheId: string, donnees: CreerDelegationRequete): Promise<DelegationVue> {
+// `roleCode` omis du type — le contrôleur l'injecte toujours depuis
+// tache.roleCorbeille (TachesController.deleguer), jamais lu depuis le
+// corps envoyé ici (25/08/2026, bouton Déléguer, cf. commentaire du
+// contrôleur). Un type qui l'exigerait forcerait l'appelant à fabriquer
+// une valeur factice, ignorée de toute façon côté serveur.
+export function deleguerTache(
+  tacheId: string,
+  donnees: Omit<CreerDelegationRequete, "roleCode">
+): Promise<DelegationVue> {
   return requete(`/api/taches/${tacheId}/deleguer`, delegationVueSchema, {
     method: "POST",
     headers: JSON_HEADERS,

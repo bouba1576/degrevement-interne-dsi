@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import type {
   DirectionResponsabiliteVue,
   FacteurDegrevementVue,
+  MembreRoleVue,
   ParametresCalculPublicVue,
   UniversFmiVue
 } from "@pgd/contracts";
@@ -43,6 +44,22 @@ export class ReferentielsService {
       libelle: d.libelle,
       services: d.services.map((s) => ({ id: s.id, libelle: s.libelle }))
     }));
+  }
+
+  // GET /api/referentiels/roles/:roleCode/membres (25/08/2026, bouton
+  // Déléguer) — MembreRole réels, jamais une resynchronisation ou un
+  // annuaire externe (identique au principe déjà posé pour la résolution de
+  // rôle à la connexion, Temps 2, cf. CLAUDE.md). Le contrôleur vérifie que
+  // l'appelant détient lui-même roleCode avant d'appeler cette méthode —
+  // aucune revérification ici, même discipline que le reste de ce service
+  // (une seule couche de vérification de portée, au niveau route).
+  async listerMembresRole(roleCode: string): Promise<MembreRoleVue[]> {
+    const membres = await this.prisma.membreRole.findMany({
+      where: { roleCode },
+      include: { utilisateur: true },
+      orderBy: { utilisateur: { nom: "asc" } }
+    });
+    return membres.map((m) => ({ id: m.utilisateur.id, nom: m.utilisateur.nom, identifiantAd: m.utilisateur.identifiantAd }));
   }
 
   // Projection délibérément étroite (5 des 7 champs de ParametreCalculVue) —

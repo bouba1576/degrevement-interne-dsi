@@ -2,22 +2,40 @@
 
 import { useEffect, useState } from "react";
 import { Button, Icon, Modal, SlaTimer, TypeActeurBadge } from "@pgd/ui";
-import type { EtapeDossier, SessionUtilisateur, TacheVue } from "@pgd/contracts";
-import { ApiError, approuverTache, claimTache, rejeterTache, trouverTache, unclaimTache } from "@/lib/api";
+import type { Demande, EtapeDossier, MembreRoleVue, RevueChamp, SessionUtilisateur, TacheVue } from "@pgd/contracts";
+import {
+  ApiError,
+  approuverTache,
+  claimTache,
+  deleguerTache,
+  listerMembresRole,
+  rejeterTache,
+  trouverTache,
+  unclaimTache
+} from "@/lib/api";
+import { DeleguerModal } from "./DeleguerModal";
+import { ExaminerModal } from "./ExaminerModal";
 
 export interface TacheActionBannerProps {
   etapes: EtapeDossier[];
   utilisateur: SessionUtilisateur;
+  // Ajoutés le 25/08/2026 (modal d'examen) — le bandeau doit désormais
+  // afficher les champs du dossier (ExaminerModal), pas seulement agir sur
+  // la tâche.
+  demande: Demande;
+  motifLibelle: string | null;
+  circuitLibelle: string | null;
   onActionEffectuee: () => void;
 }
 
-// Déléguer (POST /api/taches/{id}/deleguer) est délibérément absent ici :
-// la route réelle exige un delegataireId (uuid) mais aucune route ne permet
-// de rechercher un agent par nom/identifiant AD pour le résoudre — un champ
-// texte demandant un UUID brut serait une UX qui ne marche pas, pas un
-// raccourci acceptable. Absence constatée, pas un oubli : à traiter comme sa
-// propre étape (recherche d'agent), pas comblée ici par un champ inutilisable.
-export function TacheActionBanner({ etapes, utilisateur, onActionEffectuee }: TacheActionBannerProps) {
+export function TacheActionBanner({
+  etapes,
+  utilisateur,
+  demande,
+  motifLibelle,
+  circuitLibelle,
+  onActionEffectuee
+}: TacheActionBannerProps) {
   const etapeActionnable = etapes.find(
     (e) => utilisateur.roles.includes(e.roleCode) && (e.etat === "EN_CORBEILLE" || e.etat === "RECLAMEE")
   );
@@ -26,6 +44,15 @@ export function TacheActionBanner({ etapes, utilisateur, onActionEffectuee }: Ta
   const [chargement, setChargement] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [modalRejet, setModalRejet] = useState(false);
+  const [modalExamen, setModalExamen] = useState(false);
+  const [modalDeleguer, setModalDeleguer] = useState(false);
+  // GET /api/referentiels/roles/:roleCode/membres (25/08/2026, bouton
+  // Déléguer — cf. CLAUDE.md « Aucune route ne liste ou ne recherche les
+  // utilisateurs »). Sert deux besoins avec un seul fetch : peupler le
+  // sélecteur du modal Déléguer, ET résoudre le nom du collègue qui a
+  // réclamé la tâche (ci-dessous, reclameeParAutre) — jamais un second appel
+  // pour le second besoin.
+  const [membres, setMembres] = useState<MembreRoleVue[] | null>(null);
   const [motifRejet, setMotifRejet] = useState("");
   // Décision métier du 12/08/2026 (docs/12, CLAUDE.md « PRIORITÉ ») : par
   // défaut un rejet renvoie le dossier à l'initiateur pour correction ;
@@ -49,10 +76,42 @@ export function TacheActionBanner({ etapes, utilisateur, onActionEffectuee }: Ta
     };
   }, [etapeActionnable]);
 
+  useEffect(() => {
+    if (!etapeActionnable) {
+      setMembres(null);
+      return;
+    }
+    let annule = false;
+    listerMembresRole(etapeActionnable.roleCode).then((m) => {
+      if (!annule) setMembres(m);
+    });
+    return () => {
+      annule = true;
+    };
+  }, [etapeActionnable]);
+
   if (!etapeActionnable || !tache) return null;
+
+  const nomCollegue = membres?.find((m) => m.id === tache.agentClaimId)?.nom ?? null;
+  const candidatsDelegation = (membres ?? []).filter((m) => m.id !== utilisateur.id);
 
   const reclameeParMoi = tache.etat === "RECLAMEE" && tache.agentClaimId === utilisateur.id;
   const reclameeParAutre = tache.etat === "RECLAMEE" && tache.agentClaimId !== utilisateur.id;
+
+  // Avertissement SoD (25/08/2026, audit du profil Validateur) — CONFORT
+  // D'AFFICHAGE UNIQUEMENT, jamais la garantie : approximé par nom
+  // (EtapeDossier.acteurNom n'expose aucun id), le serveur (SodGuard, R3/
+  // R21/R24) reste la seule vérification réelle. Un faux négatif (deux
+  // acteurs homonymes) laisserait passer ce bandeau mais échouerait quand
+  // même à l'action réelle (403) ; un faux positif bloquerait ce bandeau
+  // sans bloquer réellement — risque jugé acceptable pour un simple
+  // avertissement anticipé, jamais utilisé comme contrôle d'accès.
+  const etapePrecedente = etapes.find((e) => e.ordre === etapeActionnable.ordre - 1);
+  const sodSuspect = !!etapePrecedente?.dateDecision && etapePrecedente.acteurNom === utilisateur.nom;
+
+  const etapesBloquantes = etapes.filter((e) => e.bloquant);
+  const isFinal =
+    etapesBloquantes.length > 0 && etapeActionnable.ordre === Math.max(...etapesBloquantes.map((e) => e.ordre));
 
   async function executer(action: () => Promise<unknown>) {
     setChargement(true);
@@ -67,12 +126,55 @@ export function TacheActionBanner({ etapes, utilisateur, onActionEffectuee }: Ta
     }
   }
 
+  async function handleApprouver(revue: RevueChamp[]) {
+    await executer(() => approuverTache(tache!.id, { revue }));
+    setModalExamen(false);
+  }
+
+  // Rejet déclenché depuis l'examen (anomalie signalée) — toujours un
+  // renvoi par défaut (clore: false), jamais une clôture terminale : ce
+  // chemin est un raccourci de « j'ai trouvé un problème en revoyant le
+  // dossier », pas une décision de clore définitivement. Le bouton
+  // « Rejeter » dédié (modalRejet, ci-dessous), avec sa case « et
+  // clôturer », reste le seul chemin vers une clôture terminale.
+  async function handleRejeterDepuisExamen(motifCompile: string) {
+    await executer(() => rejeterTache(tache!.id, { motif: motifCompile, clore: false }));
+    setModalExamen(false);
+  }
+
+  async function handleDeleguer(valeur: { delegataireId: string; debut: string; fin: string; noteInterim: string }) {
+    await executer(() => deleguerTache(tache!.id, valeur));
+    setModalDeleguer(false);
+  }
+
   return (
-    <div className="mb-4 rounded-6 border-l-4 border-orange bg-orange50 p-4">
+    <div className="mb-4 rounded-6 border-l-4 border-orange bg-orange50 p-5">
       {erreur && <p className="mb-2 text-13 font-semibold text-rouge700">{erreur}</p>}
 
       {reclameeParAutre ? (
-        <p className="text-13 text-gris700">Tâche récupérée par un collègue — libération automatique à expiration du verrou.</p>
+        // Port fidèle de docs/design/styles.css:372 (.lock-banner) — jusqu'ici
+        // un <p> de texte gris ordinaire, sans encart ni icône (trouvé en
+        // auditant ce bandeau, 25/08/2026).
+        <div className="flex items-center gap-2.5 rounded border border-orange100 bg-orange50 px-3.5 py-2.5 text-[12.5px] font-semibold text-orangeTexteSurClair">
+          <Icon nom="lock" taille={16} />
+          Tâche récupérée par {nomCollegue ?? "un collègue"} — libération automatique à expiration du verrou.
+        </div>
+      ) : sodSuspect ? (
+        // Bandeau SoD (docs/design/screens2.jsx:403-405) — jusqu'ici absent :
+        // un agent bloqué par R3/R21/R24 voyait le même bandeau « Récupérer »
+        // que tout le monde, et ne découvrait le blocage qu'après un clic
+        // (erreur générique). Couleur reprise telle quelle (rouge, jamais de
+        // fond/bordure supplémentaire — déjà à l'intérieur du bandeau
+        // orange).
+        <div className="flex items-start gap-2 text-13">
+          <Icon nom="shield" taille={18} className="mt-0.5 shrink-0 text-rouge700" />
+          <div>
+            <p className="font-bold text-rouge700">Séparation des tâches (SoD)</p>
+            <p className="text-gris700">
+              Vous êtes déjà intervenu à l&apos;étape précédente de ce dossier : vous ne pouvez pas traiter celle-ci.
+            </p>
+          </div>
+        </div>
       ) : (
         <div className="flex flex-wrap items-center gap-3">
           <div className="min-w-[200px] flex-1">
@@ -106,11 +208,14 @@ export function TacheActionBanner({ etapes, utilisateur, onActionEffectuee }: Ta
               <Button disabled={chargement} onClick={() => executer(() => unclaimTache(tache.id))} variante="fantome" taille="petite">
                 Libérer
               </Button>
+              <Button disabled={chargement} onClick={() => setModalDeleguer(true)} variante="fantome" taille="petite">
+                <Icon nom="delegate" taille={15} /> Déléguer
+              </Button>
               <Button disabled={chargement} onClick={() => setModalRejet(true)} variante="danger" taille="petite">
                 Rejeter
               </Button>
-              <Button disabled={chargement} onClick={() => executer(() => approuverTache(tache.id, {}))} variante="succes" taille="petite">
-                Approuver
+              <Button disabled={chargement} onClick={() => setModalExamen(true)} variante="succes" taille="petite">
+                <Icon nom="eye" taille={15} /> Examiner {etapeActionnable.typeActeur === "V" ? "(vérification)" : "(validation)"}
               </Button>
             </>
           )}
@@ -188,6 +293,31 @@ export function TacheActionBanner({ etapes, utilisateur, onActionEffectuee }: Ta
             )}
           </div>
         </Modal>
+      )}
+
+      {modalExamen && (
+        <ExaminerModal
+          demande={demande}
+          typeActeur={etapeActionnable.typeActeur}
+          roleLibelle={etapeActionnable.roleLibelle}
+          motifLibelle={motifLibelle}
+          circuitLibelle={circuitLibelle}
+          isFinal={isFinal}
+          onFermer={() => setModalExamen(false)}
+          onApprouver={handleApprouver}
+          onRejeter={handleRejeterDepuisExamen}
+          chargement={chargement}
+        />
+      )}
+
+      {modalDeleguer && (
+        <DeleguerModal
+          roleLibelle={etapeActionnable.roleLibelle}
+          membres={candidatsDelegation}
+          onFermer={() => setModalDeleguer(false)}
+          onConfirmer={handleDeleguer}
+          chargement={chargement}
+        />
       )}
     </div>
   );

@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query } from "@nestjs/common";
+import { Controller, ForbiddenException, Get, Param, Query } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 import { z } from "zod";
 import {
@@ -7,6 +7,7 @@ import {
   facteurDegrevementVueSchema,
   libelleAjustementVueSchema,
   listerMotifsQuerySchema,
+  membreRoleVueSchema,
   motifVueSchema,
   parametresCalculPublicVueSchema,
   sousFluxVueSchema,
@@ -15,6 +16,7 @@ import {
   type DirectionResponsabiliteVue,
   type FacteurDegrevementVue,
   type LibelleAjustementVue,
+  type MembreRoleVue,
   type MotifVue,
   type ParametresCalculPublicVue,
   type SousFluxVue,
@@ -22,6 +24,8 @@ import {
 } from "@pgd/contracts";
 import { ApiZodQuery, ApiZodResponse } from "../../common/swagger/zod-schema";
 import { Authenticated } from "../../common/decorators/authenticated.decorator";
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
+import type { UtilisateurRequete } from "../../common/guards/auth.guard";
 import { AdminMotifsService } from "../admin/services/admin-motifs.service";
 import { AdminLibellesAjustementService } from "../admin/services/admin-libelles-ajustement.service";
 import { AdminSousFluxService } from "../admin/services/admin-sous-flux.service";
@@ -120,5 +124,30 @@ export class ReferentielsController {
   @ApiZodResponse(200, parametresCalculPublicVueSchema)
   async parametresCalcul(@Param("circuit") circuit: string): Promise<ParametresCalculPublicVue> {
     return this.referentiels.parametresCalcul(circuit);
+  }
+
+  // GET /api/referentiels/roles/:roleCode/membres (25/08/2026, bouton
+  // Déléguer — cf. CLAUDE.md « Aucune route ne liste ou ne recherche les
+  // utilisateurs »). Portée vérifiée ici, pas dans le service (même
+  // discipline que profil=initiateur sur GET /api/demandes) : l'appelant ne
+  // peut interroger que la composition d'un rôle qu'il détient lui-même —
+  // jamais un annuaire général. `utilisateur.roles` vient du JWT (identique
+  // à la garde déjà utilisée par TacheActionBanner côté client pour
+  // déterminer l'étape actionnable), pas une requête MembreRole
+  // supplémentaire.
+  @Authenticated()
+  @Get("roles/:roleCode/membres")
+  @ApiZodResponse(200, z.array(membreRoleVueSchema))
+  async listerMembresRole(
+    @Param("roleCode") roleCode: string,
+    @CurrentUser() utilisateur: UtilisateurRequete
+  ): Promise<MembreRoleVue[]> {
+    if (!utilisateur.roles.includes(roleCode)) {
+      throw new ForbiddenException({
+        code: "ACCES_REFUSE",
+        message: "Vous ne pouvez consulter que la composition d'un rôle que vous détenez."
+      });
+    }
+    return this.referentiels.listerMembresRole(roleCode);
   }
 }

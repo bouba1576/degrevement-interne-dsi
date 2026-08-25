@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button, CircuitPill, Icon, StatusBadge, type StatutDemande } from "@pgd/ui";
 import type { DemandeDetail, EtapeDossier, JournalAuditVue, SessionUtilisateur } from "@pgd/contracts";
 import {
@@ -12,7 +13,7 @@ import {
   obtenirDetailDemande,
   rappelerDemande
 } from "@/lib/api";
-import { ApercuTab, useMotifLibelle } from "./ApercuTab";
+import { ApercuTab, useCircuitLibelle, useMotifLibelle } from "./ApercuTab";
 import { CircuitTab } from "./CircuitTab";
 import { PiecesTab } from "./PiecesTab";
 import { AuditTab } from "./AuditTab";
@@ -44,6 +45,7 @@ type Onglet = "apercu" | "circuit" | "pieces" | "audit";
 // debloquer/reaffecter) : fonctionnalité maquette sans contrepartie serveur,
 // catégorie distincte du silence de maquette (cf. DIVERGENCES.md).
 export function DossierDetailScreen({ dossierId, utilisateur, onRetour }: DossierDetailScreenProps) {
+  const router = useRouter();
   const [detail, setDetail] = useState<DemandeDetail | null>(null);
   const [etapes, setEtapes] = useState<EtapeDossier[] | null>(null);
   // Écarts DossierDetailScreen (Phase 10.6quinquies, point 3) — pas déjà
@@ -64,6 +66,10 @@ export function DossierDetailScreen({ dossierId, utilisateur, onRetour }: Dossie
   // Partagé entre la ligne d'en-tête (docs/design/screens2.jsx:387,
   // "{client} · {motif} · {libellé}") et ApercuTab, un seul fetch.
   const motifLibelle = useMotifLibelle(detail?.demande.circuit, detail?.demande.motifId);
+  // Levé ici (25/08/2026, modal d'examen) — même principe que motifLibelle :
+  // ApercuTab ET TacheActionBanner en ont désormais besoin, un seul fetch
+  // partagé plutôt que deux instances indépendantes de useCircuitLibelle.
+  const circuitLibelle = useCircuitLibelle(detail?.demande.circuit);
 
   const charger = useCallback(async () => {
     try {
@@ -103,6 +109,15 @@ export function DossierDetailScreen({ dossierId, utilisateur, onRetour }: Dossie
   // qu'un confort d'affichage, R2 des règles non négociables).
   const aucuneDecisionPrise = etapes.every((e) => e.dateDecision === null);
   const peutModifier = peutAbandonnerOuRappeler && aucuneDecisionPrise;
+  // Corriger un BROUILLON (24/08/2026, audit MesDemandesScreen — cf.
+  // CLAUDE.md « Renvoi/clôture d'un dossier rejeté ») : un dossier renvoyé
+  // par défaut (rejet sans clore) repasse en BROUILLON, structurellement
+  // exclu de peutAbandonnerOuRappeler/peutModifier ci-dessus (fenêtre
+  // SOUMIS/EN_COURS uniquement) — sans ce bouton, un dossier renvoyé
+  // n'affichait aucune action nulle part. Route vers NouvelleDemandeScreen
+  // en mode reprise, pas une édition en place ici (décision explicite,
+  // réutilise le formulaire complet plutôt qu'une modale à 3 champs).
+  const peutCorriger = estInitiateur && demande.statut === "BROUILLON";
   // Bandeaux "Rejeté par…"/"Dossier validé" (docs/design/screens2.jsx:431-432,
   // DIVERGENCES.md, jamais capturés avant ce tour). Le rejet ne mène à REJETE
   // que dans le cas terminal clore=true (le renvoi par défaut remet le
@@ -182,6 +197,13 @@ export function DossierDetailScreen({ dossierId, utilisateur, onRetour }: Dossie
             {[demande.nomClient, motifLibelle, demande.libelle].filter(Boolean).join(" · ")}
           </p>
         </div>
+        {peutCorriger && (
+          <div className="flex gap-2">
+            <Button onClick={() => router.push(`/nouvelle-demande?id=${demande.id}`)} variante="primaire" taille="petite">
+              <Icon nom="edit" taille={14} /> Corriger &amp; resoumettre
+            </Button>
+          </div>
+        )}
         {peutAbandonnerOuRappeler && (
           <div className="flex gap-2">
             {peutModifier && (
@@ -200,7 +222,14 @@ export function DossierDetailScreen({ dossierId, utilisateur, onRetour }: Dossie
       </div>
 
       {demande.statut !== "VALIDE" && demande.statut !== "REJETE" && (
-        <TacheActionBanner etapes={etapes} utilisateur={utilisateur} onActionEffectuee={charger} />
+        <TacheActionBanner
+          etapes={etapes}
+          utilisateur={utilisateur}
+          demande={demande}
+          motifLibelle={motifLibelle}
+          circuitLibelle={circuitLibelle}
+          onActionEffectuee={charger}
+        />
       )}
 
       {demande.statut === "REJETE" && (
@@ -248,7 +277,7 @@ export function DossierDetailScreen({ dossierId, utilisateur, onRetour }: Dossie
       </div>
 
       {onglet === "apercu" && (
-        <ApercuTab demande={demande} lignes={lignes} labelPalier={labelPalier} motifLibelle={motifLibelle} />
+        <ApercuTab demande={demande} lignes={lignes} labelPalier={labelPalier} motifLibelle={motifLibelle} circuitLibelle={circuitLibelle} />
       )}
       {onglet === "circuit" && (
         <CircuitTab demandeId={dossierId} circuit={demande.circuit} labelPalier={labelPalier} />

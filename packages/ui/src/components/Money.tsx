@@ -9,7 +9,7 @@ export interface MoneyProps {
 // recalcul de montant : `valeur` arrive déjà agrégée côté serveur
 // (MontantService, R17/R18, numeric(15,2)). Arrondir ici ne change que ce
 // qui s'affiche, jamais ce qui est stocké ou envoyé.
-function formaterMontant(valeur: number | null | undefined): string {
+export function formaterMontant(valeur: number | null | undefined): string {
   if (valeur == null || Number.isNaN(valeur)) return "—";
   return `${new Intl.NumberFormat("fr-FR").format(Math.round(valeur))} FCFA`;
 }

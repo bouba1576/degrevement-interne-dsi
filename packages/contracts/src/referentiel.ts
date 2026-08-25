@@ -50,6 +50,23 @@ export type ListerMotifsQuery = z.infer<typeof listerMotifsQuerySchema>;
 // schéma admin complet, la projection explicite (pas un spread) est ce qui
 // empêche une exposition par ricochet si ParametreCalculVue gagne un champ
 // plus tard.
+// GET /api/referentiels/roles/:roleCode/membres (25/08/2026, bouton
+// Déléguer — cf. CLAUDE.md « Aucune route ne liste ou ne recherche les
+// utilisateurs »). Projection délibérément étroite (id/nom/identifiantAd,
+// jamais direction/service/mfaMethode/etc. de la vue admin complète) : sert
+// à peupler un sélecteur « Déléguer à » et à résoudre un nom de collègue
+// pour l'affichage, jamais un annuaire général. Scope serveur : le rôle
+// interrogé doit être un rôle que l'appelant détient lui-même (même
+// principe qu'un initiateur ne peut lister que ses propres demandes) — un
+// validateur ne peut découvrir la composition que des corbeilles où il
+// intervient déjà, jamais un rôle arbitraire de l'organisation.
+export const membreRoleVueSchema = z.object({
+  id: z.string().uuid(),
+  nom: z.string(),
+  identifiantAd: z.string()
+});
+export type MembreRoleVue = z.infer<typeof membreRoleVueSchema>;
+
 export const parametresCalculPublicVueSchema = z.object({
   tauxTsc: z.number(),
   tauxTva: z.number(),
