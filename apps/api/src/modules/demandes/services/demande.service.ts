@@ -267,13 +267,30 @@ export class DemandeService {
           ? { statut: "BROUILLON", journalAudit: { none: { action: "renvoi-correction" } } }
           : { statut: query.statut };
 
+    // filtreStatut ET le filtre de recherche portent chacun potentiellement
+    // leur propre `OR` (filtreStatut dans la branche avecRenvoyes ci-dessus ;
+    // la recherche sur référence/nomClient) — les fusionner en un seul objet
+    // via spread aurait fait écraser silencieusement le premier `OR` par le
+    // second (deux propriétés `OR` au même niveau, la dernière gagne).
+    // Trouvé en vérification live, pas en test : chercher un mot pendant que
+    // l'onglet Rejetées est actif renvoyait n'importe quel statut, la
+    // contrainte REJETE/renvoyé disparaissant purement et simplement.
+    // `AND: [...]` combine les deux conditions indépendamment, chacune
+    // gardant son propre `OR` interne intact.
+    const conditions: Prisma.DemandeWhereInput[] = [filtreStatut];
+    if (query.q) {
+      conditions.push({
+        OR: [
+          { reference: { contains: query.q, mode: "insensitive" } },
+          { nomClient: { contains: query.q, mode: "insensitive" } }
+        ]
+      });
+    }
+
     const where: Prisma.DemandeWhereInput = {
-      ...filtreStatut,
+      AND: conditions,
       circuit: query.circuit,
       siEtat: query.siEtat,
-      ...(query.q
-        ? { OR: [{ reference: { contains: query.q, mode: "insensitive" } }, { nomClient: { contains: query.q, mode: "insensitive" } }] }
-        : {}),
       // `profil=initiateur` : périmètre réel, appliqué APRÈS les filtres
       // client, jamais contournable par eux — initiateurId vient de la
       // session authentifiée (utilisateurId, résolu par le contrôleur via
