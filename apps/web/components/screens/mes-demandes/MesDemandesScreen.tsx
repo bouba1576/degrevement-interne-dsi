@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Badge, Button, Card, Icon, type NomIcone, type TonBadge } from "@pgd/ui";
+import { Badge, Button, Card, Empty, Icon, type NomIcone, type TonBadge } from "@pgd/ui";
 import type { Demande, EnumCircuit, EnumStatutDemande } from "@pgd/contracts";
 import { ApiError, listerDemandes } from "@/lib/api";
 import { DossierTable } from "@/components/shared/DossierTable";
+import { DossierRejeteCard } from "./DossierRejeteCard";
 
 export interface MesDemandesScreenProps {
   onOuvrirDossier: (id: string) => void;
@@ -206,7 +207,26 @@ export function MesDemandesScreen({ onOuvrirDossier, onNaviguer }: MesDemandesSc
       ) : (
         <>
           <p className="mb-2 text-12 text-gris600">{total} dossier(s)</p>
-          <DossierTable dossiers={dossiers} onOuvrir={onOuvrirDossier} />
+          {onglet === "rejetees" ? (
+            dossiers.length === 0 ? (
+              // Port de docs/design/screens2.jsx:52 (RejetsCorbeille) — icône
+              // et libellés distincts du vide générique de DossierTable, pas
+              // repris tel quel.
+              <Card className="p-8">
+                <Empty icone="check" titre="Aucune demande rejetée">
+                  Toutes vos demandes sont en cours ou validées.
+                </Empty>
+              </Card>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {dossiers.map((d) => (
+                  <DossierRejeteCard key={d.id} demande={d} onOuvrir={onOuvrirDossier} />
+                ))}
+              </div>
+            )
+          ) : (
+            <DossierTable dossiers={dossiers} onOuvrir={onOuvrirDossier} />
+          )}
           {nbPages > 1 && (
             <div className="mt-3 flex items-center justify-center gap-3">
               <button

@@ -1564,6 +1564,18 @@ Demande explicite après le chantier Déléguer : dans l'onglet « Circuit de va
 
 Sweep : `pnpm --filter @pgd/web typecheck`/`lint` verts, `pnpm build` 8/8 — aucun changement côté `apps/api`, suite existante non rejouée.
 
+### Onglet « Rejetées » (MesDemandesScreen) — carte dédiée, audit corrigé (25/08/2026)
+
+Signalement direct (« le design system n'a pas été respecté ») sur l'onglet « Demandes rejetées » de `MesDemandesScreen`. Audit relancé en relisant `docs/design/screens2.jsx:47-83` (`RejetsCorbeille`) directement plutôt qu'en faisant confiance au constat déjà écrit dans `DIVERGENCES.md` — celui-ci commettait une erreur de la même famille que celle déjà nommée et corrigée le 20/08/2026 pour la structure à 3 onglets : avoir fusionné l'exclusion légitime du minuteur SLA (`rejetSla()`, contredit `docs/04_MCD_MLD_PGD_PROD.md`, « minuteur_bloquant = FALSE » pour l'Initiateur) avec l'exclusion de **tout** `RejetsCorbeille`, y compris son bandeau « Rejeté par / Motif », sa structure de carte et sa date de rejet — trois éléments sans aucun rapport avec le minuteur, jamais évalués séparément. Détail complet, tableau comparatif maquette/réel et preuve de vérification live : `docs/design/DIVERGENCES.md`, addendum du 25/08/2026 sous la section MesDemandesScreen.
+
+**Construit** : `DossierRejeteCard.tsx` (`apps/web/components/screens/mes-demandes/`) — carte par dossier (bordure gauche rouge, `CircuitPill`/`StatusBadge`/référence/montant, client — libellé), bandeau rouge « Rejeté par {acteur} · Motif : {motif} » lisant `JournalAudit` (`action="cloture"`, **même champ exact** que le bandeau déjà construit sur `DossierDetailScreen` — jamais l'entrée `"rejet"`, qui porte le motif de l'étape rejetée plutôt que la raison de la clôture terminale ; `acteur` reste l'identifiantAd brut, jamais résolu en nom, cohérent avec ce précédent), date de rejet (`dateCloture`). Vide dédié (icône `check`, « Aucune demande rejetée ») au lieu du vide générique de `DossierTable`.
+
+**Bouton « Corriger & resoumettre » de la maquette délibérément absent** — un dossier `REJETE` (clore=true) est terminal dans le modèle réel, sans route de correction ; le mode reprise (24/08/2026) ne s'applique qu'aux `BROUILLON` d'un renvoi sans clôture, déjà couverts par l'onglet « Brouillons ». La maquette ne distingue pas renvoi/clôture dans sa simulation, le réel si — reproduire ce bouton ici mènerait à une action qui échouerait toujours.
+
+**Vérifié en direct, session mintée** : dossier DOBB réel créé → soumis → réclamé → rejeté avec `clore:true` (motif de clôture distinct du motif de rejet, comme le contrat l'exige) — carte affichée dans l'onglet « Rejetées » avec les bonnes données, texte du bandeau identique à celui de `DossierDetailScreen` pour le même dossier, clic sur la carte confirmé ouvrant le bon dossier. Dossier et rôle temporaire supprimés après vérification (SQL direct, dossier `REJETE` hors du périmètre `DELETE` réel réservé aux `BROUILLON`).
+
+Sweep : `pnpm --filter @pgd/web typecheck`/`lint` verts, `pnpm build` 8/8.
+
 ---
 
 ## Commandes
