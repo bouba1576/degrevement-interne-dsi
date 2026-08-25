@@ -13,9 +13,24 @@ export interface MesDemandesScreenProps {
 
 const LIMITE = 20;
 
-type Onglet = "encours" | "validees" | "rejetees";
+type Onglet = "brouillons" | "encours" | "validees" | "rejetees";
 
+// Onglet « Brouillons » (24/08/2026, audit MesDemandesScreen — cf.
+// CLAUDE.md « Renvoi/clôture d'un dossier rejeté ») : absent de la
+// maquette (qui n'a que trois corbeilles, cf. commentaire ci-dessous) et
+// sans contrepartie directe dans le modèle de simulation client
+// (engine.jsx/data.jsx, jamais portés) — construit d'après le comportement
+// RÉEL du serveur, pas d'après la maquette. TacheWorkflowService.rejeter()
+// renvoie par défaut un dossier rejeté en BROUILLON pour correction ; sans
+// cet onglet, ce dossier redevenait introuvable depuis cet écran (aucun
+// des trois onglets d'origine ne couvre BROUILLON). Statut générique — un
+// brouillon jamais soumis et un brouillon renvoyé pour correction
+// apparaissent tous deux ici, le modèle de données ne distingue pas les
+// deux (aucun champ dédié, seule une entrée JournalAudit action=
+// "renvoi-correction" en garde la trace, jamais interrogée pour ce
+// simple comptage/affichage).
 const ONGLETS: Array<{ cle: Onglet; libelle: string; statut: EnumStatutDemande; icone: NomIcone; ton: TonBadge }> = [
+  { cle: "brouillons", libelle: "Brouillons", statut: "BROUILLON", icone: "edit", ton: "alerte" },
   { cle: "encours", libelle: "Demandes en cours", statut: "SOUMIS", icone: "refresh", ton: "accent" },
   { cle: "validees", libelle: "Demandes validées", statut: "VALIDE", icone: "check", ton: "succes" },
   { cle: "rejetees", libelle: "Demandes rejetées", statut: "REJETE", icone: "x", ton: "erreur" }
@@ -53,15 +68,19 @@ const CIRCUITS: Array<{ valeur: EnumCircuit | ""; libelle: string }> = [
 // initiateur possible, celui de la session (`profil=initiateur`, forcé
 // côté serveur) — un sélecteur à une seule option réelle serait un leurre.
 //
-// Statuts hors du périmètre des trois onglets (BROUILLON, ABANDONNE) :
-// absents des trois corbeilles dans la maquette elle-même (`enCours`/
-// `valides`/`rejetes` ne couvrent que soumis/en_cours, valide, rejete —
-// jamais brouillon ni abandonne), pas un oubli de portage.
+// BROUILLON a gagné son propre onglet (24/08/2026, cf. commentaire dédié
+// sur ONGLETS ci-dessus) — absent des trois corbeilles de la maquette
+// (`enCours`/`valides`/`rejetes` ne couvrent que soumis/en_cours, valide,
+// rejete) mais nécessaire pour rendre atteignable le renvoi-pour-correction
+// réel, que la maquette ne modélise pas. ABANDONNE reste hors périmètre :
+// un dossier abandonné par son initiateur est une fin délibérée, rien à y
+// corriger ni à y surveiller.
 export function MesDemandesScreen({ onOuvrirDossier, onNaviguer }: MesDemandesScreenProps) {
-  const [onglet, setOnglet] = useState<Onglet>("encours");
+  const [onglet, setOnglet] = useState<Onglet>("brouillons");
   const [dossiers, setDossiers] = useState<Demande[] | null>(null);
   const [total, setTotal] = useState(0);
   const [comptes, setComptes] = useState<Record<Onglet, number | null>>({
+    brouillons: null,
     encours: null,
     validees: null,
     rejetees: null
@@ -75,7 +94,7 @@ export function MesDemandesScreen({ onOuvrirDossier, onNaviguer }: MesDemandesSc
 
   const charger = useCallback(async () => {
     try {
-      const [reponse, compteEncours, compteValidees, compteRejetees] = await Promise.all([
+      const [reponse, compteBrouillons, compteEncours, compteValidees, compteRejetees] = await Promise.all([
         listerDemandes({
           profil: "initiateur",
           circuit: circuit || undefined,
@@ -84,6 +103,7 @@ export function MesDemandesScreen({ onOuvrirDossier, onNaviguer }: MesDemandesSc
           page,
           limit: LIMITE
         }),
+        listerDemandes({ profil: "initiateur", statut: "BROUILLON", page: 1, limit: 1 }),
         listerDemandes({ profil: "initiateur", statut: "SOUMIS", page: 1, limit: 1 }),
         listerDemandes({ profil: "initiateur", statut: "VALIDE", page: 1, limit: 1 }),
         listerDemandes({ profil: "initiateur", statut: "REJETE", page: 1, limit: 1 })
@@ -91,6 +111,7 @@ export function MesDemandesScreen({ onOuvrirDossier, onNaviguer }: MesDemandesSc
       setDossiers(reponse.data);
       setTotal(reponse.total);
       setComptes({
+        brouillons: compteBrouillons.total,
         encours: compteEncours.total,
         validees: compteValidees.total,
         rejetees: compteRejetees.total
@@ -121,8 +142,8 @@ export function MesDemandesScreen({ onOuvrirDossier, onNaviguer }: MesDemandesSc
     <div>
       <div className="mb-4 flex items-center justify-between">
         <p className="text-13 text-gris600">
-          Vos trois corbeilles d&apos;initiateur. Les demandes rejetées sont à corriger sous le SLA du processus
-          initié.
+          Vos quatre corbeilles d&apos;initiateur. Un dossier renvoyé pour correction repasse en Brouillons —
+          corrigez-le et resoumettez-le, sans délai contraint.
         </p>
         <Button onClick={() => onNaviguer("nouvelle")} variante="sombre" taille="petite">
           + Nouvelle demande

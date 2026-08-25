@@ -33,6 +33,7 @@ import {
   listerUniversFmi,
   modifierDemande,
   modifierTaxes,
+  obtenirDetailDemande,
   obtenirParametresCalculReferentiel,
   soumettreDemande,
   type ErreurRegleMetier
@@ -141,6 +142,13 @@ type ChampsCircuitDobb = z.infer<typeof champsCircuitDobbSchema>;
 
 export interface NouvelleDemandeScreenProps {
   utilisateur: SessionUtilisateur;
+  // Mode reprise (24/08/2026, audit MesDemandesScreen — cf. CLAUDE.md
+  // « Renvoi/clôture d'un dossier rejeté ») : un BROUILLON existant
+  // (renvoyé pour correction, ou simplement jamais soumis) est chargé et
+  // édité à la place d'un dossier neuf. Jamais un sélecteur de circuit —
+  // le circuit du dossier existant fait foi, silencieusement, même
+  // principe que sousFlux déduit du profil pour une création neuve.
+  demandeId?: string;
 }
 
 // Date du jour au format YYYY-MM-DD (fuseau local, pas UTC) — valeur par
@@ -178,11 +186,28 @@ interface TaxesEdition {
   montantTvaManuel: string;
 }
 
-export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProps) {
+export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemandeScreenProps) {
   // Déduit silencieusement du profil, jamais affiché ni modifiable à
-  // l'écran (Priorité 0.2, révision du 19/08/2026, cf. CLAUDE.md) — plus un
-  // état React puisqu'il ne change plus jamais après le premier rendu.
-  const circuit = circuitParDefaut(utilisateur.roles);
+  // l'écran (Priorité 0.2, révision du 19/08/2026, cf. CLAUDE.md) — reste
+  // un état React malgré tout (24/08/2026, mode reprise) : sur un dossier
+  // BROUILLON existant, le circuit RÉEL du dossier remplace cette valeur
+  // par défaut une seule fois, à la fin du chargement de reprise ci-dessous
+  // — jamais un sélecteur, jamais modifié par une action utilisateur, dans
+  // aucun des deux modes.
+  const [circuit, setCircuit] = useState<EnumCircuit>(() => circuitParDefaut(utilisateur.roles));
+  // Faux (mode reprise) tant que le dossier existant n'est pas chargé — les
+  // effets scopés au circuit (motifs/libellés/sous-flux/paramètres de
+  // calcul) restent en attente pour ne jamais fetcher/réinitialiser deux
+  // fois (une fois avec le circuit par défaut du rôle, une fois avec le
+  // circuit réel du dossier). Vrai immédiatement en création neuve.
+  const [circuitPret, setCircuitPret] = useState(!demandeId);
+  const [erreurReprise, setErreurReprise] = useState<string | null>(null);
+  // motifId/libelle/sousFlux sont réinitialisés à "" par les effets scopés
+  // au circuit (ci-dessous) avant de fetcher leur référentiel respectif —
+  // en reprise, cette ref porte la valeur du dossier existant à appliquer
+  // à la place du blanc, lue une fois circuitPret passe à vrai. Jamais
+  // consultée en création neuve (reste null).
+  const valeursReprise = useRef<{ motifId: string; libelle: string; sousFlux: string } | null>(null);
   const [nomClient, setNomClient] = useState("");
   const [commentaire, setCommentaire] = useState("");
   const [dateDemande, setDateDemande] = useState(dateDuJourLocale);
@@ -216,21 +241,32 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
   // Motifs sont scopés au circuit (GET /api/referentiels/motifs?circuit=) —
   // rechargés à chaque changement de circuit ; une sélection déjà faite pour
   // l'ancien circuit n'a aucune raison de rester valide pour le nouveau.
+  // Gardé par circuitPret (24/08/2026, mode reprise) : ne fetche qu'une fois
+  // le circuit réel connu — jamais avec le circuit par défaut du rôle
+  // d'abord, jamais deux fois. valeursReprise fournit le motifId du dossier
+  // existant à la place du blanc habituel ; reste `""` en création neuve
+  // (ref jamais peuplée dans ce mode).
   useEffect(() => {
-    setMotifId("");
+    if (!circuitPret) return;
     setMotifs(null);
-    void listerMotifsActifs(circuit).then(setMotifs);
-  }, [circuit]);
+    void listerMotifsActifs(circuit).then((liste) => {
+      setMotifs(liste);
+      setMotifId(valeursReprise.current?.motifId ?? "");
+    });
+  }, [circuit, circuitPret]);
 
   // LIBELLE (docs/10 remarques DOBB #3 / DXC #16) — même mécanique que
   // Motif : référentiel réel scopé au circuit, jamais un tableau codé en
   // dur (R11). DF exclu côté API (aucun libellé seedé pour ce circuit — son
-  // formulaire utilise « Objet », un texte libre).
+  // formulaire utilise « Objet », un texte libre). Même garde/reprise que
+  // Motif ci-dessus — libelle est un texte libre (pas un id), donc appliqué
+  // directement, sans attendre le fetch de la liste d'options.
   useEffect(() => {
-    setLibelle("");
+    if (!circuitPret) return;
+    setLibelle(valeursReprise.current?.libelle ?? "");
     setLibellesAjustement(null);
     void listerLibellesAjustementActifs(circuit).then(setLibellesAjustement);
-  }, [circuit]);
+  }, [circuit, circuitPret]);
 
   // Sous-flux — RÉVISION Priorité 0.2 (19/08/2026, cf. CLAUDE.md) : jamais
   // affiché ni modifiable à l'écran, déduit silencieusement du
@@ -242,13 +278,22 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
   // précondition opérationnelle (profil admin correct), pas une garantie
   // à coder : deux cas réels de ce type trouvés et corrigés en base avant
   // cette révision (jean.kouassi, FGGK6451), cf. CLAUDE.md.
+  // Gardé par circuitPret, même principe que Motif/Libellé ci-dessus. En
+  // reprise, le sous-flux DÉJÀ ENREGISTRÉ sur le dossier fait foi — jamais
+  // re-dérivé du profil de session (qui peut avoir changé depuis la
+  // création du brouillon, ou ne pas correspondre pour cet utilisateur).
   useEffect(() => {
+    if (!circuitPret) return;
+    if (valeursReprise.current) {
+      setSousFlux(valeursReprise.current.sousFlux);
+      return;
+    }
     setSousFlux("");
     void listerSousFluxReferentiel(circuit).then((options) => {
       const correspondance = utilisateur.sousFluxId ? options.find((s) => s.id === utilisateur.sousFluxId) : undefined;
       if (correspondance) setSousFlux(correspondance.libelle);
     });
-  }, [circuit, utilisateur.sousFluxId]);
+  }, [circuit, circuitPret, utilisateur.sousFluxId]);
 
   const motifSelectionne = motifs?.find((m) => m.id === motifId) ?? null;
 
@@ -325,11 +370,12 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
   // `demande` (une donnée de circuit, pas de dossier).
   const [parametresCalcul, setParametresCalcul] = useState<ParametresCalculPublicVue | null>(null);
   useEffect(() => {
+    if (!circuitPret) return;
     setParametresCalcul(null);
     void obtenirParametresCalculReferentiel(circuit)
       .then(setParametresCalcul)
       .catch(() => setParametresCalcul(null));
-  }, [circuit]);
+  }, [circuit, circuitPret]);
 
   // docs/10 remarques DOBB #9 / DXC #18 — sélection d'un résultat de
   // RechercheCompte renseigne compteClient ET nomClient d'un coup (« le nom
@@ -367,6 +413,95 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
   useEffect(() => {
     demandeRef.current = demande;
   }, [demande]);
+  // Déclaré ici (avant son usage par le chargement de reprise ci-dessous),
+  // pas à côté du reste de la mécanique de debounce plus bas — même ref,
+  // simplement consultée par deux effets distincts désormais.
+  const premierRendu = useRef(true);
+
+  // Mode reprise (24/08/2026) — charge un BROUILLON existant (renvoyé pour
+  // correction ou jamais soumis) et peuple l'état du formulaire à sa place,
+  // plutôt que de partir d'un dossier neuf. `demandeId` vient de l'écran
+  // (route ?id=), jamais saisi par l'utilisateur ici. Vérifié CÔTÉ CLIENT
+  // (statut BROUILLON + initiateur courant) en plus de la garantie serveur
+  // déjà en place (InitiateurDemandeGuard sur PATCH) — un dossier non
+  // éligible affiche une erreur explicite plutôt que de tenter une
+  // sauvegarde silencieuse vouée à échouer.
+  useEffect(() => {
+    if (!demandeId) return;
+    let annule = false;
+    void (async () => {
+      try {
+        const detail = await obtenirDetailDemande(demandeId);
+        if (annule) return;
+        const d = detail.demande;
+        if (d.initiateurId !== utilisateur.id || d.statut !== "BROUILLON") {
+          setErreurReprise("Ce dossier n'est plus modifiable, ou ne vous appartient pas.");
+          setCircuitPret(true);
+          return;
+        }
+        const cc = (d.champsCircuit ?? {}) as Record<string, unknown>;
+        const texte = (v: unknown, defaut = ""): string => (typeof v === "string" ? v : defaut);
+
+        setNomClient(d.nomClient);
+        setCommentaire(d.commentaire ?? "");
+        setDateDemande(d.dateDemande ? d.dateDemande.slice(0, 10) : dateDuJourLocale());
+        setAgentInitiateur(d.agentInitiateur ?? utilisateur.nom);
+        setMatriculeInitiateur(d.matriculeInitiateur ?? "");
+        setAgentSaisie(d.agentSaisie ?? utilisateur.nom);
+        setUniversFmiCode(d.universFmiCode ?? "");
+        setFacteurCode(d.facteurCode ?? "");
+        setCompteClient(d.compteClient ?? "");
+        setNumeroCase(d.numeroCase ?? "");
+        setFormuleAbonnement(d.formuleAbonnement ?? "");
+        setRecurrentMensuel(d.recurrentMensuel ? String(d.recurrentMensuel) : "");
+        setDirectionRespId(d.directionRespId ?? "");
+        setServiceRespId(d.serviceRespId ?? "");
+        setResponsabiliteServiceAutre(d.responsabiliteServiceAutre ?? "");
+        setServiceAutreActif(!!d.responsabiliteServiceAutre);
+        setLocalisation(d.localisation ?? "");
+        setDateReceptionBo(d.dateReceptionBo ?? "");
+        setDateReceptionOci(d.dateReceptionOci ?? "");
+        setNumeroAppel(d.numeroAppel ?? "");
+        setDebutPeriodeContestee(d.debutPeriodeContestee ?? "");
+        setFinPeriodeContestee(d.finPeriodeContestee ?? "");
+        setAgentResponsable(d.agentResponsable ?? "");
+        setMontantHt(d.montantHt ? String(d.montantHt) : "");
+        setDescriptifContestation(texte(cc.descriptifContestation));
+        setPointContact(texte(cc.pointContact));
+        setMemoDe(texte(cc.memoDe, utilisateur.nom));
+        setMemoA(texte(cc.memoA, "Service Fraude & Revenue Assurance"));
+        setMemoObjectif(texte(cc.memoObjectif, "Soumettre l'ajustement au contrôle FRA"));
+        setMemoContexte(texte(cc.memoContexte));
+        setMemoObservation(texte(cc.memoObservation));
+        setMemoReference(texte(cc.memoReference));
+
+        // motifId/libelle/sousFlux : consommés par les effets scopés au
+        // circuit une fois circuitPret vrai (ils réinitialisent sinon ces
+        // trois champs), jamais posés directement ici.
+        valeursReprise.current = { motifId: d.motifId ?? "", libelle: d.libelle ?? "", sousFlux: d.sousFlux ?? "" };
+
+        setDemande(detail);
+        // Le prochain passage de l'effet de sauvegarde silencieuse (déclenché
+        // par tous les setXxx ci-dessus) ne doit PAS écrire un PATCH
+        // identique à ce qui vient d'être chargé — même garde que le tout
+        // premier montage d'un formulaire vide.
+        premierRendu.current = true;
+        setCircuit(d.circuit);
+        setCircuitPret(true);
+      } catch (e) {
+        if (!annule) {
+          setErreurReprise(e instanceof ApiError ? e.message : "Impossible de charger ce dossier.");
+          setCircuitPret(true);
+        }
+      }
+    })();
+    return () => {
+      annule = true;
+    };
+    // Dépendance volontairement réduite à demandeId : un chargement de
+    // reprise par montage, jamais reflété par utilisateur/circuit
+    // (immuables une fois posés, cf. commentaires ci-dessus).
+  }, [demandeId]);
 
   const [sauvegardeEnCours, setSauvegardeEnCours] = useState(false);
   const [erreurSauvegarde, setErreurSauvegarde] = useState<string | null>(null);
@@ -581,7 +716,6 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
   }
 
   const debounceFormulaireRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const premierRendu = useRef(true);
   useEffect(() => {
     // Rien à sauvegarder au tout premier rendu (formulaire vide) — même
     // garde que le premier montage d'ApercuRoutage, robuste à React
@@ -664,6 +798,16 @@ export function NouvelleDemandeScreen({ utilisateur }: NouvelleDemandeScreenProp
     } finally {
       setSoumissionEnCours(false);
     }
+  }
+
+  // Mode reprise : rien du formulaire n'est monté tant que le dossier
+  // existant n'est pas chargé (ou en échec) — évite tout flash avec le
+  // circuit par défaut du rôle avant que le circuit réel ne soit connu.
+  if (demandeId && erreurReprise) {
+    return <Card className="p-5 text-13 font-semibold text-rouge700">{erreurReprise}</Card>;
+  }
+  if (demandeId && !circuitPret) {
+    return <p className="text-13 text-gris600">Chargement du dossier…</p>;
   }
 
   if (soumissionReussie) {
