@@ -1554,6 +1554,16 @@ Suite directe de l'audit ci-dessus (« le bouton Deleguer a-t-il été implémen
 
 Sweep complet : monorepo `pnpm build` 8/8 ; `apps/api` 43/43 suites, 271/271 tests (+1 todo) — aucune régression sur la nouvelle route (route `GET` simple, hors périmètre de `guard-coverage.spec.ts`/`envelope-contract.spec.ts`, comme `parametres-calcul/:circuit` déjà similaire).
 
+### Circuit de validation — nom de l'acteur en cours, scopé aux collègues du même rôle (25/08/2026)
+
+Demande explicite après le chantier Déléguer : dans l'onglet « Circuit de validation » (`CircuitTab`), l'étape actuellement réclamée (`RECLAMEE`, non décidée) n'affichait aucun nom sous le libellé du rôle — contrairement à `TacheActionBanner`, qui révèle déjà « Tâche récupérée par {nom} » pour un collègue du même rôle. Écart trouvé en clarifiant l'endroit exact et la portée avec la personne pilotant le projet (`AskUserQuestion`), pas deviné : le contrat `EtapeDossier.acteurNom` (`packages/contracts/src/tache.ts:90-96`) porte un commentaire de conception explicite — un nom n'est renseigné que pour une étape déjà **décidée**, précisément pour ne jamais révéler à un tiers quelconque qui détient une tâche encore en cours. Décision confirmée : ouvrir cette révélation, mais **seulement aux collègues du même rôle** — même portée exacte que `TacheActionBanner`, jamais à un tiers (initiateur, autre rôle, `ADMIN_PGD` compris).
+
+**Mécanisme, aucune nouvelle route** : `CircuitTab` reçoit désormais `utilisateur` (`SessionUtilisateur`, déjà porté par `DossierDetailScreen`). Pour l'étape `RECLAMEE` dont `roleCode` est détenu par le viewer (`etapeReclameeParMoi`), un second effet appelle `trouverTache(etapeId)` (`GET /api/taches/:id`, protégée par `CorbeilleRoleGuard` — échoue pour quiconque hors de ce rôle) et `listerMembresRole(roleCode)` (déjà scopée par rôle détenu, cf. chantier Déléguer ci-dessus), puis résout `agentClaimId` → nom réel. Le nom est injecté dans le `acteurNom` passé à `WorkflowStepper`, préfixé « Récupérée par {nom} » (pas le nom brut) pour ne jamais laisser croire à une décision déjà prise — le préfixe distingue visuellement de l'affichage d'une étape réellement décidée (nom brut + date). Pour toute autre étape/tout autre viewer, rien ne change : `acteurNom` reste `null` côté serveur tant que l'étape n'est pas décidée.
+
+**Vérifié en direct, deux perspectives** (session mintée, dossier DOBB réel soumis puis réclamé par `responsable.dobb@orange.com`) : un second membre réel de `RESPONSABLE_DOBB` (identité jetable) voit désormais « Récupérée par Responsable DOBB (test) » sous l'étape 1 dans l'onglet Circuit de validation (confirmé par capture d'écran, après un `docker compose restart web` — même gotcha de watcher déjà documenté) ; `jean.kouassi@orange.com` (initiateur du dossier, `INITIATEUR_DOBB`+`ADMIN_PGD`, ne détient pas `RESPONSABLE_DOBB`) ne voit toujours rien sous cette même étape — confirmé par capture d'écran, la portée reste bien limitée aux collègues du rôle, `ADMIN_PGD` compris n'y échappe pas. Dossier et identité jetable supprimés par SQL direct après vérification (même exception déjà documentée pour ce type de nettoyage — dossier passé `SOUMIS`).
+
+Sweep : `pnpm --filter @pgd/web typecheck`/`lint` verts, `pnpm build` 8/8 — aucun changement côté `apps/api`, suite existante non rejouée.
+
 ---
 
 ## Commandes
