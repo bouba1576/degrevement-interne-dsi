@@ -189,16 +189,45 @@ export type DemandeDetail = z.infer<typeof demandeDetailSchema>;
 // pourrait fournir. Sans `profil`, la liste reste non scopée — ouverte à
 // tout utilisateur authentifié par choix documenté (docs/06 §4), pas un
 // oubli à combler ici.
+// avecRenvoyes/sansRenvoyes (25/08/2026, corbeille Rejetées de
+// l'initiateur) — confirmation métier explicite : « la corbeille des
+// demandes rejetées regroupe TOUTES les demandes de l'initiateur qui ont
+// été rejetées », y compris celles renvoyées pour correction (statut
+// redevenu BROUILLON, jamais REJETE) — pas seulement les dossiers
+// terminaux (clore=true). `dateSoumission` (jamais réinitialisée par le
+// renvoi, cf. TacheWorkflowService.rejeter()) distingue un BROUILLON
+// « déjà soumis puis renvoyé » d'un BROUILLON « jamais soumis » — les deux
+// drapeaux sont additifs (défaut false, comportement inchangé pour tout
+// appelant existant) :
+//  - statut=REJETE & avecRenvoyes=true  → inclut aussi les BROUILLON avec
+//    dateSoumission non nulle (onglet Rejetées).
+//  - statut=BROUILLON & sansRenvoyes=true → exclut ces mêmes BROUILLON
+//    renvoyés (onglet Brouillons, pour ne pas les afficher deux fois).
 export const listerDemandesQuerySchema = z.object({
   circuit: enumCircuit.optional(),
   statut: enumStatutDemande.optional(),
   siEtat: enumEtatSi.optional(),
   q: z.string().optional(),
   profil: z.enum(["initiateur"]).optional(),
+  avecRenvoyes: z.coerce.boolean().optional(),
+  sansRenvoyes: z.coerce.boolean().optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(200).default(20)
 });
 export type ListerDemandesQuery = z.infer<typeof listerDemandesQuerySchema>;
+
+// GET /api/demandes/{id}/echeance-correction (25/08/2026) — échéance de
+// correction pour un dossier renvoyé (BROUILLON, dateSoumission non
+// nulle), confirmation métier explicite : « SLA du processus du dossier
+// initié », compteur démarré à la date de rejet, en heures ouvrées — même
+// mécanisme que l'échéance de la première étape à la soumission
+// (CalendrierSlaService), jamais un délai fixe inventé. `echeance: null`
+// si le dossier n'est pas dans cet état (rien à corriger) — jamais une
+// erreur, un simple badge absent côté écran.
+export const echeanceCorrectionReponseSchema = z.object({
+  echeance: z.string().nullable()
+});
+export type EcheanceCorrectionReponse = z.infer<typeof echeanceCorrectionReponseSchema>;
 
 export const demandesListeReponseSchema = z.array(demandeSchema);
 export type DemandesListeReponse = z.infer<typeof demandesListeReponseSchema>;

@@ -11,6 +11,7 @@ import {
   demandeDetailSchema,
   demandesListeReponseSchema,
   directionResponsabiliteVueSchema,
+  echeanceCorrectionReponseSchema,
   facteurDegrevementVueSchema,
   journalSecuriteVueSchema,
   erreurSchema,
@@ -61,6 +62,7 @@ import {
   type Demande,
   type DemandeDetail,
   type DirectionResponsabiliteVue,
+  type EcheanceCorrectionReponse,
   type EtapeDossier,
   type FacteurDegrevementVue,
   type ListerDemandesQuery,
@@ -337,6 +339,13 @@ export function apercuRoutage(demandeId: string): Promise<ApercuRoutageReponse> 
   return requete(`/api/demandes/${demandeId}/apercu-routage`, apercuRoutageReponseSchema, { method: "POST" });
 }
 
+// Corbeille « Rejetées » (25/08/2026) — échéance de correction (SLA du
+// processus d'origine, en heures ouvrées, depuis le rejet). `echeance: null`
+// si le dossier n'est pas dans l'état « renvoyé, correction possible ».
+export function obtenirEcheanceCorrection(demandeId: string): Promise<EcheanceCorrectionReponse> {
+  return requete(`/api/demandes/${demandeId}/echeance-correction`, echeanceCorrectionReponseSchema);
+}
+
 export function soumettreDemande(demandeId: string): Promise<SoumissionReponse> {
   return requete(`/api/demandes/${demandeId}/soumettre`, soumissionReponseSchema, { method: "POST" });
 }
@@ -358,6 +367,8 @@ export function listerDemandes(query: ListerDemandesQuery): Promise<{ data: Dema
   if (query.statut) params.set("statut", query.statut);
   if (query.q) params.set("q", query.q);
   if (query.profil) params.set("profil", query.profil);
+  if (query.avecRenvoyes) params.set("avecRenvoyes", "true");
+  if (query.sansRenvoyes) params.set("sansRenvoyes", "true");
   params.set("page", String(query.page));
   params.set("limit", String(query.limit));
   return requeteAvecTotal(`/api/demandes?${params.toString()}`, demandesListeReponseSchema);

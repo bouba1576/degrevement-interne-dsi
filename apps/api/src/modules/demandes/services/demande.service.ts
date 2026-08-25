@@ -240,9 +240,19 @@ export class DemandeService {
   }
 
   async lister(query: ListerDemandesQuery, utilisateurId: string): Promise<{ demandes: Demande[]; total: number }> {
+    // avecRenvoyes/sansRenvoyes — cf. packages/contracts/src/demande.ts pour
+    // le raisonnement complet. `statut` seul reste le filtre de tous les
+    // autres appelants (inchangé si ces deux drapeaux sont absents).
+    const filtreStatut: Prisma.DemandeWhereInput =
+      query.statut === "REJETE" && query.avecRenvoyes
+        ? { OR: [{ statut: "REJETE" }, { statut: "BROUILLON", dateSoumission: { not: null } }] }
+        : query.statut === "BROUILLON" && query.sansRenvoyes
+          ? { statut: "BROUILLON", dateSoumission: null }
+          : { statut: query.statut };
+
     const where: Prisma.DemandeWhereInput = {
+      ...filtreStatut,
       circuit: query.circuit,
-      statut: query.statut,
       siEtat: query.siEtat,
       ...(query.q
         ? { OR: [{ reference: { contains: query.q, mode: "insensitive" } }, { nomClient: { contains: query.q, mode: "insensitive" } }] }

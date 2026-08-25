@@ -16,20 +16,15 @@ const LIMITE = 20;
 
 type Onglet = "brouillons" | "encours" | "validees" | "rejetees";
 
-// Onglet « Brouillons » (24/08/2026, audit MesDemandesScreen — cf.
-// CLAUDE.md « Renvoi/clôture d'un dossier rejeté ») : absent de la
-// maquette (qui n'a que trois corbeilles, cf. commentaire ci-dessous) et
-// sans contrepartie directe dans le modèle de simulation client
-// (engine.jsx/data.jsx, jamais portés) — construit d'après le comportement
-// RÉEL du serveur, pas d'après la maquette. TacheWorkflowService.rejeter()
-// renvoie par défaut un dossier rejeté en BROUILLON pour correction ; sans
-// cet onglet, ce dossier redevenait introuvable depuis cet écran (aucun
-// des trois onglets d'origine ne couvre BROUILLON). Statut générique — un
-// brouillon jamais soumis et un brouillon renvoyé pour correction
-// apparaissent tous deux ici, le modèle de données ne distingue pas les
-// deux (aucun champ dédié, seule une entrée JournalAudit action=
-// "renvoi-correction" en garde la trace, jamais interrogée pour ce
-// simple comptage/affichage).
+// Onglet « Brouillons » (24/08/2026, ajusté 25/08/2026) : jamais soumis
+// uniquement. RÉVISION (25/08/2026, confirmation métier explicite) — un
+// dossier renvoyé pour correction (rejeté, statut redevenu BROUILLON) n'y
+// apparaît PLUS : « la corbeille des demandes rejetées regroupe TOUTES
+// les demandes de l'initiateur qui ont été rejetées », renvoyées comme
+// clôturées. `dateSoumission` (jamais réinitialisée par le renvoi, cf.
+// TacheWorkflowService.rejeter()) distingue les deux cas côté requête
+// (sansRenvoyes=true ici, avecRenvoyes=true sur Rejetées) — pas un champ
+// dédié, mais une donnée déjà fiable.
 const ONGLETS: Array<{ cle: Onglet; libelle: string; statut: EnumStatutDemande; icone: NomIcone; ton: TonBadge }> = [
   { cle: "brouillons", libelle: "Brouillons", statut: "BROUILLON", icone: "edit", ton: "alerte" },
   { cle: "encours", libelle: "Demandes en cours", statut: "SOUMIS", icone: "refresh", ton: "accent" },
@@ -44,38 +39,29 @@ const CIRCUITS: Array<{ valeur: EnumCircuit | ""; libelle: string }> = [
   { valeur: "DF", libelle: "DF" }
 ];
 
-// Port de docs/design/screens2.jsx:8-48 (MesDemandesScreen) — trois
-// corbeilles d'initiateur (en cours/validées/rejetées), vérifiées en direct
-// via le harnais (persona aya.koffi, 16 dossiers réels 7/8/1) avant de
-// conclure à un écart. Corrigé après retour explicite sur ce point : la
-// première passe (Phase 9.2) avait remplacé les trois onglets par un simple
-// <select> Statut — une commodité d'implémentation (« éviterait 3 appels
-// réseau »), jamais une des cinq catégories de divergence légitime
-// (CLAUDE.md, « les choix visuels sont contraignants ») — un choix de mise
-// en page reste contraignant, pas une commodité à arbitrer soi-même. Les
-// trois compteurs sont donc bien trois appels légers (limit=1), au même
-// titre que les tuiles de HomeScreen.
+// Port de docs/design/screens2.jsx:8-83 (MesDemandesScreen + RejetsCorbeille)
+// — quatre onglets réels (BROUILLON gagné le 24/08/2026 pour rendre
+// atteignable le renvoi-pour-correction, absent de la maquette à trois
+// corbeilles). Les trois compteurs restants sont des appels légers
+// (limit=1), même titre que les tuiles de HomeScreen — jamais un <select>
+// Statut (commodité d'implémentation déjà écartée le 20/08/2026, CLAUDE.md
+// « les choix visuels sont contraignants »).
 //
-// RejetsCorbeille (compte à rebours SLA sur rejet, cartes dédiées avec
-// minuteur) reste exclu — DIVERGENCES.md, contradiction directe avec
-// docs/04 (« minuteur_bloquant = FALSE » pour l'Initiateur). Seule la
-// STRUCTURE des trois onglets est portée ici ; le contenu de l'onglet
-// « Rejetées » reste le même DossierTable que les deux autres, jamais les
-// cartes/minuteur — la distinction est entre la mise en page (contraignante)
-// et le mécanisme SLA (contredit une source qui fait autorité).
+// RÉVISION (25/08/2026) — l'exclusion de RejetsCorbeille avait fusionné à
+// tort le minuteur SLA (contredit docs/04, « minuteur_bloquant = FALSE »
+// pour l'Initiateur — vaut toujours, cf. SlaTimer purement informatif) avec
+// TOUT le composant. Reconstruit : DossierRejeteCard (bandeau « Rejeté par
+// / Motif », badge SLA informatif, bouton « Corriger & resoumettre »)
+// remplace DossierTable sur cet onglet — cf. DossierRejeteCard.tsx et
+// CLAUDE.md, section dédiée, pour le détail complet et la vérification live.
 //
 // Pas de sélecteur « Initiateur » (présent dans la maquette,
 // `DossierExplorer`) : sur cet écran il n'y a structurellement qu'un seul
 // initiateur possible, celui de la session (`profil=initiateur`, forcé
 // côté serveur) — un sélecteur à une seule option réelle serait un leurre.
 //
-// BROUILLON a gagné son propre onglet (24/08/2026, cf. commentaire dédié
-// sur ONGLETS ci-dessus) — absent des trois corbeilles de la maquette
-// (`enCours`/`valides`/`rejetes` ne couvrent que soumis/en_cours, valide,
-// rejete) mais nécessaire pour rendre atteignable le renvoi-pour-correction
-// réel, que la maquette ne modélise pas. ABANDONNE reste hors périmètre :
-// un dossier abandonné par son initiateur est une fin délibérée, rien à y
-// corriger ni à y surveiller.
+// ABANDONNE reste hors périmètre : un dossier abandonné par son initiateur
+// est une fin délibérée, rien à y corriger ni à y surveiller.
 export function MesDemandesScreen({ onOuvrirDossier, onNaviguer }: MesDemandesScreenProps) {
   const [onglet, setOnglet] = useState<Onglet>("brouillons");
   const [dossiers, setDossiers] = useState<Demande[] | null>(null);
@@ -100,14 +86,20 @@ export function MesDemandesScreen({ onOuvrirDossier, onNaviguer }: MesDemandesSc
           profil: "initiateur",
           circuit: circuit || undefined,
           statut: statutActif,
+          // Confirmation métier (25/08/2026) : « Rejetées » regroupe
+          // renvoyés + clôturés ; « Brouillons » n'affiche donc plus les
+          // renvoyés (déjà dans Rejetées), pour ne pas les montrer deux
+          // fois. Cf. packages/contracts/src/demande.ts.
+          avecRenvoyes: onglet === "rejetees" ? true : undefined,
+          sansRenvoyes: onglet === "brouillons" ? true : undefined,
           q: q.trim() || undefined,
           page,
           limit: LIMITE
         }),
-        listerDemandes({ profil: "initiateur", statut: "BROUILLON", page: 1, limit: 1 }),
+        listerDemandes({ profil: "initiateur", statut: "BROUILLON", sansRenvoyes: true, page: 1, limit: 1 }),
         listerDemandes({ profil: "initiateur", statut: "SOUMIS", page: 1, limit: 1 }),
         listerDemandes({ profil: "initiateur", statut: "VALIDE", page: 1, limit: 1 }),
-        listerDemandes({ profil: "initiateur", statut: "REJETE", page: 1, limit: 1 })
+        listerDemandes({ profil: "initiateur", statut: "REJETE", avecRenvoyes: true, page: 1, limit: 1 })
       ]);
       setDossiers(reponse.data);
       setTotal(reponse.total);
@@ -121,7 +113,7 @@ export function MesDemandesScreen({ onOuvrirDossier, onNaviguer }: MesDemandesSc
     } catch (e) {
       setErreur(e instanceof ApiError ? e.message : "Erreur inattendue.");
     }
-  }, [statutActif, circuit, q, page]);
+  }, [statutActif, onglet, circuit, q, page]);
 
   useEffect(() => {
     void charger();
@@ -143,8 +135,8 @@ export function MesDemandesScreen({ onOuvrirDossier, onNaviguer }: MesDemandesSc
     <div>
       <div className="mb-4 flex items-center justify-between">
         <p className="text-13 text-gris600">
-          Vos quatre corbeilles d&apos;initiateur. Un dossier renvoyé pour correction repasse en Brouillons —
-          corrigez-le et resoumettez-le, sans délai contraint.
+          Vos quatre corbeilles d&apos;initiateur. Un dossier rejeté — renvoyé pour correction ou clôturé — reste
+          dans Rejetées ; corrigez et resoumettez sous le SLA du processus initié.
         </p>
         <Button onClick={() => onNaviguer("nouvelle")} variante="sombre" taille="petite">
           + Nouvelle demande

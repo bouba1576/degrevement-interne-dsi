@@ -21,6 +21,7 @@ import {
   creerDemandeRequeteSchema,
   definirLignesRequeteSchema,
   demandeDetailSchema,
+  echeanceCorrectionReponseSchema,
   listerDemandesQuerySchema,
   modifierDemandeRequeteSchema,
   modifierTaxesRequeteSchema,
@@ -30,6 +31,7 @@ import {
   type ApercuRoutageReponse,
   type Demande,
   type DemandeDetail,
+  type EcheanceCorrectionReponse,
   type EtapeDossier,
   type PieceJointeVue,
   type SiVue,
@@ -47,6 +49,7 @@ import { DemandeLigneService } from "./services/demande-ligne.service";
 import { DemandeWorkflowService } from "./services/demande-workflow.service";
 import { PieceService } from "./services/piece.service";
 import { RuleEngineService } from "./services/rule-engine.service";
+import { CalendrierSlaService } from "./services/calendrier-sla.service";
 import { SiService } from "./services/si.service";
 
 // Aucune source ne restreint ces routes à un sous-ensemble de rôles (docs/06
@@ -62,6 +65,7 @@ export class DemandesController {
     private readonly workflow: DemandeWorkflowService,
     private readonly pieceService: PieceService,
     private readonly ruleEngine: RuleEngineService,
+    private readonly calendrierSla: CalendrierSlaService,
     private readonly prisma: PrismaService,
     private readonly siService: SiService
   ) {}
@@ -229,6 +233,56 @@ export class DemandesController {
         slaHeures: e.slaHeures
       }))
     };
+  }
+
+  // GET /api/demandes/{id}/echeance-correction (25/08/2026, corbeille
+  // Rejetées de l'initiateur — confirmation métier explicite, cf.
+  // packages/contracts/src/demande.ts) — même garde qu'apercuRoutage, même
+  // raison : expose la chaîne SLA d'un dossier tiers. Route GET,
+  // structurellement hors périmètre de guard-coverage.spec.ts
+  // (listerRoutesEcriture ne retient que les méthodes d'écriture), même
+  // précédent que parametres-calcul/:circuit. `null` (jamais une erreur)
+  // pour tout dossier hors de l'état « renvoyé, correction possible » — un
+  // badge simplement absent côté écran.
+  @Authenticated()
+  @UseGuards(InitiateurDemandeGuard)
+  @Get(":id/echeance-correction")
+  @ApiZodResponse(200, echeanceCorrectionReponseSchema)
+  async echeanceCorrection(@Param("id") id: string): Promise<EcheanceCorrectionReponse> {
+    const demande = await this.prisma.demande.findUnique({ where: { id } });
+    if (!demande) {
+      throw new NotFoundException({ code: "DEMANDE_INTROUVABLE", message: "Demande introuvable." });
+    }
+    if (demande.statut !== "BROUILLON" || demande.dateSoumission === null) {
+      return { echeance: null };
+    }
+
+    const dernierRejet = await this.prisma.journalAudit.findFirst({
+      where: { demandeId: id, action: "rejet" },
+      orderBy: { horodatage: "desc" }
+    });
+    if (!dernierRejet) return { echeance: null };
+
+    let configuration;
+    try {
+      configuration = await this.ruleEngine.selectionnerConfiguration({
+        circuit: demande.circuit,
+        segment: demande.segment,
+        sousFlux: demande.sousFlux,
+        montantTtc: Number(demande.montantTtc)
+      });
+    } catch {
+      // AUCUN_PALIER_CORRESPONDANT (montant hors palier depuis le rejet,
+      // configuration retirée entre-temps, etc.) — un badge d'échéance
+      // absent, jamais une erreur qui casserait l'affichage de la liste.
+      return { echeance: null };
+    }
+
+    const sommeSlaHeures = configuration.etapesRegle.filter((e) => e.bloquant).reduce((total, e) => total + e.slaHeures, 0);
+    if (sommeSlaHeures === 0) return { echeance: null };
+
+    const echeance = await this.calendrierSla.calculerEcheance(dernierRejet.horodatage, sommeSlaHeures);
+    return { echeance: echeance.toISOString() };
   }
 
   @Authenticated()
