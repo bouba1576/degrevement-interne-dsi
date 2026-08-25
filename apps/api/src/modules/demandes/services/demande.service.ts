@@ -243,11 +243,28 @@ export class DemandeService {
     // avecRenvoyes/sansRenvoyes — cf. packages/contracts/src/demande.ts pour
     // le raisonnement complet. `statut` seul reste le filtre de tous les
     // autres appelants (inchangé si ces deux drapeaux sont absents).
+    //
+    // Signal réel : JournalAudit action="renvoi-correction" — jamais
+    // `dateSoumission IS NOT NULL` (bug trouvé en vérification live, pas
+    // en test) : `DemandeWorkflowService.rappeler()` (action « Rappeler »,
+    // un self-recall par l'initiateur, sans aucun rapport avec un rejet)
+    // repasse aussi le dossier en BROUILLON sans jamais toucher
+    // `dateSoumission` — un dossier simplement rappelé se retrouvait donc
+    // classé comme « rejeté renvoyé », affiché dans Rejetées sans aucune
+    // entrée "rejet" à afficher, échéance de correction toujours null.
+    // "renvoi-correction" est l'entrée dédiée, écrite UNIQUEMENT par le
+    // chemin renvoi-après-rejet (cf. CLAUDE.md, « Renvoi ou clôture d'un
+    // dossier rejeté »), jamais par rappeler().
     const filtreStatut: Prisma.DemandeWhereInput =
       query.statut === "REJETE" && query.avecRenvoyes
-        ? { OR: [{ statut: "REJETE" }, { statut: "BROUILLON", dateSoumission: { not: null } }] }
+        ? {
+            OR: [
+              { statut: "REJETE" },
+              { statut: "BROUILLON", journalAudit: { some: { action: "renvoi-correction" } } }
+            ]
+          }
         : query.statut === "BROUILLON" && query.sansRenvoyes
-          ? { statut: "BROUILLON", dateSoumission: null }
+          ? { statut: "BROUILLON", journalAudit: { none: { action: "renvoi-correction" } } }
           : { statut: query.statut };
 
     const where: Prisma.DemandeWhereInput = {

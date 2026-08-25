@@ -1582,6 +1582,12 @@ Signalement direct (« le design system n'a pas été respecté ») sur l'onglet
 
 Sweep complet : `apps/api` 43/43 suites, 271/271 tests (+1 todo) — aucune régression ; `pnpm build` 8/8.
 
+**Bug trouvé en signalement direct (« les infos SLA ne s'affichent pas »), pas en test — `avecRenvoyes`/`sansRenvoyes` utilisaient le mauvais signal.** `dateSoumission IS NOT NULL` ne distingue pas fiablement « renvoyé après rejet » de « rappelé par l'initiateur lui-même » (`DemandeWorkflowService.rappeler()`, action « Rappeler », un self-recall sans aucun rapport avec un rejet) — les deux repassent le dossier en `BROUILLON` sans jamais toucher `dateSoumission`. Un dossier simplement rappelé (`DOBB-2026-4F16E0`, réel, trouvé en vérifiant plutôt qu'en supposant) se retrouvait donc classé « rejeté renvoyé », affiché dans l'onglet Rejetées avec un bouton « Corriger & resoumettre » actif mais sans aucune entrée `JournalAudit` `"rejet"` à afficher — `echeance-correction` renvoyait `null` (correctement, pour la mauvaise raison : pas de rejet du tout, jamais un simple oubli de calcul).
+
+**Corrigé** : signal remplacé par `journalAudit: { some: { action: "renvoi-correction" } }` (inclusion, onglet Rejetées) / `{ none: { ... } }` (exclusion, onglet Brouillons) — l'entrée dédiée déjà écrite exclusivement par le chemin renvoi-après-rejet (`TacheWorkflowService.rejeter()`, branche `clore: false`), jamais par `rappeler()`. C'était déjà le signal documenté depuis la création de cet onglet (24/08/2026 : « seule une entrée JournalAudit action="renvoi-correction" en garde la trace ») — perdu de vue en construisant `avecRenvoyes`/`sansRenvoyes` la veille, un vrai oubli, pas une ambiguïté de conception.
+
+Vérifié en direct, dans les deux sens, sur le dossier réel qui a révélé le bug : après correctif, `DOBB-2026-4F16E0` (rappelé, jamais rejeté) disparaît de l'onglet Rejetées et réapparaît dans Brouillons (22→23) ; un dossier fraîchement rejeté sans `clore` (créé pour ce test précis) continue de s'afficher correctement avec badge SLA réel et bouton actif — le correctif ne casse pas le cas qu'il ne visait pas. Total Brouillons+Rejetées inchangé (24), confirmé par comptage direct en base. Sweep complet revérifié : `apps/api` 43/43 suites, 271/271 tests (+1 todo) ; `pnpm build` 8/8.
+
 ---
 
 ## Commandes
