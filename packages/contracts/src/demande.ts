@@ -5,7 +5,8 @@ import {
   enumEtatSi,
   enumLocalisation,
   enumStatutDemande,
-  enumStatutLigne
+  enumStatutLigne,
+  enumTypeActeur
 } from "./enums";
 
 // docs/06_Contrats_API.md §4 · SF-PGD-040, 041, 042, 060, 061, 062, 330, 331.
@@ -263,7 +264,7 @@ export const etapePrevisionnelleSchema = z.object({
   ordre: z.number(),
   roleCode: z.string(),
   roleLibelle: z.string(),
-  typeActeur: z.string(),
+  typeActeur: enumTypeActeur,
   bloquant: z.boolean(),
   slaHeures: z.number()
 });

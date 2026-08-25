@@ -1,11 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Card, CircuitPill } from "@pgd/ui";
+import { Card, CircuitPill, Icon, TypeActeurBadge } from "@pgd/ui";
 import { apercuRoutage as appelerApercuRoutage, ApiError } from "@/lib/api";
 import type { ApercuRoutageReponse, EnumCircuit } from "@pgd/contracts";
-
-const LIBELLE_TYPE_ACTEUR: Record<string, string> = { V: "Vérification", A: "Validation", C: "Contrôle" };
 
 export interface ApercuRoutageProps {
   demandeId: string;
@@ -24,10 +22,26 @@ export interface ApercuRoutageProps {
 
 // PGD-035/SF-PGD-033, 104. Pas de réutilisation de WorkflowStepper (packages/
 // ui) : cette réponse n'a ni `etat` ni `echeanceSla` — une prévision n'a pas
-// encore d'existence en tant que tâche réelle. Lui fabriquer un faux état
-// ferait mentir l'écran, exactement ce que WorkflowStepper refuse déjà de
-// faire pour l'escalade (cf. son propre commentaire). Rendu volontairement
-// plus simple : une liste ordonnée, sans pastille d'état.
+// encore d'existence en tant que tâche réelle, et WorkflowStepper n'a de
+// toute façon pas le rendu attendu ici (icône bouclier pour un contrôle
+// même en attente, cf. ci-dessous). Lui fabriquer un faux état ferait
+// mentir l'écran, exactement ce que WorkflowStepper refuse déjà de faire
+// pour l'escalade (cf. son propre commentaire).
+//
+// Fidélité maquette (docs/design/screens1.jsx:547-563, `.stepper`/`.step`/
+// `.step-rail`/`.step-dot`/`.step-line`) — trouvé en écart lors d'un audit
+// direct : la première version rendait chaque étape comme une ligne de
+// liste plate (bordure, sans lien visuel entre étapes), jamais le
+// « fil » de la chaîne (pastilles reliées par un trait vertical) que la
+// maquette montre. Reconstruit ici en reproduisant la structure
+// pastille+trait de WorkflowStepper (packages/ui), mais TOUJOURS dans son
+// état "attente" (`etatTache.attente`, gris/blanc) — une prévision n'a
+// jamais d'état décidé, ce composant ne varie donc jamais de couleur entre
+// étapes, contrairement à WorkflowStepper sur un dossier réel. Icône
+// bouclier à la place du numéro d'ordre pour un contrôle (`typeActeur ===
+// "C"`) — comportement propre à ce panneau, absent de WorkflowStepper,
+// repris tel quel de la maquette (`s.type === "C" ? <Icon name="shield"/>
+// : i+1`).
 export function ApercuRoutage({ demandeId, circuit, declencheur }: ApercuRoutageProps) {
   const [reponse, setReponse] = useState<ApercuRoutageReponse | null>(null);
   const [chargement, setChargement] = useState(false);
@@ -92,23 +106,36 @@ export function ApercuRoutage({ demandeId, circuit, declencheur }: ApercuRoutage
 
       {reponse && (
         <div className="flex flex-col gap-3">
-          <div className="row gap-8 mb-6" style={{ flexWrap: "wrap" }}>
+          <div className="mb-1.5 flex flex-wrap items-center gap-2">
             <CircuitPill code={circuit} />
-            <span className="chip active ml-2">Tranche {reponse.labelPalier}</span>
+            <span className="chip active">Tranche {reponse.labelPalier}</span>
           </div>
-          <ol className="flex flex-col gap-2">
-            {reponse.etapes.map((e) => (
-              <li key={e.ordre} className="flex items-center gap-3 rounded border border-gris200 p-2 text-13">
-                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-gris100 text-12 font-bold">
-                  {e.ordre}
-                </span>
-                <span className="flex-1 font-semibold">{e.roleLibelle}</span>
-                <span className="text-12 text-gris600">{LIBELLE_TYPE_ACTEUR[e.typeActeur] ?? e.typeActeur}</span>
-                <span className="text-12 text-gris600">{e.slaHeures} h</span>
-                {e.bloquant && <span className="text-12 font-semibold text-orange600">Bloquant</span>}
-              </li>
-            ))}
-          </ol>
+          <div className="flex flex-col">
+            {reponse.etapes.map((e, i) => {
+              const dernier = i === reponse.etapes.length - 1;
+              return (
+                <div className="relative flex gap-3" key={e.ordre}>
+                  <div className="flex flex-col items-center">
+                    <div className="grid h-[24px] w-[24px] shrink-0 place-items-center rounded-full border-2 border-gris300 bg-blanc text-11 font-extrabold text-gris600">
+                      {e.typeActeur === "C" ? <Icon nom="shield" taille={12} /> : e.ordre}
+                    </div>
+                    {!dernier && <div className="min-h-3 w-0.5 flex-1 bg-gris200" />}
+                  </div>
+                  <div className={dernier ? "pb-0" : "pb-3"}>
+                    {/* Maquette : fontSize 12.5 — consolidé à t13 (échelle
+                        déjà en place, cf. Card.tsx : un écart de 0,5px n'est
+                        jamais une taille dédiée dans ce projet). */}
+                    <div className="text-13 font-semibold">{e.roleLibelle}</div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-11 text-gris600">
+                      <TypeActeurBadge type={e.typeActeur} />
+                      <span>· SLA {e.slaHeures} h</span>
+                      {e.bloquant && <span className="font-semibold text-orange600">· Bloquant</span>}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </Card>

@@ -228,7 +228,10 @@ export class DemandesController {
         ordre: e.ordre,
         roleCode: e.roleCode,
         roleLibelle: e.roleLibelle,
-        typeActeur: e.typeActeur,
+        // ConfigurationCache.typeActeur reste déclaré `string` (RuleEngineService)
+        // — même cast déjà utilisé ailleurs dans ce service pour la même raison
+        // (instancierChaine), pas une divergence introduite ici.
+        typeActeur: e.typeActeur as never,
         bloquant: e.bloquant,
         slaHeures: e.slaHeures
       }))
