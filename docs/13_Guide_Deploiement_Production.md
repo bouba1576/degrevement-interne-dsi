@@ -162,20 +162,38 @@ Points qui exigent une action, pas une simple copie :
   `openssl rand -hex 32`, une valeur **distincte** de tout environnement de
   dev/recette, jamais copiée d'un exemple.
 - `DATABASE_URL`, `REDIS_URL`, `RABBITMQ_*` : vers les instances du §3.
+- **`AUTH_PROVIDER` — ⚠️ décision de sécurité à reconfirmer explicitement avant
+  tout déploiement réel, pas une simple copie.** `keycloak` ou `ad-api`
+  (**défaut : `ad-api` depuis le 24/08/2026**, `packages/config/src/env.schema.ts`)
+  — sélection strictement serveur, un seul fournisseur actif à la fois,
+  jamais une tentative en cascade de l'un puis l'autre. `AdApiProvider`
+  restauré le 24/08/2026 comme **mesure transitoire** (cf. `CLAUDE.md`
+  « Restauration transitoire — AdApiProvider »), en attendant que Keycloak
+  soit confirmé définitivement opérationnel. **`ad-api` ne déclenche aucune
+  étape MFA, ni PGD ni Keycloak, pour aucun rôle** — y compris
+  `SM_DF`/`DF`/`DGA_DG`/`ADMIN`, qui exigent la double authentification selon
+  `docs/09_Specifications_Fonctionnelles_PROD_v3.md`. Si la double
+  authentification est requise dès ce déploiement, fixer explicitement
+  `AUTH_PROVIDER=keycloak` dans `.env.prod` — ne jamais compter sur le défaut
+  sans l'avoir vérifié.
+- `AD_API_URL`, `AD_API_TIMEOUT_MS` : requis si `AUTH_PROVIDER=ad-api`
+  (défaut) — endpoint réel de l'API REST AD (SF-PGD-001, cf. `CLAUDE.md`
+  « API AD réelle »). Sans objet si `AUTH_PROVIDER=keycloak`.
 - `KEYCLOAK_BASE_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`,
-  `KEYCLOAK_CLIENT_SECRET` : royaume Keycloak réel — **SOURCE UNIQUE**
+  `KEYCLOAK_CLIENT_SECRET` : royaume Keycloak réel — fournisseur cible
   d'authentification (identité et second facteur DUO, tous deux résolus côté
-  Keycloak — décision actée le 24/08/2026, `MfaService`/`TotpProvider`/
-  `DuoProvider` et tout le mécanisme `mfaMethode` retirés côté PGD le même
-  jour, cf. `CLAUDE.md` « Architecture Keycloak — source unique »).
-  `LdapPort`/`LdapProvider`/`AdApiProvider` et toute leur configuration
-  (`LDAP_*`/`AD_API_*`) sont retirés aussi — Keycloak est le seul point
-  d'authentification, sans exception. **Reste à confirmer avant un
-  déploiement réel** : la forme exacte de la résolution DUO dans l'échange
-  `/token` (cf. `CLAUDE.md`, même section) — un essai réel avec un compte DUO
-  actif, fait personnellement par la personne pilotant le projet, doit
-  trancher avant de considérer l'authentification pleinement fonctionnelle
-  en prod pour les comptes concernés par DUO.
+  Keycloak quand `AUTH_PROVIDER=keycloak` — décision actée le 24/08/2026,
+  `MfaService`/`TotpProvider`/`DuoProvider` et tout le mécanisme `mfaMethode`
+  retirés côté PGD le même jour, cf. `CLAUDE.md` « Architecture Keycloak —
+  source unique »). Toujours requis dans `.env.prod` (`docker-compose.prod.yml`
+  échoue explicitement sans ces quatre variables) même si `AUTH_PROVIDER=ad-api`
+  au démarrage — permet une bascule vers `keycloak` sans reconfiguration
+  supplémentaire. **Reste à confirmer avant un déploiement réel avec
+  `AUTH_PROVIDER=keycloak`** : la forme exacte de la résolution DUO dans
+  l'échange `/token` (cf. `CLAUDE.md`, même section) — un essai réel avec un
+  compte DUO actif, fait personnellement par la personne pilotant le projet,
+  doit trancher avant de considérer l'authentification pleinement
+  fonctionnelle en prod pour les comptes concernés par DUO.
 - `CORS_ORIGIN` : URL publique exacte de `pgd-web` (le cookie de session
   utilise `credentials: true`, une origine inexacte casse l'authentification
   silencieusement côté navigateur).
@@ -282,8 +300,12 @@ curl -f https://<url-worker-interne>:3002/health   # généralement pas exposé 
 curl -f https://<url-web>/login
 
 # Readiness — confirme les connexions réelles (Postgres/Redis/RabbitMQ/
-# Keycloak — identité ET second facteur, un seul champ `ad` couvre les deux
-# depuis le 24/08/2026)
+# fournisseur d'authentification actif). Le champ `ad` sonde QUEL QUE SOIT
+# le fournisseur sélectionné par AUTH_PROVIDER — ad:true confirme la
+# joignabilité du fournisseur actif, JAMAIS lequel des deux répond, et
+# encore moins si le second facteur est appliqué. Toujours croiser avec la
+# valeur réelle d'AUTH_PROVIDER dans .env.prod avant de conclure quoi que
+# ce soit sur la couverture MFA.
 curl -s https://<url-api>/api/health/ready
 # Attendu : {"data":{"statut":"ok","services":{"postgresql":true,"redis":true,
 #            "rabbitmq":true,"ad":true}, ...}}
@@ -292,9 +314,12 @@ curl -s https://<url-api>/api/health/ready
 ```
 
 Puis un parcours de connexion réel avec le premier compte admin créé au §5.3,
-jusqu'à l'écran d'administration — seule vérification qui confirme que
-Keycloak (identité + DUO, pas seulement `health/ready`) fonctionne de bout en
-bout.
+jusqu'à l'écran d'administration — seule vérification qui confirme que le
+fournisseur actif fonctionne de bout en bout. **Si `AUTH_PROVIDER=keycloak`**,
+c'est la seule vérification qui confirme identité + DUO (pas seulement
+`health/ready`). **Si `AUTH_PROVIDER=ad-api`** (défaut), rappeler qu'aucun
+second facteur n'est demandé à cette étape, pour aucun compte — comportement
+attendu de la mesure transitoire, pas un défaut de la vérification.
 
 ---
 
@@ -313,6 +338,43 @@ désormais entièrement de la configuration du royaume Keycloak.
 `bootstrap-premier-admin.ts`/`enrolement-comptes.ts` restent les deux
 scripts opérationnels **permanents** pour créer des comptes (§5.3) — ils ne
 gèrent plus aucun secret ni QR, seulement le compte et ses rôles.
+
+### 8.1. `AUTH_PROVIDER` — restauration transitoire d'`AdApiProvider`, défaut `ad-api` (24/08/2026)
+
+Le retrait décrit ci-dessus visait `MfaService`/`TotpProvider`/`DuoProvider`
+(le second facteur propre à PGD), pas l'authentification elle-même. Trois
+tours plus tard, le même jour, `AdApiProvider` (API REST AD réelle,
+SF-PGD-001) a été **restauré** comme **mesure transitoire**, en attendant que
+Keycloak soit confirmé définitivement opérationnel — sélectionnable via
+`AUTH_PROVIDER=keycloak|ad-api` (§4), **défaut `ad-api`** depuis ce même
+jour.
+
+**⚠️ Conséquence de sécurité directe, à ne pas manquer avant un déploiement
+réel** : le chemin `ad-api` ne déclenche **aucune** étape MFA, ni PGD (déjà
+retiré, ci-dessus) ni Keycloak (fournisseur non sollicité sur ce chemin) —
+pour **aucun** rôle, y compris `SM_DF`/`DF`/`DGA_DG`/`ADMIN`, qui exigent la
+double authentification selon `docs/09_Specifications_Fonctionnelles_PROD_v3.md`.
+Une authentification AD réussie mène directement à la création de session.
+Ceci est une décision consciente pour la fenêtre transitoire actuelle, **pas
+une régression** — mais elle prend effet **par défaut**, sur toute
+installation qui ne fixe pas `AUTH_PROVIDER=keycloak` explicitement dans
+`.env.prod`.
+
+**Avant de déployer en production** :
+- Si la double authentification est requise dès ce déploiement (cas probable
+  pour tout environnement de production réel, vu les rôles concernés) :
+  fixer `AUTH_PROVIDER=keycloak` explicitement dans `.env.prod` — ne jamais
+  supposer que le défaut convient sans l'avoir vérifié avec la personne
+  pilotant le projet.
+- Si `ad-api` est délibérément retenu pour cette fenêtre transitoire :
+  s'assurer que `AD_API_URL` pointe vers l'API AD réelle joignable depuis le
+  serveur de production, et documenter la décision (durée prévue, date de
+  revisite) au-delà de ce guide.
+- Dans les deux cas, `KEYCLOAK_BASE_URL`/`KEYCLOAK_REALM`/`KEYCLOAK_CLIENT_ID`/
+  `KEYCLOAK_CLIENT_SECRET` restent requis dans `.env.prod` (§4) — permet une
+  bascule vers `keycloak` sans reconfiguration supplémentaire, à recréer les
+  conteneurs (`docker compose ... up -d --force-recreate`, jamais un simple
+  `restart`).
 
 ---
 
@@ -363,19 +425,28 @@ gèrent plus aucun secret ni QR, seulement le compte et ses rôles.
 
 À obtenir/trancher avant un déploiement réel, pas devinés ici :
 
-1. Registre Docker réel et pipeline qui y pousse les images (§2) — **sans
+1. **`AUTH_PROVIDER` — décision de sécurité, pas un détail de configuration
+   (§4, §8.1).** Le défaut (`ad-api`) ne déclenche aucune double
+   authentification, pour aucun rôle, y compris ceux qui l'exigent selon
+   `docs/09`. À reconfirmer explicitement avec la personne pilotant le
+   projet avant tout déploiement réel — `keycloak` si la double
+   authentification est requise dès ce déploiement, `ad-api` seulement si la
+   fenêtre transitoire est délibérément acceptée pour cet environnement
+   précis.
+2. Registre Docker réel et pipeline qui y pousse les images (§2) — **sans
    objet si `docker-compose.prod.build.yml` est retenu** (build local,
    aucun registre requis).
-2. Hébergement réel de PostgreSQL/Redis/RabbitMQ (§3).
-3. Forme exacte de la résolution DUO dans l'échange Keycloak `/token` (§4 et
+3. Hébergement réel de PostgreSQL/Redis/RabbitMQ (§3).
+4. Forme exacte de la résolution DUO dans l'échange Keycloak `/token` (§4 et
    `CLAUDE.md` « Architecture Keycloak — source unique ») — un essai réel
    avec un compte DUO actif, fait personnellement par la personne pilotant
-   le projet, doit trancher avant un déploiement réel pour les comptes
-   concernés.
-4. Disponibilité du tenant DUO **côté royaume Keycloak** au moment du
+   le projet, doit trancher avant un déploiement réel avec
+   `AUTH_PROVIDER=keycloak` pour les comptes concernés.
+5. Disponibilité du tenant DUO **côté royaume Keycloak** au moment du
    déploiement — entièrement une question de configuration du royaume
    depuis le 24/08/2026, PGD ne porte plus aucune configuration DUO propre
-   (`DUO_*` retirés avec `MfaService`/`DuoProvider`, cf. §8).
-5. Séparation référentiels/démo du script de seed (§5.2) — pas encore faite
+   (`DUO_*` retirés avec `MfaService`/`DuoProvider`, cf. §8). Sans objet si
+   `AUTH_PROVIDER=ad-api`.
+6. Séparation référentiels/démo du script de seed (§5.2) — pas encore faite
    dans le dépôt.
-6. Dimensionnement serveur (§1).
+7. Dimensionnement serveur (§1).

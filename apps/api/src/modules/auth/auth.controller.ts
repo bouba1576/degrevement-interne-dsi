@@ -63,8 +63,15 @@ export class AuthController {
       throw limiteAtteinte("Trop de tentatives. Réessayez plus tard.");
     }
 
-    // Une réponse AUTHENTIFIE signifie identité ET second facteur (DUO déjà
-    // lié au royaume) tous deux résolus côté Keycloak.
+    // Facteur journalisé selon le fournisseur réellement actif (AUTH_PROVIDER,
+    // sélection strictement serveur, cf. AuthModule) — EnumFacteurAuth.AD
+    // déjà présent en base (jamais retiré lors du retrait AD/LDAP), restauré
+    // en usage actif ici plutôt que recréé. Une réponse AUTHENTIFIE signifie
+    // identité ET second facteur tous deux résolus côté Keycloak quand ce
+    // fournisseur est actif ; le chemin AD, lui, ne déclenche aucune étape
+    // MFA, ni PGD ni Keycloak — cf. CLAUDE.md « Restauration transitoire —
+    // AdApiProvider ».
+    const facteurAuth = loadEnv().AUTH_PROVIDER === "ad-api" ? "AD" : "KEYCLOAK";
     const resultatAuth = await this.keycloak.authentifier(identifiantAd, motDePasse);
     if (resultatAuth.statut === "ECHEC") {
       const { verrouille } = await this.rateLimit.enregistrerEchec("login", identifiantAd);
@@ -75,7 +82,7 @@ export class AuthController {
       // ni un DUO refusé d'un mot de passe erroné).
       await this.journal.consigner({
         evenement: "LOGIN",
-        facteur: "KEYCLOAK",
+        facteur: facteurAuth,
         succes: false,
         codeEchec: resultatAuth.codeEchec,
         messageEchec: resultatAuth.messageEchec
@@ -91,13 +98,14 @@ export class AuthController {
     const resolution = await this.rbacResolution.resoudre(utilisateurAd);
     if (resolution.statut === "NON_PROVISIONNE") {
       // Pré-enregistrement des utilisateurs AD, Temps 2 (12/08/2026) — un
-      // identifiant/mot de passe valides côté Keycloak ne suffisent plus :
-      // distinct d'un échec d'authentification (évènement/message dédiés),
-      // jamais une session dégradée à zéro rôle (JIT retiré, cf. CLAUDE.md).
+      // identifiant/mot de passe valides côté fournisseur actif ne
+      // suffisent plus : distinct d'un échec d'authentification (évènement/
+      // message dédiés), jamais une session dégradée à zéro rôle (JIT
+      // retiré, cf. CLAUDE.md).
       await this.journal.consigner({
         utilisateurId: resolution.utilisateurId ?? undefined,
         evenement: "ACCES_NON_PROVISIONNE",
-        facteur: "KEYCLOAK",
+        facteur: facteurAuth,
         succes: false
       });
       throw new UnauthorizedException({
@@ -109,7 +117,7 @@ export class AuthController {
     await this.journal.consigner({
       utilisateurId: utilisateur.id,
       evenement: "LOGIN",
-      facteur: "KEYCLOAK",
+      facteur: facteurAuth,
       succes: true
     });
 

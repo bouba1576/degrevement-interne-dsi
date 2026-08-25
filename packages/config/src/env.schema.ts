@@ -34,9 +34,32 @@ export const envSchema = z.object({
   REFRESH_COOKIE_NAME: z.string().default("pgd_refresh"),
   COOKIE_SECURE: z.coerce.boolean().default(true),
 
-  // --- Keycloak (KeycloakPort — réel, SOURCE UNIQUE d'authentification,
-  // décision actée le 24/08/2026, remplace LdapPort/LdapProvider/
-  // AdApiProvider/OpenLDAP retirés dans le même chantier) -----------------
+  // --- KeycloakPort (fournisseur cible d'authentification) — AUTH_PROVIDER
+  // restaure une sélection à deux fournisseurs (AdApiProvider, mesure
+  // transitoire, cf. CLAUDE.md « Restauration transitoire — AdApiProvider ») :
+  // un seul actif à la fois, jamais une tentative en cascade, même mécanique
+  // que l'ancien LDAP_PROVIDER/le SMTP_PROVIDER actuel. Nomme le DOMAINE
+  // (authentification), pas une implémentation précise — reste valable si un
+  // troisième fournisseur apparaît un jour.
+  //
+  // Défaut basculé sur "ad-api" le 24/08/2026 (demande explicite, même jour
+  // que la restauration) — ⚠️ ce chemin ne déclenche aucune étape MFA, ni
+  // PGD ni Keycloak, pour AUCUN rôle, y compris SM_DF/DF/DGA_DG/ADMIN qui
+  // exigent la double authentification selon docs/09. Mesure transitoire
+  // acceptée explicitement par la personne pilotant le projet, en attendant
+  // que Keycloak soit confirmé définitivement opérationnel — cf. CLAUDE.md,
+  // section dédiée, pour le détail et la date de retrait/restriction prévue.
+  AUTH_PROVIDER: z.enum(["keycloak", "ad-api"]).default("ad-api"),
+  // Base uniquement (schéma+hôte+port) — le chemin documenté
+  // (/ci.orange.ldap/rs-interface/authenticate) est fixe, ajouté par
+  // AdApiProvider, pas paramétrable ici. Vide par défaut — sans objet tant
+  // que AUTH_PROVIDER=keycloak, mais AUTH_PROVIDER vaut désormais "ad-api"
+  // par défaut : cette valeur doit être renseignée dans tout environnement
+  // qui n'override pas explicitement AUTH_PROVIDER=keycloak, sous peine
+  // d'échec fermé silencieux (fetch sur une base vide).
+  AD_API_URL: z.string().default(""),
+  AD_API_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+
   KEYCLOAK_BASE_URL: z.string().min(1, "KEYCLOAK_BASE_URL est requis"),
   KEYCLOAK_REALM: z.string().min(1, "KEYCLOAK_REALM est requis"),
   KEYCLOAK_CLIENT_ID: z.string().min(1, "KEYCLOAK_CLIENT_ID est requis"),

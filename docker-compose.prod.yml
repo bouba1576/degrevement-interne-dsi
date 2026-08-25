@@ -183,8 +183,18 @@ services:
       SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-pgd_session}
       REFRESH_COOKIE_NAME: ${REFRESH_COOKIE_NAME:-pgd_refresh}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
-      # Keycloak — SOURCE UNIQUE d'authentification, identité ET second
-      # facteur (décision actée le 24/08/2026, remplace LdapPort/
+      # AUTH_PROVIDER — AdApiProvider restauré le 24/08/2026 comme mesure
+      # TRANSITOIRE (cf. CLAUDE.md « Restauration transitoire —
+      # AdApiProvider »), défaut "ad-api" depuis le même jour. ⚠️ ce chemin ne
+      # déclenche aucune étape MFA, ni PGD ni Keycloak, pour aucun rôle — y
+      # compris SM_DF/DF/DGA_DG/ADMIN, qui exigent la double authentification
+      # selon docs/09. Décision à reconfirmer explicitement avant tout
+      # déploiement réel — cf. §4/§8 du guide de déploiement.
+      AUTH_PROVIDER: ${AUTH_PROVIDER:-ad-api}
+      AD_API_URL: ${AD_API_URL:-}
+      AD_API_TIMEOUT_MS: ${AD_API_TIMEOUT_MS:-5000}
+      # Keycloak — fournisseur cible d'authentification, identité ET second
+      # facteur quand actif (décision actée le 24/08/2026, remplace LdapPort/
       # LdapProvider/AdApiProvider/OpenLDAP ET MfaService/TotpProvider/
       # DuoProvider, tous retirés — cf. CLAUDE.md « Architecture Keycloak —
       # source unique »). Aucun conteneur Keycloak ici : royaume réel,

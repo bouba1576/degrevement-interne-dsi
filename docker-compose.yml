@@ -65,13 +65,17 @@ services:
       SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-pgd_session}
       REFRESH_COOKIE_NAME: ${REFRESH_COOKIE_NAME:-pgd_refresh}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
-      # Keycloak — SOURCE UNIQUE d'authentification, identité ET second
-      # facteur (décision actée le 24/08/2026, remplace LdapPort/
-      # LdapProvider/AdApiProvider ET MfaService/TotpProvider/DuoProvider,
-      # tous retirés — cf. CLAUDE.md « Architecture Keycloak — source
-      # unique »). Prod : royaume réel. Dev : cf. docker-compose.override.yml
+      # Keycloak reste le fournisseur cible, identité ET second facteur (cf.
+      # CLAUDE.md « Architecture Keycloak — source unique »). AUTH_PROVIDER
+      # restaure une sélection à deux fournisseurs (AdApiProvider, mesure
+      # transitoire, cf. CLAUDE.md « Restauration transitoire —
+      # AdApiProvider ») — service `api` uniquement, `worker` n'authentifie
+      # jamais. Prod : royaume réel. Dev : cf. docker-compose.override.yml
       # (service keycloak éphémère si construit — jamais la même
       # KEYCLOAK_BASE_URL dans les deux).
+      AUTH_PROVIDER: ${AUTH_PROVIDER:-ad-api}
+      AD_API_URL: ${AD_API_URL:-}
+      AD_API_TIMEOUT_MS: ${AD_API_TIMEOUT_MS:-5000}
       KEYCLOAK_BASE_URL: ${KEYCLOAK_BASE_URL}
       KEYCLOAK_REALM: ${KEYCLOAK_REALM}
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID}

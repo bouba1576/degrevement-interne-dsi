@@ -1,19 +1,25 @@
 import request from "supertest";
 import { PrismaService } from "../src/infra/prisma/prisma.service";
-import { KeycloakDirectGrantProvider } from "../src/modules/auth/providers/keycloak-direct-grant.provider";
-import type { ResultatAuthentificationAd, UtilisateurAd } from "../src/modules/auth/ports/keycloak.port";
+import { KEYCLOAK_PORT, type KeycloakPort } from "../src/modules/auth/ports/keycloak.port";
 import { demarrerAppE2e, type AppE2e } from "./helpers/e2e-app";
 
 // Pré-enregistrement des utilisateurs AD, Temps 2 (12/08/2026, CLAUDE.md) —
-// exerce POST /api/auth/login en HTTP réel, KeycloakDirectGrantProvider
-// remplacé par un faux (authentifier() toujours réussi) pour ne dépendre
-// d'aucun royaume Keycloak réel : ce test porte sur ce que fait le SERVEUR
-// une fois l'authentification franchie (Keycloak, décision du 24/08/2026,
-// remplace LdapProvider — cf. CLAUDE.md « Architecture Keycloak — source
-// unique »), pas sur l'authentification elle-même (couverte par
-// keycloak-direct-grant-provider.spec.ts). Écrit AVANT le changement de
-// comportement (Temps 2, historique), pour prouver — pas supposer — que la
-// route refuse aujourd'hui de refuser un compte non pré-enregistré.
+// exerce POST /api/auth/login en HTTP réel, KEYCLOAK_PORT remplacé par un
+// faux (authentifier() toujours réussi) pour ne dépendre d'aucun fournisseur
+// réel (ni royaume Keycloak, ni API AD réelle). Ce test porte sur ce que
+// fait le SERVEUR une fois l'authentification franchie, pas sur
+// l'authentification elle-même (couverte par
+// keycloak-direct-grant-provider.spec.ts/ad-api-provider.spec.ts).
+//
+// Override sur le TOKEN (KEYCLOAK_PORT), pas sur une classe concrète — trouvé
+// en corrigeant une régression réelle (24/08/2026, bascule du défaut
+// AUTH_PROVIDER=keycloak → ad-api, cf. CLAUDE.md « Restauration transitoire
+// — AdApiProvider ») : overrider KeycloakDirectGrantProvider ne suffisait
+// plus dès que AUTH_PROVIDER=ad-api (le défaut désormais) faisait
+// sélectionner AdApiProvider (jamais overridé) par le useFactory de
+// AuthModule — ce test dépendait silencieusement d'un défaut d'environnement
+// qu'il ne contrôlait pas. Overrider le token directement rend ce test
+// robuste à AUTH_PROVIDER, quelle que soit sa valeur.
 describe("E2E — POST /api/auth/login, refus d'un compte non pré-enregistré", () => {
   let e2e: AppE2e;
   let prisma: PrismaService;
@@ -21,20 +27,20 @@ describe("E2E — POST /api/auth/login, refus d'un compte non pré-enregistré",
   const identifiantInconnu = `e2e.non-provisionne.${suffixe}@orange.com`;
   const utilisateurIds: string[] = [];
 
-  const keycloakFaux: Pick<KeycloakDirectGrantProvider, "authentifier" | "estDisponible" | "rechercher"> = {
-    async authentifier(identifiantAd: string): Promise<ResultatAuthentificationAd> {
+  const keycloakFaux: KeycloakPort = {
+    async authentifier(identifiantAd: string) {
       return { statut: "AUTHENTIFIE", utilisateur: { identifiantAd, nom: "E2E Non Provisionné", groupes: [] } };
     },
     async estDisponible(): Promise<boolean> {
       return true;
     },
-    async rechercher(): Promise<UtilisateurAd[]> {
+    async rechercher() {
       return [];
     }
   };
 
   beforeAll(async () => {
-    e2e = await demarrerAppE2e([{ provider: KeycloakDirectGrantProvider, useValue: keycloakFaux }]);
+    e2e = await demarrerAppE2e([{ provider: KEYCLOAK_PORT, useValue: keycloakFaux }]);
     prisma = e2e.app.get(PrismaService);
   });
 
