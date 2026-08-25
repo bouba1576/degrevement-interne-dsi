@@ -146,4 +146,12 @@
   html {
     @apply font-sans;
     }
+
+  .chip {
+    @apply rounded-lg bg-blanc gap-1 px-2.5 py-1 text-xs text-gris700;
+  }
+
+  .chip.active {
+    @apply bg-noir border border-noir text-blanc ;
+  }
 }

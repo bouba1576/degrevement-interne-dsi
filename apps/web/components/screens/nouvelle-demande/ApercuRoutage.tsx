@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Card } from "@pgd/ui";
+import { Card, CircuitPill } from "@pgd/ui";
 import { apercuRoutage as appelerApercuRoutage, ApiError } from "@/lib/api";
-import type { ApercuRoutageReponse } from "@pgd/contracts";
+import type { ApercuRoutageReponse, EnumCircuit } from "@pgd/contracts";
 
 const LIBELLE_TYPE_ACTEUR: Record<string, string> = { V: "Vérification", A: "Validation", C: "Contrôle" };
 
 export interface ApercuRoutageProps {
   demandeId: string;
+  circuit: EnumCircuit
   // Mécanisme entièrement automatique, aucun bouton manuel (règle
   // permanente CLAUDE.md « mécanismes d'interaction contraignants » —
   // Phase 10.6septies, poursuite) : `declencheur` est un jeton opaque
@@ -27,7 +28,7 @@ export interface ApercuRoutageProps {
 // ferait mentir l'écran, exactement ce que WorkflowStepper refuse déjà de
 // faire pour l'escalade (cf. son propre commentaire). Rendu volontairement
 // plus simple : une liste ordonnée, sans pastille d'état.
-export function ApercuRoutage({ demandeId, declencheur }: ApercuRoutageProps) {
+export function ApercuRoutage({ demandeId, circuit, declencheur }: ApercuRoutageProps) {
   const [reponse, setReponse] = useState<ApercuRoutageReponse | null>(null);
   const [chargement, setChargement] = useState(false);
   const [erreur, setErreur] = useState<{ code: string; message: string } | null>(null);
@@ -72,7 +73,7 @@ export function ApercuRoutage({ demandeId, declencheur }: ApercuRoutageProps) {
   return (
     <Card className="p-5">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-14 font-bold">Aperçu de routage</h3>
+        <h3 className="text-14 font-bold">Routage prévu</h3>
         {chargement && <span className="text-12 font-semibold text-gris600">Calcul…</span>}
       </div>
 
@@ -91,8 +92,9 @@ export function ApercuRoutage({ demandeId, declencheur }: ApercuRoutageProps) {
 
       {reponse && (
         <div className="flex flex-col gap-3">
-          <div className="text-13">
-            Palier déclenché : <span className="font-bold">{reponse.labelPalier ?? "—"}</span>
+          <div className="row gap-8 mb-6" style={{ flexWrap: "wrap" }}>
+            <CircuitPill code={circuit} />
+            <span className="chip active ml-2">Tranche {reponse.labelPalier}</span>
           </div>
           <ol className="flex flex-col gap-2">
             {reponse.etapes.map((e) => (
