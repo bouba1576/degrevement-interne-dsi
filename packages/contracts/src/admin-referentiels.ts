@@ -116,6 +116,50 @@ export const libelleAjustementVueSchema = z.object({
 export type LibelleAjustementVue = z.infer<typeof libelleAjustementVueSchema>;
 
 // ---------------------------------------------------------------------------
+// Operateur (25/08/2026, demande explicite) — fiche Mémo Wholesale (DF),
+// champ « Opérateur » promu en référentiel admin-configurable. Même forme
+// que LibelleAjustement (id/libelle/actif), sans `circuit` : DF
+// exclusivement, jamais partagé avec DOBB/DXC.
+// ---------------------------------------------------------------------------
+export const creerOperateurRequeteSchema = z.object({
+  libelle: z.string().min(1),
+  actif: z.boolean().optional()
+});
+export type CreerOperateurRequete = z.infer<typeof creerOperateurRequeteSchema>;
+
+export const modifierOperateurRequeteSchema = creerOperateurRequeteSchema.partial();
+export type ModifierOperateurRequete = z.infer<typeof modifierOperateurRequeteSchema>;
+
+export const operateurVueSchema = z.object({
+  id: z.string().uuid(),
+  libelle: z.string(),
+  actif: z.boolean()
+});
+export type OperateurVue = z.infer<typeof operateurVueSchema>;
+
+// ---------------------------------------------------------------------------
+// PointContact (25/08/2026, demande explicite) — fiche B2B (DOBB), champ
+// « Point de contact » : déjà un <select> (Priorité 1.3, 20/08/2026) mais
+// sur une constante locale, promu ici en référentiel admin-configurable.
+// Même forme qu'Operateur ci-dessus.
+// ---------------------------------------------------------------------------
+export const creerPointContactRequeteSchema = z.object({
+  libelle: z.string().min(1),
+  actif: z.boolean().optional()
+});
+export type CreerPointContactRequete = z.infer<typeof creerPointContactRequeteSchema>;
+
+export const modifierPointContactRequeteSchema = creerPointContactRequeteSchema.partial();
+export type ModifierPointContactRequete = z.infer<typeof modifierPointContactRequeteSchema>;
+
+export const pointContactVueSchema = z.object({
+  id: z.string().uuid(),
+  libelle: z.string(),
+  actif: z.boolean()
+});
+export type PointContactVue = z.infer<typeof pointContactVueSchema>;
+
+// ---------------------------------------------------------------------------
 // SousFlux — SF-PGD-109 (« Motifs & circuits : référentiel des sous-flux et
 // motifs par circuit »). Pas de champ actif (absent du modèle Prisma,
 // contrairement à Motif/LibelleAjustement) ; pas de FK entrante

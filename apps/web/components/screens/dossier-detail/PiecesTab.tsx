@@ -9,6 +9,14 @@ export interface PiecesTabProps {
   demandeId: string;
   pieces: PieceJointeVue[];
   onChange: (pieces: PieceJointeVue[]) => void;
+  // 25/08/2026, demande explicite — en dehors du profil initiateur, aucun
+  // autre profil ne doit pouvoir ajouter/supprimer une pièce jointe.
+  // Purement un confort d'affichage côté écran : le serveur applique déjà
+  // cette même restriction (InitiateurDemandeGuard sur ajouterPiece/
+  // supprimerPiece, guard-coverage.spec.ts) — sans ce drapeau, le bouton
+  // « Ajouter une pièce » restait visible à tout viewer du dossier, qui
+  // n'obtenait un 403 qu'après avoir cliqué.
+  peutModifier: boolean;
 }
 
 function formaterTaille(octets: number): string {
@@ -22,7 +30,7 @@ function formaterTaille(octets: number): string {
 // pas supposée : à traiter comme sa propre décision (même famille que les
 // actions superviseur sans contrepartie serveur), pas comblée ici par un
 // lien qui pointerait vers rien.
-export function PiecesTab({ demandeId, pieces, onChange }: PiecesTabProps) {
+export function PiecesTab({ demandeId, pieces, onChange, peutModifier }: PiecesTabProps) {
   const [envoi, setEnvoi] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -56,26 +64,28 @@ export function PiecesTab({ demandeId, pieces, onChange }: PiecesTabProps) {
       <CardHeader
         titre={`Pièces jointes (${pieces.length})`}
         action={
-          // Déclencheur d'upload : reste un <label> (pas <Button>, qui ne
-          // rend qu'un <button> réel) — la sémantique HTML d'un input file
-          // caché exige un <label htmlFor>/enfant, jamais un bouton. Couleur
-          // alignée sur la correction bg-noir de Button (variante "sombre") :
-          // même famille de dérive (bg-encre au lieu de var(--black)) que
-          // les 20 fichiers migrés vers <Button>, ici sans pouvoir migrer la
-          // structure elle-même.
-          <label className="cursor-pointer rounded bg-noir px-3 py-1.5 text-13 font-bold text-blanc hover:enabled:bg-gris800 disabled:opacity-45">
-            {envoi ? "Envoi…" : "Ajouter une pièce"}
-            <input
-              ref={inputRef}
-              type="file"
-              className="hidden"
-              disabled={envoi}
-              onChange={(e) => {
-                const fichier = e.target.files?.[0];
-                if (fichier) void handleFichier(fichier);
-              }}
-            />
-          </label>
+          peutModifier ? (
+            // Déclencheur d'upload : reste un <label> (pas <Button>, qui ne
+            // rend qu'un <button> réel) — la sémantique HTML d'un input file
+            // caché exige un <label htmlFor>/enfant, jamais un bouton. Couleur
+            // alignée sur la correction bg-noir de Button (variante "sombre") :
+            // même famille de dérive (bg-encre au lieu de var(--black)) que
+            // les 20 fichiers migrés vers <Button>, ici sans pouvoir migrer la
+            // structure elle-même.
+            <label className="cursor-pointer rounded bg-noir px-3 py-1.5 text-13 font-bold text-blanc hover:enabled:bg-gris800 disabled:opacity-45">
+              {envoi ? "Envoi…" : "Ajouter une pièce"}
+              <input
+                ref={inputRef}
+                type="file"
+                className="hidden"
+                disabled={envoi}
+                onChange={(e) => {
+                  const fichier = e.target.files?.[0];
+                  if (fichier) void handleFichier(fichier);
+                }}
+              />
+            </label>
+          ) : undefined
         }
       />
       <div className="p-5">
@@ -94,13 +104,15 @@ export function PiecesTab({ demandeId, pieces, onChange }: PiecesTabProps) {
                     {piece.typeMime} · {formaterTaille(piece.tailleOctets)}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleSupprimer(piece.id)}
-                  className="text-13 font-semibold text-rouge700"
-                >
-                  Supprimer
-                </button>
+                {peutModifier && (
+                  <button
+                    type="button"
+                    onClick={() => handleSupprimer(piece.id)}
+                    className="text-13 font-semibold text-rouge700"
+                  >
+                    Supprimer
+                  </button>
+                )}
               </div>
             ))}
           </div>

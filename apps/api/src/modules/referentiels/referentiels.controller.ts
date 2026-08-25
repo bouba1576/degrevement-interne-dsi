@@ -9,7 +9,9 @@ import {
   listerMotifsQuerySchema,
   membreRoleVueSchema,
   motifVueSchema,
+  operateurVueSchema,
   parametresCalculPublicVueSchema,
+  pointContactVueSchema,
   sousFluxVueSchema,
   universFmiVueSchema,
   type CircuitVue,
@@ -18,7 +20,9 @@ import {
   type LibelleAjustementVue,
   type MembreRoleVue,
   type MotifVue,
+  type OperateurVue,
   type ParametresCalculPublicVue,
+  type PointContactVue,
   type SousFluxVue,
   type UniversFmiVue
 } from "@pgd/contracts";
@@ -28,6 +32,8 @@ import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import type { UtilisateurRequete } from "../../common/guards/auth.guard";
 import { AdminMotifsService } from "../admin/services/admin-motifs.service";
 import { AdminLibellesAjustementService } from "../admin/services/admin-libelles-ajustement.service";
+import { AdminOperateursService } from "../admin/services/admin-operateurs.service";
+import { AdminPointsContactService } from "../admin/services/admin-points-contact.service";
 import { AdminSousFluxService } from "../admin/services/admin-sous-flux.service";
 import { AdminCircuitsService } from "../admin/services/admin-circuits.service";
 import { ReferentielsService } from "./services/referentiels.service";
@@ -45,6 +51,8 @@ export class ReferentielsController {
     private readonly referentiels: ReferentielsService,
     private readonly motifs: AdminMotifsService,
     private readonly libellesAjustement: AdminLibellesAjustementService,
+    private readonly operateurs: AdminOperateursService,
+    private readonly pointsContact: AdminPointsContactService,
     private readonly sousFlux: AdminSousFluxService,
     private readonly circuits: AdminCircuitsService
   ) {}
@@ -92,6 +100,26 @@ export class ReferentielsController {
   async listerSousFlux(@Query() query: unknown): Promise<SousFluxVue[]> {
     const { circuit } = listerMotifsQuerySchema.parse(query);
     return this.sousFlux.lister(circuit);
+  }
+
+  // GET /api/referentiels/operateurs (25/08/2026, demande explicite) —
+  // NouvelleDemandeScreen peuple le <select> « Opérateur » (fiche Mémo
+  // Wholesale, DF) depuis cette route, jamais admin/operateurs (ADMIN_PGD).
+  @Authenticated()
+  @Get("operateurs")
+  @ApiZodResponse(200, z.array(operateurVueSchema))
+  async listerOperateurs(): Promise<OperateurVue[]> {
+    return this.operateurs.listerActifs();
+  }
+
+  // GET /api/referentiels/points-contact (25/08/2026, demande explicite) —
+  // NouvelleDemandeScreen peuple le <select> « Point de contact » (fiche
+  // B2B, DOBB) depuis cette route, jamais admin/points-contact (ADMIN_PGD).
+  @Authenticated()
+  @Get("points-contact")
+  @ApiZodResponse(200, z.array(pointContactVueSchema))
+  async listerPointsContact(): Promise<PointContactVue[]> {
+    return this.pointsContact.listerActifs();
   }
 
   @Authenticated()

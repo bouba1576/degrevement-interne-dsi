@@ -12,6 +12,10 @@ import { AdminMotifsController } from "./admin-motifs.controller";
 import { AdminMotifsService } from "./services/admin-motifs.service";
 import { AdminLibellesAjustementController } from "./admin-libelles-ajustement.controller";
 import { AdminLibellesAjustementService } from "./services/admin-libelles-ajustement.service";
+import { AdminOperateursController } from "./admin-operateurs.controller";
+import { AdminOperateursService } from "./services/admin-operateurs.service";
+import { AdminPointsContactController } from "./admin-points-contact.controller";
+import { AdminPointsContactService } from "./services/admin-points-contact.service";
 import { AdminSousFluxController } from "./admin-sous-flux.controller";
 import { AdminSousFluxService } from "./services/admin-sous-flux.service";
 import { AdminParametresGlobauxController } from "./admin-parametres-globaux.controller";
@@ -38,6 +42,8 @@ import { AuthModule } from "../auth/auth.module";
     AdminRolesController,
     AdminMotifsController,
     AdminLibellesAjustementController,
+    AdminOperateursController,
+    AdminPointsContactController,
     AdminSousFluxController,
     AdminParametresGlobauxController,
     AdminCalendrierSlaController,
@@ -51,6 +57,8 @@ import { AuthModule } from "../auth/auth.module";
     AdminRolesService,
     AdminMotifsService,
     AdminLibellesAjustementService,
+    AdminOperateursService,
+    AdminPointsContactService,
     AdminSousFluxService,
     AdminParametresGlobauxService,
     AdminCalendrierSlaService,
@@ -80,9 +88,17 @@ import { AuthModule } from "../auth/auth.module";
   // (admin/sous-flux, ADMIN_PGD, CRUD complet). Pas de listerActifs() séparé
   // ici — SousFlux n'a pas de champ `actif` (contrairement à Motif/
   // LibelleAjustement), lister() suffit.
+  // AdminOperateursService/AdminPointsContactService.listerActifs() suivent
+  // le même principe (25/08/2026) — GET /api/referentiels/operateurs et
+  // .../points-contact, ouverts à tout authentifié : NouvelleDemandeScreen
+  // en a besoin pour peupler les <select> « Opérateur »/« Point de contact »,
+  // jamais les contrôleurs admin/operateurs et admin/points-contact
+  // (ADMIN_PGD, CRUD complet).
   exports: [
     AdminMotifsService,
     AdminLibellesAjustementService,
+    AdminOperateursService,
+    AdminPointsContactService,
     AdminSousFluxService,
     AdminParametresCalculService,
     AdminCircuitsService

@@ -287,6 +287,11 @@ export function DossierDetailScreen({ dossierId, utilisateur, onRetour }: Dossie
           demandeId={dossierId}
           pieces={pieces}
           onChange={(nouvelles) => setDetail({ ...detail, pieces: nouvelles })}
+          // 25/08/2026, demande explicite — en dehors du profil initiateur,
+          // aucun autre profil (validateur, admin, etc.) ne peut ajouter/
+          // supprimer une pièce jointe. Même booléen déjà calculé pour
+          // peutCorriger/peutAbandonnerOuRappeler ci-dessus.
+          peutModifier={estInitiateur}
         />
       )}
       {onglet === "audit" && <AuditTab demandeId={dossierId} />}

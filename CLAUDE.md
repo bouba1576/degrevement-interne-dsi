@@ -1608,6 +1608,22 @@ Signalement direct (« le composant réalisé ne respecte pas le design de la ma
 
 Sweep complet : `apps/api` 43/43 suites, 271/271 tests (+1 todo) ; `pnpm build` 8/8 — aucune régression.
 
+### Opérateur (DF) / Point de contact (DOBB) — promotion en référentiels admin-configurables ; PiecesTab restreint à l'initiateur (25/08/2026)
+
+Trois demandes explicites, traitées ensemble : (1) le champ « Opérateur » de la fiche Mémo Wholesale (DF), texte libre jusqu'ici, doit devenir un `<select>` admin-configurable ; (2) le champ « Point de contact » (DOBB), déjà un `<select>` (Priorité 1.3, 20/08/2026) mais sur une constante locale, doit devenir configurable de la même façon — la promotion était déjà anticipée dans le commentaire d'origine (« à reconsidérer si le métier veut la rendre configurable ») ; (3) en dehors du profil initiateur, aucun autre profil ne doit pouvoir ajouter/supprimer une pièce jointe.
+
+**(1)/(2) — deux nouveaux référentiels, même mécanique que `LibelleAjustement`/`SousFlux` déjà en place, sans `circuit`** (chacun exclusif à un seul circuit — Operateur à DF, PointContact à DOBB — contrairement à `LibelleAjustement` qui varie par circuit) :
+- `packages/database/prisma/schema.prisma` — modèles `Operateur`/`PointContact` (`id`/`libelle` unique/`actif`), migration `20260825180000_operateur_point_contact` (écrite à la main — `prisma migrate dev` refuse l'environnement non-interactif de cette session ; `migrate deploy` l'a appliquée normalement ensuite).
+- **`Operateur` démarre vide** — aucune liste réelle d'opérateurs trouvée dans la maquette ni ailleurs dans ce dépôt (R11 : jamais une liste inventée), à peupler par l'admin. **`PointContact` seedé avec les 23 valeurs réelles déjà utilisées** (transcrites de la constante locale `POINTS_CONTACT`, elle-même transcrite de `docs/design/data.jsx:211-219` — jamais réinventées).
+- Backend : `AdminOperateursService`/`AdminPointsContactService` + contrôleurs `admin/operateurs`/`admin/points-contact` (CRUD complet, `ADMIN_PGD`), mêmes méthodes que `AdminLibellesAjustementService` (lister/listerActifs/trouver/creer/modifier/supprimer). Routes publiques `GET /api/referentiels/operateurs`/`.../points-contact` (`ReferentielsController`, `@Authenticated()` seul, `listerActifs()`) — même distinction déjà établie pour tous les autres référentiels de cet écran (lecture ouverte pour peupler un formulaire, jamais le contrôleur admin complet).
+- Frontend : `NouvelleDemandeScreen.tsx` — « Opérateur » passe d'un `<input>` à un `<select>` (toujours lié à `nomClient`, même champ que « Nom du client » DOBB/DXC, seule la présentation change) ; « Point de contact » lit désormais `listerPointsContactReferentiel()` au lieu de la constante `POINTS_CONTACT` (supprimée). `OperateursAdminTab.tsx`/`PointsContactAdminTab.tsx` (nouveaux, mêmes onglet « Motifs & libellés » qu'`AdminScreen`) — port direct de `LibellesAjustementAdminTab.tsx` sans la grille par circuit.
+
+**(3) — confort d'affichage, pas un nouveau contrôle de sécurité** : `InitiateurDemandeGuard` protégeait déjà `ajouterPiece`/`supprimerPiece` côté serveur (`guard-coverage.spec.ts`, `TABLE_DEMANDES`) — un non-initiateur cliquant « Ajouter une pièce » obtenait déjà un `403`, le bouton restait simplement visible à tort. `PiecesTab.tsx` gagne une prop `peutModifier` (bouton d'ajout + liens « Supprimer » masqués si `false`) — `DossierDetailScreen.tsx` passe `estInitiateur` (déjà calculé) ; `NouvelleDemandeScreen.tsx` passe `true` sans condition (cet écran n'est jamais atteint que par l'initiateur du dossier, création ou mode reprise).
+
+**Vérifié en direct, session mintée** : `GET /api/referentiels/points-contact` renvoie les 23 valeurs réelles après `pnpm db:seed` (vide avant — la base de dev n'avait jamais reçu ce seed). Un opérateur créé via `POST /api/admin/operateurs` apparaît immédiatement dans le `<select>` « Opérateur » de la fiche DF. Onglet admin « Motifs & libellés » affiche les deux nouvelles sections avec CRUD inline fonctionnel (capture d'écran). `PiecesTab` : dossier réel ouvert par son initiateur (`jean.kouassi`) → bouton « Ajouter une pièce » visible ; même dossier ouvert par `responsable.dobb` (rôle de validation, pas l'initiateur) → bouton absent, seul l'en-tête « Pièces jointes (0) » reste — confirmé par capture d'écran dans les deux cas.
+
+Sweep complet : `apps/api` 43/43 suites, 271/271 tests (+1 todo) ; `pnpm build` 8/8 — aucune régression.
+
 ---
 
 ## Commandes

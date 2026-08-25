@@ -26,6 +26,7 @@ import {
   motifVueSchema,
   universFmiVueSchema,
   notificationSchema,
+  operateurVueSchema,
   paliersListeReponseSchema,
   palierVueSchema,
   membreRoleVueSchema,
@@ -33,6 +34,7 @@ import {
   parametresCalculPublicVueSchema,
   parametreGlobalVueSchema,
   pieceJointeSchema,
+  pointContactVueSchema,
   roleVueSchema,
   sessionUtilisateurSchema,
   siVueSchema,
@@ -54,7 +56,9 @@ import {
   type CreerDemandeRequete,
   type CreerLibelleAjustementRequete,
   type CreerMotifRequete,
+  type CreerOperateurRequete,
   type CreerPalierRequete,
+  type CreerPointContactRequete,
   type CreerRoleRequete,
   type CreerSousFluxRequete,
   type DefinirLignesRequete,
@@ -80,10 +84,12 @@ import {
   type ModifierLibelleAjustementRequete,
   type ModifierModuleRequete,
   type ModifierMotifRequete,
+  type ModifierOperateurRequete,
   type ModifierPalierRequete,
   type ModifierParametreCalculReponse,
   type ModifierParametreCalculRequete,
   type ModifierParametreGlobalRequete,
+  type ModifierPointContactRequete,
   type ModifierRoleRequete,
   type ModifierSousFluxRequete,
   type ModifierTaxesRequete,
@@ -92,12 +98,14 @@ import {
   type ModuleVue,
   type MotifVue,
   type NotificationVue,
+  type OperateurVue,
   type PaliersListeReponse,
   type PalierVue,
   type ParametreCalculVue,
   type ParametresCalculPublicVue,
   type ParametreGlobalVue,
   type PieceJointeVue,
+  type PointContactVue,
   type PreEnregistrerUtilisateurRequete,
   type RejeterRequete,
   type RoleVue,
@@ -268,6 +276,21 @@ export function listerUniversFmi(): Promise<UniversFmiVue[]> {
 export function listerSousFluxReferentiel(circuit?: string): Promise<SousFluxVue[]> {
   const query = circuit ? `?circuit=${circuit}` : "";
   return requete(`/api/referentiels/sous-flux${query}`, z.array(sousFluxVueSchema));
+}
+
+// 25/08/2026 (demande explicite) — GET /api/referentiels/operateurs, ouvert
+// à tout authentifié. Distinct de listerOperateurs() ci-dessous (GET
+// /api/admin/operateurs, ADMIN_PGD-only, CRUD complet) : celui-ci alimente
+// le <select> « Opérateur » de NouvelleDemandeScreen (fiche Mémo Wholesale,
+// DF), pas l'écran d'administration.
+export function listerOperateursReferentiel(): Promise<OperateurVue[]> {
+  return requete("/api/referentiels/operateurs", z.array(operateurVueSchema));
+}
+
+// Même distinction que ci-dessus, pour le <select> « Point de contact »
+// (fiche B2B, DOBB).
+export function listerPointsContactReferentiel(): Promise<PointContactVue[]> {
+  return requete("/api/referentiels/points-contact", z.array(pointContactVueSchema));
 }
 
 export function listerFacteursReferentiel(): Promise<FacteurDegrevementVue[]> {
@@ -620,6 +643,58 @@ export function modifierLibelleAjustement(id: string, donnees: ModifierLibelleAj
 
 export function supprimerLibelleAjustement(id: string): Promise<{ supprime: true }> {
   return requete(`/api/admin/libelles-ajustement/${id}`, z.object({ supprime: z.literal(true) }), { method: "DELETE" });
+}
+
+// Opérateurs (25/08/2026, fiche Mémo Wholesale DF) --
+
+export function listerOperateurs(): Promise<OperateurVue[]> {
+  return requete("/api/admin/operateurs", z.array(operateurVueSchema));
+}
+
+export function creerOperateur(donnees: CreerOperateurRequete): Promise<OperateurVue> {
+  return requete("/api/admin/operateurs", operateurVueSchema, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(donnees)
+  });
+}
+
+export function modifierOperateur(id: string, donnees: ModifierOperateurRequete): Promise<OperateurVue> {
+  return requete(`/api/admin/operateurs/${id}`, operateurVueSchema, {
+    method: "PATCH",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(donnees)
+  });
+}
+
+export function supprimerOperateur(id: string): Promise<{ supprime: true }> {
+  return requete(`/api/admin/operateurs/${id}`, z.object({ supprime: z.literal(true) }), { method: "DELETE" });
+}
+
+// Points de contact (25/08/2026, fiche B2B DOBB) --
+
+export function listerPointsContact(): Promise<PointContactVue[]> {
+  return requete("/api/admin/points-contact", z.array(pointContactVueSchema));
+}
+
+export function creerPointContact(donnees: CreerPointContactRequete): Promise<PointContactVue> {
+  return requete("/api/admin/points-contact", pointContactVueSchema, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(donnees)
+  });
+}
+
+export function modifierPointContact(id: string, donnees: ModifierPointContactRequete): Promise<PointContactVue> {
+  return requete(`/api/admin/points-contact/${id}`, pointContactVueSchema, {
+    method: "PATCH",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(donnees)
+  });
+}
+
+export function supprimerPointContact(id: string): Promise<{ supprime: true }> {
+  return requete(`/api/admin/points-contact/${id}`, z.object({ supprime: z.literal(true) }), { method: "DELETE" });
 }
 
 // Sous-flux (SF-PGD-109, docs/09 §13.3) --

@@ -15,7 +15,9 @@ import type {
   FacteurDegrevementVue,
   LibelleAjustementVue,
   MotifVue,
+  OperateurVue,
   ParametresCalculPublicVue,
+  PointContactVue,
   SessionUtilisateur,
   SoumissionReponse,
   UniversFmiVue
@@ -29,6 +31,8 @@ import {
   listerFacteursReferentiel,
   listerLibellesAjustementActifs,
   listerMotifsActifs,
+  listerOperateursReferentiel,
+  listerPointsContactReferentiel,
   listerSousFluxReferentiel,
   listerUniversFmi,
   modifierDemande,
@@ -58,38 +62,11 @@ const BADGE_FICHE_PAR_CIRCUIT: Record<EnumCircuit, { texte: string; ton: "accent
   DF: { texte: "Soumis au contrôle FRA", ton: "special" }
 };
 
-// Points de contact (DOBB) — Priorité 1.3 (20/08/2026). Liste réelle
-// transcrite depuis `docs/design/data.jsx:211-219` (`POINTS_CONTACT`), pas
-// inventée — vérifiée via le harnais (docs/design, serveur statique) contre
-// le rendu réel de screens1.jsx:386. Constante locale, pas encore un
-// référentiel admin — même statut que Motif/Libellé avant leur promotion
-// (Phase A) ; « Autre » reste une option ordinaire de la liste, aucun champ
-// de saisie manuelle ne lui est associé dans la maquette elle-même.
-const POINTS_CONTACT = [
-  "Service client B2B",
-  "Service client B2C",
-  "Gestionnaire de compte",
-  "Back-office facturation",
-  "Centre d'appel",
-  "Agence commerciale",
-  "Responsable recouvrement",
-  "Service technique / dérangement",
-  "Chargé de clientèle grands comptes",
-  "Recouvrement B2B",
-  "ASCOM",
-  "FACTURATION",
-  "ADV FIXE INTERNET",
-  "AGENCE",
-  "RECOUVREMENT B2C",
-  "ROBOT FORMULAIRE GUIDE",
-  "TELE OPERATEUR MOBILE",
-  "TELE OPERATEUR FI",
-  "ORANGE BUSINESS MAIL",
-  "SAV B2B TECHNIQUE",
-  "COMMERCIAUX",
-  "ASSISTANTE DE DIRECTION",
-  "Autre"
-];
+// Points de contact (DOBB) — promu en référentiel admin-configurable
+// (25/08/2026, demande explicite) ; la liste réelle vit désormais en base
+// (packages/database/prisma/seed/referentiels/point-contact.seed.ts),
+// fetchée via listerPointsContactReferentiel() — plus une constante locale
+// ici (cf. « Point de contact » plus bas dans ce fichier).
 
 // Convention déjà établie pour Sidebar (packages/ui) : le code de rôle
 // `INITIATEUR_<CIRCUIT>` est le seul indice réel disponible côté client — pas
@@ -231,11 +208,20 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
   const [univers, setUnivers] = useState<UniversFmiVue[] | null>(null);
   const [facteurs, setFacteurs] = useState<FacteurDegrevementVue[] | null>(null);
   const [libellesAjustement, setLibellesAjustement] = useState<LibelleAjustementVue[] | null>(null);
+  // Opérateurs (DF)/Points de contact (DOBB) — 25/08/2026, demande explicite,
+  // promotion en référentiels admin-configurables. Chacun exclusif à un seul
+  // circuit (pas de scoping par circuit à l'appel, contrairement à Motif/
+  // LibelleAjustement) — même mécanique qu'univers/facteurs ci-dessous, un
+  // seul appel, jamais rechargé au changement de circuit.
+  const [operateurs, setOperateurs] = useState<OperateurVue[] | null>(null);
+  const [pointsContact, setPointsContact] = useState<PointContactVue[] | null>(null);
 
   // Univers/facteurs sont indépendants du circuit (Phase A) — un seul appel.
   useEffect(() => {
     void listerUniversFmi().then(setUnivers);
     void listerFacteursReferentiel().then(setFacteurs);
+    void listerOperateursReferentiel().then(setOperateurs);
+    void listerPointsContactReferentiel().then(setPointsContact);
   }, []);
 
   // Motifs sont scopés au circuit (GET /api/referentiels/motifs?circuit=) —
@@ -1087,28 +1073,23 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
                       </p>
                     </div>
                   )}
-                  {/* Point de contact — <select>, pas un champ libre (Priorité
-                      1.3, 20/08/2026) : liste réelle trouvée dans la maquette
-                      (docs/design/data.jsx:211-219, POINTS_CONTACT), pas
-                      inventée. Valeur toujours stockée dans champsCircuit —
-                      pas de nouveau référentiel admin (décision Priorité 2,
-                      19/08/2026), cohérent avec descriptifContestation
-                      ci-dessus ; la liste elle-même reste une constante
-                      locale, pas encore un référentiel admin-configurable —
-                      même statut que Motif/Libellé avant leur promotion
-                      (Phase A), à reconsidérer si le métier veut la rendre
-                      configurable. */}
+                  {/* Point de contact — <select> admin-configurable (25/08/2026,
+                      demande explicite ; promu depuis Priorité 1.3,
+                      20/08/2026, où la liste n'était encore qu'une constante
+                      locale). Valeur toujours stockée dans champsCircuit,
+                      inchangé — seule la source des options change. */}
                   <div>
                     <label className="mb-1 block text-13 font-bold text-gris800">Point de contact</label>
                     <select
                       className="w-full rounded border border-gris300 px-3 py-2 text-13"
                       value={pointContact}
                       onChange={(e) => setPointContact(e.target.value)}
+                      disabled={!pointsContact}
                     >
                       <option value="">— Choisir —</option>
-                      {POINTS_CONTACT.map((p) => (
-                        <option key={p} value={p}>
-                          {p}
+                      {pointsContact?.map((p) => (
+                        <option key={p.id} value={p.libelle}>
+                          {p.libelle}
                         </option>
                       ))}
                     </select>
@@ -1206,17 +1187,28 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
                 />
               </div>
               {/* Ordre exact de la maquette (Priorité 1.1, 20/08/2026) :
-                  Opérateur en 3ᵉ position, juste après « À ». */}
+                  Opérateur en 3ᵉ position, juste après « À ». <select>
+                  admin-configurable (25/08/2026, demande explicite) — texte
+                  libre jusqu'ici, promu en référentiel (Operateur), même
+                  champ nomClient qu'avant (partagé avec DOBB/DXC « Nom du
+                  client »), seule la présentation change. */}
               <div>
                 <label className="mb-1 block text-13 font-bold text-gris800">
                   Opérateur <span className="text-rouge">*</span>
                 </label>
-                <input
+                <select
                   className="w-full rounded border border-gris300 px-3 py-2 text-13"
                   value={nomClient}
                   onChange={(e) => setNomClient(e.target.value)}
-                  placeholder="Nom de l'opérateur"
-                />
+                  disabled={!operateurs}
+                >
+                  <option value="">— Choisir —</option>
+                  {operateurs?.map((o) => (
+                    <option key={o.id} value={o.libelle}>
+                      {o.libelle}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="mb-1 block text-13 font-bold text-gris800">Compte client</label>
@@ -1379,6 +1371,11 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
             demandeId={demande.demande.id}
             pieces={demande.pieces}
             onChange={(nouvelles) => setDemande((d) => (d ? { ...d, pieces: nouvelles } : d))}
+            // Cet écran n'est jamais atteint que par l'initiateur du dossier
+            // (création ou mode reprise, cf. CLAUDE.md) — toujours vrai ici,
+            // contrairement à DossierDetailScreen où n'importe quel viewer
+            // authentifié peut ouvrir un dossier tiers.
+            peutModifier
           />
         )}
       </div>

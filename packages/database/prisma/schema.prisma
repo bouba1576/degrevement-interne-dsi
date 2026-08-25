@@ -456,6 +456,40 @@ model LibelleAjustement {
   @@map("libelle_ajustement")
 }
 
+// Opérateur (25/08/2026, demande explicite) — fiche Mémo Wholesale (DF),
+// champ « Opérateur » : texte libre jusqu'ici, promu en référentiel
+// admin-configurable, même mécanique que LibelleAjustement mais sans
+// `circuit` (DF exclusivement, pas de sens pour DOBB/DXC — clients B2B/B2C
+// individuels, pas des opérateurs télécom). Pas de FK depuis Demande :
+// Demande.nomClient reste un champ texte libre (même champ que « Nom du
+// client » DOBB/DXC), ce référentiel n'alimente que les OPTIONS du select.
+// Démarre vide — aucune liste réelle d'opérateurs trouvée dans la maquette
+// ni ailleurs dans ce dépôt (R11 : jamais une liste inventée), à peupler par
+// l'admin.
+model Operateur {
+  id      String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  libelle String  @unique
+  actif   Boolean @default(true)
+
+  @@map("operateur")
+}
+
+// Point de contact (25/08/2026, demande explicite) — fiche B2B (DOBB),
+// champ « Point de contact » : déjà un <select> (Priorité 1.3, 20/08/2026)
+// mais sur une constante locale (POINTS_CONTACT, NouvelleDemandeScreen.tsx),
+// jamais un référentiel admin — promotion explicitement anticipée par le
+// commentaire d'origine (« à reconsidérer si le métier veut la rendre
+// configurable »). Même mécanique qu'Operateur ci-dessus. Seedé avec les 20
+// valeurs réelles déjà utilisées (transcrites de docs/design/data.jsx,
+// jamais inventées) — contrairement à Operateur, une vraie liste existe déjà.
+model PointContact {
+  id      String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  libelle String  @unique
+  actif   Boolean @default(true)
+
+  @@map("point_contact")
+}
+
 model ParametreCalcul {
   id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   circuit         EnumCircuit @unique
