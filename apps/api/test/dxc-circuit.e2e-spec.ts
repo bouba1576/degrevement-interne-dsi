@@ -39,7 +39,7 @@ describe("E2E — circuit DXC (B2C), parcours complet en HTTP réel", () => {
   }
 
   it("parcours complet : soumission → 4 approbations bloquantes → VALIDE", async () => {
-    const initiateur = await creerActeur("initiateur", []);
+    const initiateur = await creerActeur("initiateur", ["INITIATEUR_DXC"]);
     const responsable = await creerActeur("responsable", ["RESPONSABLE_DXC"]);
     const manager = await creerActeur("manager", ["MANAGER_DXC"]);
     const managerSenior = await creerActeur("manager-senior", ["MANAGER_SENIOR_DXC"]);
@@ -106,7 +106,7 @@ describe("E2E — circuit DXC (B2C), parcours complet en HTTP réel", () => {
   });
 
   it("R12 — un dossier DXC au-delà de 5M est rejeté à la soumission (422), pas soumissible sans arbitrage métier", async () => {
-    const initiateur = await creerActeur("initiateur-r12", []);
+    const initiateur = await creerActeur("initiateur-r12", ["INITIATEUR_DXC"]);
 
     const creation = await request(e2e.app.getHttpServer())
       .post("/api/demandes")

@@ -94,15 +94,13 @@ export const envSchema = z.object({
   SMTP_PORT: z.coerce.number().int().positive().default(587),
   SMTP_USER: z.string().default(""),
   SMTP_PASSWORD: z.string().default(""),
-  SMTP_FROM: z.string().default(""),
+  SMTP_FROM: z.string().default("")
 
-  // --- Phase 6 : claim double verrou (SF-PGD-072, PGD-051) ---------------
-  // Paramètre opérationnel (durée de détention d'un verrou de claim), pas une
-  // règle métier chiffrée — aucune source ne fixe cette valeur ; le
-  // locks-sweeper (PGD-053, cron 5 min) libère toute tâche RECLAMEE dont le
-  // verrou a expiré sans décision, donc ce TTL doit rester significativement
-  // plus long que l'intervalle du sweeper.
-  TACHE_VERROU_TTL_SECONDES: z.coerce.number().int().positive().default(1800)
+  // TACHE_VERROU_TTL_SECONDES retirée le 25/08/2026 — devenue configurable
+  // par l'administration (ParametreGlobal, cle "tache_verrou_ttl_secondes",
+  // TacheService.ttlVerrouSecondes()), demande explicite : un paramètre
+  // opérationnel sans source métier figée n'a pas sa place dans une variable
+  // d'environnement qui exige un redéploiement pour changer.
 });
 
 export type Env = z.infer<typeof envSchema>;

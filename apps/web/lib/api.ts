@@ -30,12 +30,15 @@ import {
   paliersListeReponseSchema,
   palierVueSchema,
   membreRoleVueSchema,
+  moniteurListeReponseSchema,
   parametreCalculVueSchema,
   parametresCalculPublicVueSchema,
   parametreGlobalVueSchema,
   pieceJointeSchema,
   pointContactVueSchema,
+  reportingReponseSchema,
   roleVueSchema,
+  syntheseReponseSchema,
   sessionUtilisateurSchema,
   siVueSchema,
   soumissionReponseSchema,
@@ -67,6 +70,7 @@ import {
   type DemandeDetail,
   type DirectionResponsabiliteVue,
   type EcheanceCorrectionReponse,
+  type EnumCircuit,
   type EtapeDossier,
   type FacteurDegrevementVue,
   type ListerDemandesQuery,
@@ -95,6 +99,7 @@ import {
   type ModifierTaxesRequete,
   type ModifierUtilisateurAdminRequete,
   type MembreRoleVue,
+  type MoniteurListeReponse,
   type ModuleVue,
   type MotifVue,
   type NotificationVue,
@@ -108,12 +113,16 @@ import {
   type PointContactVue,
   type PreEnregistrerUtilisateurRequete,
   type RejeterRequete,
+  type ReportingQuery,
+  type ReportingReponse,
   type RoleVue,
   type SessionUtilisateur,
   type SiVue,
   type SoumettreControleRequete,
   type SoumissionReponse,
   type SousFluxVue,
+  type SyntheseQuery,
+  type SyntheseReponse,
   type TacheVue,
   type TachesListeReponse,
   type UniversFmiVue,
@@ -206,8 +215,23 @@ const JSON_HEADERS = { "Content-Type": "application/json" };
 
 export type ProfilKpi = "initiateur" | "valideur" | "pilotage";
 
-export function fetchKpi(profil: ProfilKpi): Promise<KpiValeur[]> {
-  return requete(`/api/kpi?profil=${profil}`, z.array(kpiValeurSchema));
+// `debut`/`fin` (26/08/2026, refonte Dashboard) — bornent Demande.dateSoumission
+// côté serveur (KpiEngineService.construireWhere), jamais transmis par les
+// appelants initiateur/valideur existants d'avant ce chantier (rétrocompatible).
+export function fetchKpi(profil: ProfilKpi, circuit?: EnumCircuit, debut?: string, fin?: string): Promise<KpiValeur[]> {
+  const params = new URLSearchParams({ profil });
+  if (circuit) params.set("circuit", circuit);
+  if (debut) params.set("debut", debut);
+  if (fin) params.set("fin", fin);
+  return requete(`/api/kpi?${params.toString()}`, z.array(kpiValeurSchema));
+}
+
+export function fetchSynthese(query: SyntheseQuery): Promise<SyntheseReponse> {
+  const params = new URLSearchParams({ profil: query.profil });
+  if (query.circuit) params.set("circuit", query.circuit);
+  if (query.debut) params.set("debut", query.debut);
+  if (query.fin) params.set("fin", query.fin);
+  return requete(`/api/kpi/synthese?${params.toString()}`, syntheseReponseSchema);
 }
 
 // `limit=1` : seul `total` (un vrai count() Postgres, TacheService.lister)
@@ -481,6 +505,10 @@ export function unclaimTache(tacheId: string): Promise<TacheVue> {
   return requete(`/api/taches/${tacheId}/unclaim`, tacheVueSchema, { method: "POST" });
 }
 
+export function prolongerVerrouTache(tacheId: string): Promise<TacheVue> {
+  return requete(`/api/taches/${tacheId}/prolonger-verrou`, tacheVueSchema, { method: "POST" });
+}
+
 export function approuverTache(tacheId: string, donnees: ApprouverRequete): Promise<TacheVue> {
   return requete(`/api/taches/${tacheId}/approuver`, tacheVueSchema, {
     method: "POST",
@@ -552,6 +580,21 @@ export function modifierPalier(id: string, donnees: ModifierPalierRequete): Prom
 
 export function supprimerPalier(id: string): Promise<{ supprime: true }> {
   return requete(`/api/admin/paliers/${id}`, z.object({ supprime: z.literal(true) }), { method: "DELETE" });
+}
+
+// Moniteur (audit AdminScreen, 25/08/2026) -------------------------------
+
+export function listerMoniteur(circuit?: string): Promise<MoniteurListeReponse> {
+  const query = circuit ? `?circuit=${circuit}` : "";
+  return requete(`/api/admin/moniteur${query}`, moniteurListeReponseSchema);
+}
+
+export function relancerCorbeille(tacheId: string): Promise<{ relance: true }> {
+  return requete(`/api/admin/moniteur/${tacheId}/relancer`, z.object({ relance: z.literal(true) }), { method: "POST" });
+}
+
+export function escaladerManuellement(tacheId: string): Promise<TacheVue> {
+  return requete(`/api/admin/escalade-manuelle/${tacheId}`, tacheVueSchema, { method: "POST" });
 }
 
 // Rôles (PGD-043) -------------------------------------------------------
@@ -828,4 +871,49 @@ export function listerNotifications(query: ListerNotificationsQuery): Promise<{ 
 
 export function marquerNotificationLue(id: string): Promise<NotificationVue> {
   return requete(`/api/notifications/${id}/lu`, notificationSchema, { method: "PATCH" });
+}
+
+// --- ReportingScreen (26/08/2026) — GET /api/reporting[/export] ---------
+
+function paramsReporting(query: ReportingQuery): URLSearchParams {
+  const params = new URLSearchParams({ debut: query.debut, fin: query.fin });
+  if (query.circuit) params.set("circuit", query.circuit);
+  return params;
+}
+
+export function fetchReporting(query: ReportingQuery): Promise<ReportingReponse> {
+  return requete(`/api/reporting?${paramsReporting(query).toString()}`, reportingReponseSchema);
+}
+
+// Réponse binaire brute (Content-Disposition: attachment), jamais
+// l'enveloppe {data,error,meta} — même patron que ReportingController.
+// exporter()/AuditController.exporter() côté serveur (@Res() + res.send()
+// contourne délibérément ResponseEnvelopeInterceptor). `requete()` ne
+// convient donc pas ici : fetch() direct, lecture en Blob, déclenchement du
+// téléchargement via un <a download> éphémère.
+export async function exporterReporting(query: ReportingQuery, format: "csv" | "pdf"): Promise<void> {
+  const params = paramsReporting(query);
+  params.set("format", format);
+  const reponse = await fetch(`${API_URL}/api/reporting/export?${params.toString()}`, { credentials: "include" });
+
+  if (!reponse.ok) {
+    const corps: unknown = await reponse.json().catch(() => null);
+    const enveloppe = corps as { error?: unknown } | null;
+    const erreur = enveloppe?.error
+      ? erreurSchema.parse(enveloppe.error)
+      : { code: "ERREUR", message: "Export impossible.", details: undefined };
+    throw new ApiError(erreur.code, erreur.message, reponse.status, erreur.details);
+  }
+
+  const blob = await reponse.blob();
+  const nomFichier =
+    reponse.headers.get("Content-Disposition")?.match(/filename="([^"]+)"/)?.[1] ?? `reporting.${format}`;
+  const url = URL.createObjectURL(blob);
+  const lien = document.createElement("a");
+  lien.href = url;
+  lien.download = nomFichier;
+  document.body.appendChild(lien);
+  lien.click();
+  lien.remove();
+  URL.revokeObjectURL(url);
 }

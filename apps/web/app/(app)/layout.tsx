@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { AppShellProvider } from "@/lib/app-shell-context";
+import { ToastProvider } from "@pgd/ui";
 import { cheminDeCle, cleDePathname, titreDeChemin } from "@/lib/routes";
 import { deconnecter, fetchSession, listerDemandes, listerTachesCorbeille } from "@/lib/api";
 import type { SessionUtilisateur } from "@pgd/contracts";
@@ -110,20 +111,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const routeActuelle = cleDePathname(pathname);
 
   return (
-    <AppShellProvider value={contexte}>
-      <AppShell
-        utilisateur={utilisateur}
-        titre={titre}
-        sousTitre={sousTitre}
-        routeActuelle={routeActuelle}
-        onNaviguer={onNaviguer}
-        onDeconnexion={onDeconnexion}
-        onOuvrirDossier={onOuvrirDossier}
-        compteMesDemandes={compteMesDemandes}
-        compteCorbeilles={compteCorbeilles}
-      >
-        {children}
-      </AppShell>
-    </AppShellProvider>
+    <ToastProvider>
+      <AppShellProvider value={contexte}>
+        <AppShell
+          utilisateur={utilisateur}
+          titre={titre}
+          sousTitre={sousTitre}
+          routeActuelle={routeActuelle}
+          onNaviguer={onNaviguer}
+          onDeconnexion={onDeconnexion}
+          onOuvrirDossier={onOuvrirDossier}
+          compteMesDemandes={compteMesDemandes}
+          compteCorbeilles={compteCorbeilles}
+        >
+          {children}
+        </AppShell>
+      </AppShellProvider>
+    </ToastProvider>
   );
 }

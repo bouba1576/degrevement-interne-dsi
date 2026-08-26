@@ -27,7 +27,8 @@ interface DefinitionAdmin {
 
 const ADMINS: DefinitionAdmin[] = [
   { identifiantAd: "c_afofana6", nom: "Abou Fofana" },
-  { identifiantAd: "wrtm9736", nom: "Yaya Diomandé" }
+  { identifiantAd: "wrtm9736", nom: "Yaya Diomandé" },
+  { identifiantAd: "xfmw0715", nom: "Souleymane Traoré" }
 ];
 
 export async function seedAdmins(prisma: PrismaClient): Promise<void> {

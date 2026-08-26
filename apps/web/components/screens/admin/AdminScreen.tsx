@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { PaliersAdminTab } from "./PaliersAdminTab";
+import { MoniteurAdminTab } from "./MoniteurAdminTab";
 import { RolesAdminTab } from "./RolesAdminTab";
 import { MotifsAdminTab } from "./MotifsAdminTab";
 import { LibellesAjustementAdminTab } from "./LibellesAjustementAdminTab";
@@ -16,6 +17,7 @@ import { UtilisateursAdminTab } from "./UtilisateursAdminTab";
 
 type Onglet =
   | "processus"
+  | "moniteur"
   | "roles"
   | "motifs"
   | "circuits"
@@ -26,6 +28,7 @@ type Onglet =
 
 const ONGLETS: Array<{ cle: Onglet; libelle: string }> = [
   { cle: "processus", libelle: "Processus" },
+  { cle: "moniteur", libelle: "Moniteur" },
   { cle: "roles", libelle: "Rôles" },
   { cle: "motifs", libelle: "Motifs & libellés" },
   { cle: "circuits", libelle: "Circuits" },
@@ -46,8 +49,9 @@ const ONGLETS: Array<{ cle: Onglet; libelle: string }> = [
 // « Utilisateurs » — trou comblé (analyse + conception du 12/08/2026,
 // CLAUDE.md « Pré-enregistrement des utilisateurs AD », Temps 1) : recherche
 // AD, pré-enregistrement rôle+direction+service+MFA, édition. « Moniteur »
-// (maquette docs/design/screens3.jsx) reste exclu — aucune route ne le sert,
-// question distincte non traitée ici.
+// (maquette docs/design/screens3.jsx, MoniteurView) comblé le 25/08/2026 —
+// GET /api/admin/moniteur (agrégation cross-corbeille) + POST .../relancer
+// construits dans le même chantier, cf. CLAUDE.md.
 export function AdminScreen() {
   const [onglet, setOnglet] = useState<Onglet>("processus");
 
@@ -69,6 +73,7 @@ export function AdminScreen() {
       </div>
 
       {onglet === "processus" && <PaliersAdminTab />}
+      {onglet === "moniteur" && <MoniteurAdminTab />}
       {onglet === "roles" && <RolesAdminTab />}
       {onglet === "motifs" && (
         <>

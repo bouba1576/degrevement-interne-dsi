@@ -85,6 +85,20 @@ export class TachesController {
     return this.taches.unclaim(id, utilisateur.id);
   }
 
+  // POST /api/taches/{id}/prolonger-verrou (25/08/2026) — « continuer à
+  // garder la main » du modal de confirmation d'expiration du verrou de
+  // claim (apps/web, TacheActionBanner). Même garde que claim/unclaim (R4,
+  // CorbeilleRoleGuard) — restreint en service à l'agent qui détient
+  // effectivement le claim.
+  @Authenticated()
+  @UseGuards(CorbeilleRoleGuard)
+  @Post(":id/prolonger-verrou")
+  @HttpCode(200)
+  @ApiZodResponse(200, tacheVueSchema)
+  async prolongerVerrou(@Param("id") id: string, @CurrentUser() utilisateur: UtilisateurRequete): Promise<TacheVue> {
+    return this.taches.prolongerVerrou(id, utilisateur.id);
+  }
+
   // DelegationContextGuard AVANT CorbeilleRoleGuard/SodGuard : NestJS exécute
   // les guards dans l'ordre donné, et SodGuard lit le contexte que
   // DelegationContextGuard pose sur la requête (il ne le devine jamais

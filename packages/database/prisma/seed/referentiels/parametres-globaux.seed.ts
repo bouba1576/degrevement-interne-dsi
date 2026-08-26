@@ -28,6 +28,16 @@ export async function seedParametresGlobaux(prisma: PrismaClient): Promise<void>
       valeur: { methode: "DUO" },
       libelle: "Méthode MFA par défaut à l'enrôlement"
     },
+    // 25/08/2026, demande explicite — durée du verrou de claim (SF-PGD-072,
+    // R7), jusqu'ici figée dans TACHE_VERROU_TTL_SECONDES (packages/config,
+    // défaut 1800s/30min, non modifiable sans redéploiement). Même défaut
+    // repris ici pour ne rien changer au comportement observable tant que
+    // l'admin ne modifie pas cette clé.
+    {
+      cle: "tache_verrou_ttl_secondes",
+      valeur: { secondes: 1800 },
+      libelle: "Durée du verrou de récupération d'une tâche (claim), en secondes"
+    },
     // PGD-073 — destinataires non déterminés par les sources (CLAUDE.md
     // « Questions ouvertes ») : roleCode volontairement NULL au seed, pas
     // deviné. Tant qu'un admin ne configure pas ce rôle via

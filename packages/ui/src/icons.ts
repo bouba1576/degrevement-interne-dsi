@@ -27,6 +27,10 @@ export const ICONES = {
   alert: "M12 3l9 16H3zM12 10v4M12 17v.5",
   info: "M12 21a9 9 0 100-18 9 9 0 000 18zM12 11v5M12 8v.5",
   eye: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 15a3 3 0 100-6 3 3 0 000 6z",
+  // Absent de docs/design/ui.jsx (aucun toggle de visibilité mot de passe
+  // dans la maquette) — glyphe "eye" existant + un trait diagonal, même
+  // style minimaliste que le reste de ce fichier, pas une invention libre.
+  eyeOff: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 15a3 3 0 100-6 3 3 0 000 6zM3 3l18 18",
   edit: "M4 20h4L19 9l-4-4L4 16zM14 6l4 4",
   dots: "M5 12h.01M12 12h.01M19 12h.01",
   logout: "M15 4h4v16h-4M10 12h9m0 0l-4-4m4 4l-4 4",

@@ -13,6 +13,7 @@ export const CLE_VERS_CHEMIN: Record<string, string> = {
   admin: "/admin",
   audit: "/audit",
   consultation: "/consultation",
+  reporting: "/reporting",
   integrations: "/integrations"
 };
 
@@ -39,6 +40,8 @@ export const TITRES_PAR_CHEMIN: Record<string, { titre: string; sousTitre?: stri
   "/mes-demandes": { titre: "Mes demandes", sousTitre: "Dossiers dont vous êtes l'initiateur" },
   "/corbeilles": { titre: "Corbeilles partagées", sousTitre: "Affectation par rôle (pull)" },
   "/controle": { titre: "Contrôle a posteriori", sousTitre: "Contrôles à froid, hors chemin bloquant" },
+  "/consultation": { titre: "Consultation des dossiers", sousTitre: "Vue globale, tous initiateurs — ADMIN_PGD" },
+  "/reporting": { titre: "Reporting", sousTitre: "Transmis, rejetés, validés, en cours — ADMIN_PGD" },
   "/admin": { titre: "Administration", sousTitre: "Référentiels — ADMIN_PGD" },
   "/audit": { titre: "Journal de sécurité", sousTitre: "Connexions, MFA, refus RBAC/SoD — ADMIN_PGD" }
 };

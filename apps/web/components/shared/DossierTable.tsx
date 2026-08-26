@@ -6,6 +6,11 @@ import type { Demande } from "@pgd/contracts";
 export interface DossierTableProps {
   dossiers: Demande[];
   onOuvrir: (id: string) => void;
+  // Colonne « Initiateur » (25/08/2026, écran Consultation) — omise par
+  // défaut : sur MesDemandesScreen, l'initiateur EST déjà l'appelant, une
+  // colonne redondante n'aurait rien montré de nouveau. Consultation, seule
+  // vue tous-initiateurs confondus, en a réellement besoin.
+  avecInitiateur?: boolean;
 }
 
 const CLE_STATUT: Record<Demande["statut"], StatutDemande> = {
@@ -34,7 +39,7 @@ const CLE_STATUT: Record<Demande["statut"], StatutDemande> = {
 // `libelle` (texte libre saisi) ; la colonne ci-dessous utilise `libelle`,
 // jamais une résolution de `motifId` qui exigerait la route
 // `GET /api/admin/motifs` (ADMIN_PGD, hors de portée d'un initiateur).
-export function DossierTable({ dossiers, onOuvrir }: DossierTableProps) {
+export function DossierTable({ dossiers, onOuvrir, avecInitiateur }: DossierTableProps) {
   if (dossiers.length === 0) {
     return (
       <Card className="p-8">
@@ -53,6 +58,7 @@ export function DossierTable({ dossiers, onOuvrir }: DossierTableProps) {
             <th className="px-3 py-2">Référence</th>
             <th className="px-3 py-2">Circuit</th>
             <th className="px-3 py-2">Client</th>
+            {avecInitiateur && <th className="px-3 py-2">Initiateur</th>}
             <th className="px-3 py-2">Libellé</th>
             <th className="px-3 py-2 text-right">Montant TTC</th>
             <th className="px-3 py-2">Statut</th>
@@ -74,6 +80,7 @@ export function DossierTable({ dossiers, onOuvrir }: DossierTableProps) {
                 <div className="font-semibold">{d.nomClient}</div>
                 {d.compteClient && <div className="text-12 text-gris600">{d.compteClient}</div>}
               </td>
+              {avecInitiateur && <td className="px-3 py-2 text-gris700">{d.agentInitiateur ?? "—"}</td>}
               <td className="px-3 py-2 text-gris700">{d.libelle ?? "—"}</td>
               <td className="px-3 py-2 text-right">
                 <Money valeur={d.montantTtc} fort />

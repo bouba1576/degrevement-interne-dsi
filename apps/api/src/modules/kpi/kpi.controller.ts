@@ -1,6 +1,6 @@
 import { Controller, Get, Query, UseGuards } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
-import { kpiQuerySchema, type KpiDefinitionVue, type KpiValeur } from "@pgd/contracts";
+import { kpiQuerySchema, syntheseQuerySchema, type KpiDefinitionVue, type KpiValeur, type SyntheseReponse } from "@pgd/contracts";
 import { ApiZodQuery } from "../../common/swagger/zod-schema";
 import { Authenticated } from "../../common/decorators/authenticated.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
@@ -33,5 +33,21 @@ export class KpiController {
   @Get("definitions")
   async definitions(): Promise<KpiDefinitionVue[]> {
     return this.engine.definitions();
+  }
+
+  // 26/08/2026, refonte Dashboard — entonnoir de statuts + SLA (Initiateur/
+  // Valideur) ou 4 tuiles d'en-tête (Pilotage), cf. KpiEngineService.synthese.
+  // Même garde que calculer() : KpiPerimetreGuard lit `profil` depuis la
+  // query brute (pas le DTO), fonctionne à l'identique ici. Entrée requise
+  // dans guard-coverage.spec.ts (TABLE_KPI) — ce contrôleur énumère TOUTES
+  // ses routes, pas seulement celles d'écriture (la faille d'origine était
+  // sur une lecture agrégée).
+  @Authenticated()
+  @UseGuards(KpiPerimetreGuard)
+  @Get("synthese")
+  @ApiZodQuery(syntheseQuerySchema)
+  async synthese(@Query() query: unknown, @CurrentUser() utilisateur: UtilisateurRequete): Promise<SyntheseReponse> {
+    const dto = syntheseQuerySchema.parse(query);
+    return this.engine.synthese(dto, utilisateur);
   }
 }

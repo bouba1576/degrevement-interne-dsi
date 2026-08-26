@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { z } from "zod";
-import { Badge, Button, Card, Icon, Money } from "@pgd/ui";
+import { Badge, Button, Card, Icon, Money, useToast } from "@pgd/ui";
 import type {
   CircuitVue,
   CompteClient,
@@ -19,7 +20,6 @@ import type {
   ParametresCalculPublicVue,
   PointContactVue,
   SessionUtilisateur,
-  SoumissionReponse,
   UniversFmiVue
 } from "@pgd/contracts";
 import {
@@ -164,6 +164,8 @@ interface TaxesEdition {
 }
 
 export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemandeScreenProps) {
+  const router = useRouter();
+  const toast = useToast();
   // Déduit silencieusement du profil, jamais affiché ni modifiable à
   // l'écran (Priorité 0.2, révision du 19/08/2026, cf. CLAUDE.md) — reste
   // un état React malgré tout (24/08/2026, mode reprise) : sur un dossier
@@ -500,7 +502,6 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
   const [apercuDeclencheur, setApercuDeclencheur] = useState(0);
 
   const [soumissionEnCours, setSoumissionEnCours] = useState(false);
-  const [soumissionReussie, setSoumissionReussie] = useState<SoumissionReponse | null>(null);
   const [erreursSoumission, setErreursSoumission] = useState<ErreurRegleMetier[] | null>(null);
   const [erreurSoumissionUnique, setErreurSoumissionUnique] = useState<string | null>(null);
 
@@ -767,7 +768,13 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
     setErreurSoumissionUnique(null);
     try {
       const reponse = await soumettreDemande(demande.demande.id);
-      setSoumissionReussie(reponse);
+      toast({
+        ton: "succes",
+        titre: "Demande soumise",
+        message: `Réf. ${demande.demande.reference} — statut ${reponse.statut}, étape courante ${reponse.etapeCourante}.`
+      });
+      router.push("/mes-demandes?onglet=encours");
+      return;
     } catch (e) {
       if (e instanceof ApiError && e.code === "REGLE_METIER_VIOLEE" && e.details) {
         const violations = z.array(erreurRegleMetierSchema).safeParse(e.details);
@@ -794,15 +801,6 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
   }
   if (demandeId && !circuitPret) {
     return <p className="text-13 text-gris600">Chargement du dossier…</p>;
-  }
-
-  if (soumissionReussie) {
-    return (
-      <Card className="p-5 text-13">
-        Demande soumise — statut <span className="font-bold">{soumissionReussie.statut}</span>, étape courante{" "}
-        {soumissionReussie.etapeCourante}.
-      </Card>
-    );
   }
 
   // Options de motif — référentiel réel scopé au circuit, jamais un tableau

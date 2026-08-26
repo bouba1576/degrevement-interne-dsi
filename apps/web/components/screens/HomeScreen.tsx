@@ -1,9 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Badge, Icon, KpiCarte, Money, tonBadge, type NomIcone } from "@pgd/ui";
-import type { SessionUtilisateur, KpiValeur } from "@pgd/contracts";
-import { ApiError, fetchKpi, fetchTachesTotal, listerDemandes, listerTachesControle, type ProfilKpi } from "@/lib/api";
+import { Badge, Icon, type NomIcone } from "@pgd/ui";
+import type { SessionUtilisateur } from "@pgd/contracts";
+import { ApiError, fetchTachesTotal, listerDemandes, listerTachesControle } from "@/lib/api";
+import { SectionPilotage } from "@/components/screens/pilotage/SectionPilotage";
+import { SectionSynthese } from "@/components/screens/pilotage/SectionSynthese";
+import { SectionStatistiquesMotif } from "@/components/screens/pilotage/SectionStatistiquesMotif";
+import { GRANULARITES, calculerPeriode, type Granularite } from "@/lib/periode";
 
 const ROLE_ADMIN = "ADMIN_PGD";
 
@@ -32,11 +36,26 @@ type Onglet = "initiateur" | "valideur" | "pilotage";
 // paresseux) : si les compteurs arrivent après coup (premier chargement de
 // session, avant que leur propre fetch parent ne résolve), l'onglet ne
 // bascule pas sous l'utilisateur une fois affiché.
-function ongletParDefaut(estAdmin: boolean, compteMesDemandes?: number, compteCorbeilles?: number): Onglet {
+// RÉVISION (26/08/2026, correction explicite) — un profil Initiateur pur ne
+// doit pas pouvoir sélectionner l'onglet Valideur (ni l'inverse) : ce n'est
+// plus « le serveur scope déjà, montrer un onglet à 0 n'est pas une fuite »,
+// mais une vraie règle de visibilité — un profil ne voit que SES tabs. Le
+// choix par défaut ne pointe donc plus jamais vers un onglet que
+// `estInitiateur`/`estValideur` masqueraient ensuite (cf. onglets ci-dessous).
+function ongletParDefaut(
+  estAdmin: boolean,
+  estInitiateur: boolean,
+  estValideur: boolean,
+  compteMesDemandes?: number,
+  compteCorbeilles?: number
+): Onglet {
   if (estAdmin) return "pilotage";
-  const aDesDossiers = !!compteMesDemandes && compteMesDemandes > 0;
-  const aDesTaches = !!compteCorbeilles && compteCorbeilles > 0;
-  if (aDesTaches && !aDesDossiers) return "valideur";
+  if (estInitiateur && estValideur) {
+    const aDesDossiers = !!compteMesDemandes && compteMesDemandes > 0;
+    const aDesTaches = !!compteCorbeilles && compteCorbeilles > 0;
+    return aDesTaches && !aDesDossiers ? "valideur" : "initiateur";
+  }
+  if (estValideur) return "valideur";
   return "initiateur";
 }
 
@@ -59,9 +78,14 @@ function ongletParDefaut(estAdmin: boolean, compteMesDemandes?: number, compteCo
 // "Activité récente" reste omise : aucun flux transversal n'existe côté
 // serveur (CLAUDE.md § Questions ouvertes, toujours vrai) — lacune
 // backend, pas contournée côté client.
-// Aucune tuile n'est masquée par rôle (ni ici, ni pour "Nouvelle demande"
-// déjà en place) : un confort d'affichage par rôle serait redondant avec
-// la garde serveur réelle, jamais l'inverse (règle non négociable 2).
+// RÉVISION (25/08/2026, demande explicite) — « Nouvelle demande » est
+// désormais masquée aux profils qui ne sont ni Initiateur (un rôle
+// INITIATEUR_<CIRCUIT>) ni Admin, ici comme dans Sidebar (packages/ui) :
+// POST /api/demandes porte le même @Roles() réel côté serveur depuis ce
+// même chantier (DemandesController) — ce n'est plus un confort isolé sans
+// garde derrière, l'un ne va plus sans l'autre. Les trois autres tuiles
+// restent non masquées (leurs routes réelles n'ont aucune restriction de
+// rôle comparable à vérifier).
 // Défaut caractérisé en Phase 10.6bis (inventaire des branches
 // conditionnelles) : les sections KPI étaient toujours empilées, jamais un
 // choix exclusif par vue comme dans la maquette — corrigé ici par un
@@ -70,18 +94,38 @@ function ongletParDefaut(estAdmin: boolean, compteMesDemandes?: number, compteCo
 export function HomeScreen({ utilisateur, onNaviguer, compteMesDemandes, compteCorbeilles }: HomeScreenProps) {
   const prenom = utilisateur.nom.split(" ")[0];
   const estAdmin = utilisateur.roles.includes(ROLE_ADMIN);
+  const estInitiateur = utilisateur.roles.some((r) => r.startsWith("INITIATEUR_"));
+  // Tout rôle réel qui n'est ni INITIATEUR_<CIRCUIT> ni ADMIN_PGD est une
+  // corbeille de validation (RESPONSABLE_*/MANAGER_*/DOBB-DXC-DF/FRA/
+  // DGA_DG/CONTROLE_N1-N2, etc.) — pas une réintroduction de la taxonomie
+  // I/V/A/C déjà écartée (DIVERGENCES.md) : une lecture structurelle des
+  // codes de rôle réels, jamais une catégorie inventée.
+  const estValideur = utilisateur.roles.some((r) => r !== ROLE_ADMIN && !r.startsWith("INITIATEUR_"));
   const [onglet, setOnglet] = useState<Onglet>(() =>
-    ongletParDefaut(estAdmin, compteMesDemandes, compteCorbeilles)
+    ongletParDefaut(estAdmin, estInitiateur, estValideur, compteMesDemandes, compteCorbeilles)
   );
 
-  // Initiateur/Valideur toujours proposés aux deux — le serveur scope déjà
-  // chaque appel (R2) : montrer un onglet qui reviendrait à 0 n'est pas une
-  // fuite. Pilotage seulement si ADMIN_PGD — seule distinction fiable, un
-  // vrai rôle, pas la taxonomie I/V/A/C déjà écartée.
+  // Filtre de période (26/08/2026, refonte Dashboard — docs/design/
+  // screens3.jsx:159-166) — UN SEUL sélecteur, partagé par les 3 vues
+  // (Initiateur/Valideur/Pilotage), comme la maquette. `debut`/`fin` sont
+  // des dates explicites (cf. lib/periode.ts) — jamais la granularité
+  // elle-même envoyée au serveur.
+  const [granularite, setGranularite] = useState<Granularite>("mois");
+  const [periode, setPeriode] = useState(() => calculerPeriode("mois"));
+
+  function appliquerGranularite(g: Granularite) {
+    setGranularite(g);
+    setPeriode(calculerPeriode(g));
+  }
+
+  // RÉVISION (26/08/2026, correction explicite) — un profil Initiateur pur
+  // ne doit plus voir/pouvoir sélectionner l'onglet Valideur (ni l'inverse) :
+  // chaque onglet n'apparaît désormais que si le rôle réel de l'appelant le
+  // justifie, ADMIN_PGD voit toujours les trois.
   const onglets: Array<{ k: Onglet; l: string }> = [
-    { k: "initiateur", l: "Initiateur" },
-    { k: "valideur", l: "Valideur" },
-    ...(estAdmin ? ([{ k: "pilotage", l: "Pilotage" }] as const) : [])
+    ...(estInitiateur || estAdmin ? [{ k: "initiateur" as const, l: "Initiateur" }] : []),
+    ...(estValideur || estAdmin ? [{ k: "valideur" as const, l: "Valideur" }] : []),
+    ...(estAdmin ? [{ k: "pilotage" as const, l: "Pilotage" }] : [])
   ];
 
   return (
@@ -104,37 +148,70 @@ export function HomeScreen({ utilisateur, onNaviguer, compteMesDemandes, compteC
       </div>
 
       <div className="mb-6 grid grid-cols-3 gap-4">
-        <TuileNavigation
-          libelle="Nouvelle demande"
-          description="Saisir une fiche d'ajustement"
-          icone="plus"
-          primaire
-          onClick={() => onNaviguer("nouvelle")}
-        />
+        {(estInitiateur || estAdmin) && (
+          <TuileNavigation
+            libelle="Nouvelle demande"
+            description="Saisir une fiche d'ajustement"
+            icone="plus"
+            primaire
+            onClick={() => onNaviguer("nouvelle")}
+          />
+        )}
         <TuileCorbeilles onClick={() => onNaviguer("corbeilles")} />
         <TuileMesDemandes onClick={() => onNaviguer("mes")} />
         <TuileControle onClick={() => onNaviguer("controle")} />
       </div>
 
-      <div className="mb-4 flex gap-2">
-        {onglets.map((o) => (
-          <button
-            key={o.k}
-            type="button"
-            onClick={() => setOnglet(o.k)}
-            className={
-              "rounded px-3 py-1.5 text-13 font-bold " +
-              (onglet === o.k ? "bg-encre text-blanc" : "border border-gris200 text-gris700")
-            }
-          >
-            {o.l}
-          </button>
-        ))}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex gap-2">
+          {onglets.map((o) => (
+            <button
+              key={o.k}
+              type="button"
+              onClick={() => setOnglet(o.k)}
+              className={
+                "rounded px-3 py-1.5 text-13 font-bold " +
+                (onglet === o.k ? "bg-encre text-blanc" : "border border-gris200 text-gris700")
+              }
+            >
+              {o.l}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {GRANULARITES.map((g) => (
+            <button
+              key={g.cle}
+              type="button"
+              onClick={() => appliquerGranularite(g.cle)}
+              className={
+                "rounded-full border px-3 py-1 text-12 font-bold " +
+                (granularite === g.cle ? "border-encre bg-gris50 text-encre" : "border-gris200 text-gris700")
+              }
+            >
+              {g.libelle}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {onglet === "initiateur" && <SectionKpi titre="Mes dossiers initiés" profil="initiateur" />}
-      {onglet === "valideur" && <SectionKpi titre="Mes dossiers à traiter" profil="valideur" />}
-      {onglet === "pilotage" && estAdmin && <SectionKpi titre="Pilotage" profil="pilotage" />}
+      {/* Initiateur/Valideur — refonte 26/08/2026 (audit maquette) :
+          entonnoir de statuts + SLA (docs/design/screens3.jsx:174-198,
+          `initStats`/`valStats`), plus le panneau motifs partagé — jamais
+          le catalogue générique à 26 indicateurs, réservé à Pilotage. */}
+      {onglet === "initiateur" && (estInitiateur || estAdmin) && (
+        <>
+          <SectionSynthese profil="initiateur" circuit={null} periode={periode} />
+          <SectionStatistiquesMotif profil="initiateur" circuit={null} periode={periode} />
+        </>
+      )}
+      {onglet === "valideur" && (estValideur || estAdmin) && (
+        <>
+          <SectionSynthese profil="valideur" circuit={null} periode={periode} />
+          <SectionStatistiquesMotif profil="valideur" circuit={null} periode={periode} />
+        </>
+      )}
+      {onglet === "pilotage" && estAdmin && <SectionPilotage periode={periode} />}
     </div>
   );
 }
@@ -285,83 +362,3 @@ function TuileControle({ onClick }: { onClick: () => void }) {
   );
 }
 
-const PALETTE_FAMILLE: Record<string, { icone: NomIcone; couleur: string }> = {
-  recus: { icone: "download", couleur: tonBadge.info.texte },
-  traites: { icone: "check", couleur: tonBadge.succes.texte }
-};
-
-function SectionKpi({ titre, profil }: { titre: string; profil: ProfilKpi }) {
-  const [valeurs, setValeurs] = useState<KpiValeur[] | null>(null);
-  const [erreur, setErreur] = useState<string | null>(null);
-
-  useEffect(() => {
-    let annule = false;
-    fetchKpi(profil)
-      .then((v) => {
-        if (!annule) setValeurs(v);
-      })
-      .catch((e: unknown) => {
-        if (!annule) {
-          // Message lisible, jamais l'erreur technique brute — même si
-          // KpiPerimetreGuard ne devrait jamais être atteint ici pour
-          // `pilotage` (la section n'est rendue que si ADMIN_PGD), une
-          // session qui aurait perdu ce rôle entre le chargement de la
-          // page et cet appel reçoit un message compréhensible, pas un
-          // crash ni un 403 brut.
-          setErreur(e instanceof ApiError ? e.message : "Impossible de charger les indicateurs.");
-        }
-      });
-    return () => {
-      annule = true;
-    };
-  }, [profil]);
-
-  if (erreur) {
-    return (
-      <div className="mb-6 rounded-6 border border-gris200 bg-gris50 p-5 text-13 text-gris600">
-        {titre} — {erreur}
-      </div>
-    );
-  }
-
-  if (valeurs === null) {
-    return (
-      <div className="mb-6 text-13 text-gris600">{titre} — chargement…</div>
-    );
-  }
-
-  // Uniquement les KPI scalaires (dimensions: [] côté seed) : les KPI à
-  // ventilation (repartition) demandent un rendu dédié (tableau/graphique),
-  // hors périmètre du premier écran connecté.
-  const scalaires = valeurs.filter((v) => v.repartition === undefined && v.valeur !== null);
-
-  if (scalaires.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="mb-6">
-      <h3 className="mb-3 text-14 font-bold">{titre}</h3>
-      <div className="grid grid-cols-3 gap-4">
-        {scalaires.map((v) => {
-          const { icone, couleur }: { icone: NomIcone; couleur: string } = PALETTE_FAMILLE[v.famille] ?? {
-            icone: "chart",
-            couleur: tonBadge.neutre.texte
-          };
-          const valeurAffichee =
-            v.unite === "MONTANT" ? (
-              <Money valeur={v.valeur} fort />
-            ) : v.unite === "TAUX" ? (
-              // tauxEvolution (KpiEngineService) renvoie un RATIO (1 = +100%),
-              // jamais déjà un pourcentage — vérifié en direct (Phase 9.2) :
-              // *100 est nécessaire, pas une supposition.
-              `${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 }).format((v.valeur ?? 0) * 100)} %`
-            ) : (
-              new Intl.NumberFormat("fr-FR").format(v.valeur ?? 0)
-            );
-          return <KpiCarte key={v.code} libelle={v.libelle} valeur={valeurAffichee} icone={icone} couleur={couleur} />;
-        })}
-      </div>
-    </div>
-  );
-}

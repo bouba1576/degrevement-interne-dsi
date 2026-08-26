@@ -47,7 +47,7 @@ describe("E2E — circuit DOBB (B2B), parcours complet en HTTP réel", () => {
   }
 
   it("parcours complet : soumission → 4 approbations bloquantes → VALIDE", async () => {
-    const initiateur = await creerActeur("initiateur", []);
+    const initiateur = await creerActeur("initiateur", ["INITIATEUR_DOBB"]);
     const responsable = await creerActeur("responsable", ["RESPONSABLE_DOBB"]);
     const manager = await creerActeur("manager", ["MANAGER_DOBB"]);
     const managerSenior = await creerActeur("manager-senior", ["MANAGER_SENIOR_DOBB"]);
@@ -114,7 +114,7 @@ describe("E2E — circuit DOBB (B2B), parcours complet en HTTP réel", () => {
   });
 
   it("R12 — un dossier DOBB au-delà de 5M est rejeté à la soumission (422), pas soumissible sans arbitrage métier", async () => {
-    const initiateur = await creerActeur("initiateur-r12", []);
+    const initiateur = await creerActeur("initiateur-r12", ["INITIATEUR_DOBB"]);
 
     const creation = await request(e2e.app.getHttpServer())
       .post("/api/demandes")

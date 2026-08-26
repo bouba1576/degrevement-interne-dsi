@@ -48,7 +48,7 @@ describe("E2E — circuit DF (Wholesale), palier 1 (0–5M), parcours complet en
   }
 
   it("parcours complet : soumission → 3 approbations bloquantes → VALIDE, aucun contrôle FRA instancié (R12 ne se déclenche pas sous 5M)", async () => {
-    const initiateur = await creerActeur("initiateur", []);
+    const initiateur = await creerActeur("initiateur", ["INITIATEUR_DF"]);
     const responsable = await creerActeur("responsable", ["RESPONSABLE_DF"]);
     const manager = await creerActeur("manager", ["MANAGER_DF"]);
     const managerSenior = await creerActeur("manager-senior", ["MANAGER_SENIOR_DF"]);
@@ -131,7 +131,7 @@ describe("E2E — circuit DF (Wholesale), palier 1 (0–5M), parcours complet en
   // DOBB). Preuve positive ici : un dossier DF sans commentaire soumet et
   // valide normalement, R14_COMMENTAIRE_REQUIS n'apparaît jamais.
   it("R14 — un dossier DF se soumet sans commentaire (exception, contrairement à DOBB/DXC)", async () => {
-    const initiateur = await creerActeur("initiateur-r14", []);
+    const initiateur = await creerActeur("initiateur-r14", ["INITIATEUR_DF"]);
     const responsable = await creerActeur("responsable-r14", ["RESPONSABLE_DF"]);
     const manager = await creerActeur("manager-r14", ["MANAGER_DF"]);
     const managerSenior = await creerActeur("manager-senior-r14", ["MANAGER_SENIOR_DF"]);

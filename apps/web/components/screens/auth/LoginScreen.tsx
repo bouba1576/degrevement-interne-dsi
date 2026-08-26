@@ -23,6 +23,7 @@ export interface LoginScreenProps {
 export function LoginScreen({ onConnecte }: LoginScreenProps) {
   const [identifiantAd, setIdentifiantAd] = useState("");
   const [motDePasse, setMotDePasse] = useState("");
+  const [motDePasseVisible, setMotDePasseVisible] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [chargement, setChargement] = useState(false);
 
@@ -138,12 +139,21 @@ export function LoginScreen({ onConnecte }: LoginScreenProps) {
                   <Icon nom="lock" taille={16} />
                 </span>
                 <input
-                  type="password"
+                  type={motDePasseVisible ? "text" : "password"}
                   value={motDePasse}
                   onChange={(e) => setMotDePasse(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full rounded border border-gris300 py-2 pl-9 pr-3 text-14 font-normal"
+                  className="w-full rounded border border-gris300 py-2 pl-9 pr-9 text-14 font-normal"
                 />
+                <button
+                  type="button"
+                  onClick={() => setMotDePasseVisible((v) => !v)}
+                  tabIndex={-1}
+                  aria-label={motDePasseVisible ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gris500 hover:text-gris700"
+                >
+                  <Icon nom={motDePasseVisible ? "eyeOff" : "eye"} taille={16} />
+                </button>
               </div>
             </label>
             <button

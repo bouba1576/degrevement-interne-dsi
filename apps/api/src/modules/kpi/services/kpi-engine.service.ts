@@ -1,11 +1,12 @@
 import { Injectable } from "@nestjs/common";
 import type { KpiDefinition, Prisma } from "@pgd/database";
-import type { KpiDefinitionVue, KpiQuery, KpiRepartition, KpiValeur } from "@pgd/contracts";
+import type { KpiDefinitionVue, KpiQuery, KpiRepartition, KpiValeur, SyntheseQuery, SyntheseReponse } from "@pgd/contracts";
 import { PrismaService } from "../../../infra/prisma/prisma.service";
 import { CacheService } from "../../../infra/redis/cache.service";
 import type { UtilisateurRequete } from "../../../common/guards/auth.guard";
 
 type DemandeWhere = Prisma.DemandeWhereInput;
+type TacheWhere = Prisma.TacheWhereInput;
 type ChampGroupBy = "universFmiCode" | "motifId" | "facteurCode" | "directionRespId" | "serviceRespId";
 
 interface DimensionMeta {
@@ -138,6 +139,128 @@ export class KpiEngineService {
     return resultats;
   }
 
+  // GET /api/kpi/synthese (26/08/2026, refonte Dashboard) — entonnoir de
+  // statuts + SLA (Initiateur/Valideur) ou 4 tuiles d'en-tête (Pilotage),
+  // docs/design/screens3.jsx:174-206 (`initStats`/`valStats`/en-tête
+  // Pilotage). Aucune de ces métriques n'est un KPI_DEFINITION générique
+  // (dimension/agrégation) — requêtes Prisma directes, même discipline que
+  // ReportingService (delta avant/après en test, jamais un état ambiant
+  // supposé propre). Pas de cache : volume de requêtes bien plus faible que
+  // calculer() (une poignée de count()/aggregate(), pas 26 définitions),
+  // et cette route est appelée une fois par changement de filtre, pas en
+  // boucle.
+  async synthese(query: SyntheseQuery, utilisateur: UtilisateurRequete): Promise<SyntheseReponse> {
+    if (query.profil === "initiateur") return this.syntheseInitiateur(query, utilisateur);
+    if (query.profil === "valideur") return this.syntheseValideur(query, utilisateur);
+    return this.synthesePilotage(query);
+  }
+
+  private bornesPeriode(query: SyntheseQuery): { gte?: Date; lt?: Date } {
+    return {
+      ...(query.debut ? { gte: new Date(`${query.debut}T00:00:00.000Z`) } : {}),
+      ...(query.fin ? { lt: new Date(new Date(`${query.fin}T00:00:00.000Z`).getTime() + 86400000) } : {})
+    };
+  }
+
+  private async slaOk(where: TacheWhere): Promise<number> {
+    const taches = await this.prisma.tache.findMany({ where, select: { echeanceSla: true } });
+    if (taches.length === 0) return 100;
+    const maintenant = Date.now();
+    const enRetard = taches.filter((t) => t.echeanceSla !== null && t.echeanceSla.getTime() <= maintenant).length;
+    return Math.round(((taches.length - enRetard) / taches.length) * 100);
+  }
+
+  private async syntheseInitiateur(query: SyntheseQuery, utilisateur: UtilisateurRequete): Promise<SyntheseReponse> {
+    const periode = this.bornesPeriode(query);
+    const baseWhere: DemandeWhere = {
+      initiateurId: utilisateur.id,
+      ...(query.circuit ? { circuit: query.circuit } : {}),
+      ...(query.debut || query.fin ? { dateSoumission: periode } : {})
+    };
+
+    const [initiees, enCours, validees, rejetees, slaOk] = await Promise.all([
+      this.prisma.demande.count({ where: baseWhere }),
+      this.prisma.demande.count({ where: { ...baseWhere, statut: "SOUMIS" } }),
+      this.prisma.demande.count({ where: { ...baseWhere, statut: "VALIDE" } }),
+      this.prisma.demande.count({ where: { ...baseWhere, statut: "REJETE" } }),
+      // SLA — instantané sur mes tâches actives en ce moment, jamais borné
+      // par la période (un backlog n'est pas un événement daté, même
+      // principe déjà retenu pour « en cours » dans ReportingService).
+      this.slaOk({
+        etat: { in: ["EN_CORBEILLE", "RECLAMEE"] },
+        demande: { initiateurId: utilisateur.id, ...(query.circuit ? { circuit: query.circuit } : {}) }
+      })
+    ]);
+
+    return { profil: "initiateur", initiees, enCours, validees, rejetees, slaOk };
+  }
+
+  private async syntheseValideur(query: SyntheseQuery, utilisateur: UtilisateurRequete): Promise<SyntheseReponse> {
+    const periode = this.bornesPeriode(query);
+    const circuitFiltre: DemandeWhere = query.circuit ? { circuit: query.circuit } : {};
+    const rolesWhere: TacheWhere = { roleCorbeille: { in: utilisateur.roles }, demande: circuitFiltre };
+
+    const [enAttente, enCoursTraitement, valideesParMoi, rejeteesParMoi, slaOk] = await Promise.all([
+      this.prisma.tache.count({ where: { ...rolesWhere, etat: "EN_CORBEILLE" } }),
+      this.prisma.tache.count({ where: { ...rolesWhere, etat: "RECLAMEE" } }),
+      this.prisma.tache.count({
+        where: {
+          agentClaimId: utilisateur.id,
+          etat: "APPROUVEE",
+          demande: circuitFiltre,
+          ...((query.debut || query.fin) ? { dateDecision: periode } : {})
+        }
+      }),
+      this.prisma.tache.count({
+        where: {
+          agentClaimId: utilisateur.id,
+          etat: "REJETEE",
+          demande: circuitFiltre,
+          ...((query.debut || query.fin) ? { dateDecision: periode } : {})
+        }
+      }),
+      this.slaOk({ ...rolesWhere, etat: { in: ["EN_CORBEILLE", "RECLAMEE"] } })
+    ]);
+
+    return { profil: "valideur", enAttente, enCoursTraitement, valideesParMoi, rejeteesParMoi, slaOk };
+  }
+
+  private async synthesePilotage(query: SyntheseQuery): Promise<SyntheseReponse> {
+    const periode = this.bornesPeriode(query);
+    const circuitFiltre: DemandeWhere = query.circuit ? { circuit: query.circuit } : {};
+    const clotureWhere = (query.debut || query.fin) ? { dateCloture: periode } : {};
+
+    const [valides, rejetes, montantValideCumule, dossiersEnCircuit, dureesValides] = await Promise.all([
+      this.prisma.demande.count({ where: { ...circuitFiltre, ...clotureWhere, statut: "VALIDE" } }),
+      this.prisma.demande.count({ where: { ...circuitFiltre, ...clotureWhere, statut: "REJETE" } }),
+      this.prisma.demande.aggregate({
+        where: { ...circuitFiltre, ...clotureWhere, statut: "VALIDE" },
+        _sum: { montantTtc: true }
+      }),
+      // Instantané, jamais borné par la période — même choix que l'« en
+      // cours » de ReportingService (un backlog n'est pas un événement daté).
+      this.prisma.demande.count({ where: { ...circuitFiltre, statut: "SOUMIS" } }),
+      this.prisma.demande.findMany({
+        where: { ...circuitFiltre, ...clotureWhere, statut: "VALIDE", dateSoumission: { not: null } },
+        select: { dateSoumission: true, dateCloture: true }
+      })
+    ]);
+
+    const denominateur = valides + rejetes;
+    const heures = dureesValides
+      .filter((d): d is { dateSoumission: Date; dateCloture: Date } => d.dateSoumission !== null && d.dateCloture !== null)
+      .map((d) => (d.dateCloture.getTime() - d.dateSoumission.getTime()) / 3600000);
+    const delaiMoyenHeures = heures.length > 0 ? heures.reduce((a, b) => a + b, 0) / heures.length : null;
+
+    return {
+      profil: "pilotage",
+      delaiMoyenHeures: delaiMoyenHeures !== null ? Math.round(delaiMoyenHeures * 10) / 10 : null,
+      tauxApprobation: denominateur > 0 ? valides / denominateur : null,
+      dossiersEnCircuit,
+      montantValideCumule: Number(montantValideCumule._sum.montantTtc ?? 0)
+    };
+  }
+
   // Cache partagé entre tous les appelants d'une même forme de requête — sans
   // ceci, deux initiateurs différents demandant tous deux `profil=initiateur`
   // partageraient la même clé de cache et l'un verrait les résultats de
@@ -155,6 +278,16 @@ export class KpiEngineService {
     if (query.univers) where.universFmiCode = query.univers;
     if (query.siEtat) where.siEtat = query.siEtat;
     if (query.statutLigne) where.lignes = { some: { statutLigne: query.statutLigne } };
+    // Filtre de période (26/08/2026, refonte Dashboard) — borne le dossier
+    // par sa date de soumission, jamais l'évolution M-1→M (fenêtre mensuelle
+    // indépendante, cf. commentaire de kpiQuerySchema). Additif : absent
+    // pour tout appelant qui ne le passe pas, comportement inchangé.
+    if (query.debut || query.fin) {
+      where.dateSoumission = {
+        ...(query.debut ? { gte: new Date(`${query.debut}T00:00:00.000Z`) } : {}),
+        ...(query.fin ? { lt: new Date(new Date(`${query.fin}T00:00:00.000Z`).getTime() + 86400000) } : {})
+      };
+    }
     // Convention « reçu vs traité » ci-dessus — prioritaire sur un siEtat
     // demandé explicitement par l'appelant s'il entre en contradiction.
     if (def.surDossiersTraites) where.siEtat = "CONFIRME";

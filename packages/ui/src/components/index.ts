@@ -20,3 +20,4 @@ export * from "./Sidebar";
 export * from "./Topbar";
 export * from "./KpiCarte";
 export * from "./StatutLigneBadge";
+export * from "./Toast";

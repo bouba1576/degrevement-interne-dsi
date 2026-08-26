@@ -1,13 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Badge, Button, Card, Empty, Icon, type NomIcone, type TonBadge } from "@pgd/ui";
-import type { Demande, EnumCircuit, EnumStatutDemande } from "@pgd/contracts";
+import type { Demande, EnumCircuit, EnumStatutDemande, SessionUtilisateur } from "@pgd/contracts";
 import { ApiError, listerDemandes } from "@/lib/api";
 import { DossierTable } from "@/components/shared/DossierTable";
 import { DossierRejeteCard } from "./DossierRejeteCard";
 
 export interface MesDemandesScreenProps {
+  utilisateur: SessionUtilisateur;
   onOuvrirDossier: (id: string) => void;
   onNaviguer: (route: string) => void;
 }
@@ -62,8 +64,34 @@ const CIRCUITS: Array<{ valeur: EnumCircuit | ""; libelle: string }> = [
 //
 // ABANDONNE reste hors périmètre : un dossier abandonné par son initiateur
 // est une fin délibérée, rien à y corriger ni à y surveiller.
-export function MesDemandesScreen({ onOuvrirDossier, onNaviguer }: MesDemandesScreenProps) {
-  const [onglet, setOnglet] = useState<Onglet>("brouillons");
+const CLES_ONGLET = ONGLETS.map((o) => o.cle);
+
+export function MesDemandesScreen({ utilisateur, onOuvrirDossier, onNaviguer }: MesDemandesScreenProps) {
+  // 25/08/2026, demande explicite — même gate que Sidebar/HomeScreen : le
+  // bouton « + Nouvelle demande » de cet écran menait au même formulaire,
+  // désormais réservé à INITIATEUR_<CIRCUIT>/ADMIN_PGD côté serveur
+  // (DemandesController.creer). Cet écran lui-même reste accessible à tout
+  // authentifié (profil=initiateur le scope déjà à ses propres dossiers,
+  // vides pour un non-initiateur — rien à masquer sur l'écran en entier).
+  const estInitiateurOuAdmin = utilisateur.roles.some((r) => r.startsWith("INITIATEUR_") || r === "ADMIN_PGD");
+  // 26/08/2026, correction explicite — hors ADMIN_PGD, personne ne doit
+  // avoir à choisir un circuit ici : un rôle INITIATEUR_<CIRCUIT> (ou tout
+  // autre rôle métier réel) n'opère jamais que sur un seul circuit, le
+  // filtre était donc redondant par construction pour ces profils, jamais
+  // un vrai choix. Le filtre Circuit reste utile pour ADMIN_PGD, qui peut
+  // voir des dossiers de plusieurs circuits.
+  const estAdmin = utilisateur.roles.includes("ADMIN_PGD");
+  // ?onglet= (25/08/2026) — NouvelleDemandeScreen redirige ici après une
+  // soumission réussie, directement sur « Demandes en cours » plutôt que sur
+  // le défaut « Brouillons ». Lu une seule fois à l'initialisation (valeur
+  // figée du premier rendu, comme demandeId ailleurs dans l'app) : ce n'est
+  // pas un état piloté par l'URL en continu, juste un point d'entrée.
+  const paramsRecherche = useSearchParams();
+  const ongletInitial = (() => {
+    const valeur = paramsRecherche.get("onglet");
+    return CLES_ONGLET.includes(valeur as Onglet) ? (valeur as Onglet) : "brouillons";
+  })();
+  const [onglet, setOnglet] = useState<Onglet>(ongletInitial);
   const [dossiers, setDossiers] = useState<Demande[] | null>(null);
   const [total, setTotal] = useState(0);
   const [comptes, setComptes] = useState<Record<Onglet, number | null>>({
@@ -138,9 +166,11 @@ export function MesDemandesScreen({ onOuvrirDossier, onNaviguer }: MesDemandesSc
           Vos quatre corbeilles d&apos;initiateur. Un dossier rejeté — renvoyé pour correction ou clôturé — reste
           dans Rejetées ; corrigez et resoumettez sous le SLA du processus initié.
         </p>
-        <Button onClick={() => onNaviguer("nouvelle")} variante="sombre" taille="petite">
-          + Nouvelle demande
-        </Button>
+        {estInitiateurOuAdmin && (
+          <Button onClick={() => onNaviguer("nouvelle")} variante="sombre" taille="petite">
+            + Nouvelle demande
+          </Button>
+        )}
       </div>
 
       <div className="mb-4 flex gap-2">
@@ -176,20 +206,22 @@ export function MesDemandesScreen({ onOuvrirDossier, onNaviguer }: MesDemandesSc
             />
           </div>
         </label>
-        <label className="flex flex-col gap-1 text-13">
-          Circuit
-          <select
-            value={circuit}
-            onChange={(e) => changerFiltre(setCircuit, e.target.value as EnumCircuit | "")}
-            className="rounded border border-gris300 px-2 py-1.5 text-13"
-          >
-            {CIRCUITS.map((c) => (
-              <option key={c.valeur} value={c.valeur}>
-                {c.libelle}
-              </option>
-            ))}
-          </select>
-        </label>
+        {estAdmin && (
+          <label className="flex flex-col gap-1 text-13">
+            Circuit
+            <select
+              value={circuit}
+              onChange={(e) => changerFiltre(setCircuit, e.target.value as EnumCircuit | "")}
+              className="rounded border border-gris300 px-2 py-1.5 text-13"
+            >
+              {CIRCUITS.map((c) => (
+                <option key={c.valeur} value={c.valeur}>
+                  {c.libelle}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </Card>
 
       {erreur && <p className="mb-3 text-13 font-semibold text-rouge700">{erreur}</p>}

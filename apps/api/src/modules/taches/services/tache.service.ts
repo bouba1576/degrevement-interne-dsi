@@ -1,5 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
-import { loadEnv } from "@pgd/config";
+import { ConflictException, Injectable, InternalServerErrorException, NotFoundException } from "@nestjs/common";
 import type { ListerTachesQuery, TacheVue, TachesListeReponse } from "@pgd/contracts";
 import { PrismaService } from "../../../infra/prisma/prisma.service";
 import { CacheService } from "../../../infra/redis/cache.service";
@@ -89,13 +88,39 @@ export class TacheService {
     return this.versVue(tache);
   }
 
+  // Durée du verrou de claim (SF-PGD-072, R7) — 25/08/2026, demande
+  // explicite : rendue configurable (ParametreGlobal, cle
+  // "tache_verrou_ttl_secondes"), jusqu'ici figée dans
+  // TACHE_VERROU_TTL_SECONDES (packages/config). Toute écriture
+  // d'administration doit rester rechargeable sans redéploiement (règle non
+  // négociable 1) — un ParametreGlobal l'est par construction, un env ne
+  // l'est pas. Pas de cache Redis ici, comme les autres consultations de
+  // ParametreGlobal de ce dépôt (si_adaptateur_par_circuit,
+  // destinataire_notification_*, politique_ligne_resiliee) — jamais mis en
+  // cache, lu directement à chaque appel : la fréquence de lecture (un claim
+  // à la fois, jamais une boucle chaude) ne justifie pas d'en faire
+  // l'exception.
+  private async ttlVerrouSecondes(): Promise<number> {
+    const parametre = await this.prisma.parametreGlobal.findUnique({
+      where: { cle: "tache_verrou_ttl_secondes" }
+    });
+    const secondes = (parametre?.valeur as { secondes?: unknown } | null)?.secondes;
+    if (typeof secondes !== "number" || !Number.isInteger(secondes) || secondes <= 0) {
+      throw new InternalServerErrorException({
+        code: "PARAMETRE_GLOBAL_INVALIDE",
+        message: "tache_verrou_ttl_secondes est absent ou invalide en base."
+      });
+    }
+    return secondes;
+  }
+
   // POST /api/taches/{id}/claim (SF-PGD-072) — 200 ou 409, jamais autre chose :
   // aucun état intermédiaire visible pour l'appelant.
   async claim(tacheId: string, agentId: string): Promise<TacheVue> {
-    const env = loadEnv();
+    const ttlSecondes = await this.ttlVerrouSecondes();
     const cle = this.cleVerrou(tacheId);
 
-    const verrouAcquis = await this.cache.acquerirVerrou(cle, agentId, env.TACHE_VERROU_TTL_SECONDES);
+    const verrouAcquis = await this.cache.acquerirVerrou(cle, agentId, ttlSecondes);
     if (!verrouAcquis) {
       throw new ConflictException({
         code: "TACHE_DEJA_RECLAMEE",
@@ -106,7 +131,7 @@ export class TacheService {
 
     try {
       const maintenant = new Date();
-      const expiration = new Date(maintenant.getTime() + env.TACHE_VERROU_TTL_SECONDES * 1000);
+      const expiration = new Date(maintenant.getTime() + ttlSecondes * 1000);
 
       const { affectees } = await this.prisma.$transaction(async (tx) => {
         const { count } = await tx.tache.updateMany({
@@ -170,6 +195,57 @@ export class TacheService {
     });
 
     await this.cache.libererVerrou(this.cleVerrou(tacheId));
+    return this.trouver(tacheId);
+  }
+
+  // POST /api/taches/{id}/prolonger-verrou (25/08/2026, demande explicite) —
+  // « continuer à garder la main » du modal de confirmation d'expiration
+  // (apps/web, TacheActionBanner). Repousse verrouExpireAt d'un nouveau TTL
+  // complet (ttlVerrouSecondes()), jamais un simple ajout au reliquat —
+  // recharger la même durée que celle qu'un nouveau claim obtiendrait,
+  // cohérent avec l'intitulé « continuer » plutôt que « prolonger d'un
+  // peu ». `cache.set()` (pas acquerirVerrou, qui est un SET NX — on
+  // possède déjà ce verrou, on le réécrit, on ne tente pas de l'acquérir).
+  // Restreint à l'agent qui détient effectivement le claim, même garde que
+  // unclaim() — pas de « vol » de prolongation.
+  async prolongerVerrou(tacheId: string, agentId: string): Promise<TacheVue> {
+    const tache = await this.prisma.tache.findUnique({ where: { id: tacheId } });
+    if (!tache) {
+      throw new NotFoundException({ code: "TACHE_INTROUVABLE", message: "Tâche introuvable." });
+    }
+    if (tache.etat !== "RECLAMEE" || tache.agentClaimId !== agentId) {
+      throw new ConflictException({
+        code: "TACHE_NON_RECLAMEE_PAR_VOUS",
+        message: "Cette tâche n'est pas réclamée par vous."
+      });
+    }
+
+    const ttlSecondes = await this.ttlVerrouSecondes();
+    const expiration = new Date(Date.now() + ttlSecondes * 1000);
+
+    const { affectees } = await this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.tache.updateMany({
+        where: { id: tacheId, etat: "RECLAMEE", agentClaimId: agentId },
+        data: { verrouExpireAt: expiration }
+      });
+      if (count === 1) {
+        await tx.journalAudit.create({
+          data: { tacheId, acteur: agentId, action: "verrou_prolonge", detail: { verrouExpireAt: expiration } }
+        });
+      }
+      return { affectees: count };
+    });
+
+    if (affectees === 0) {
+      // Race avec le locks-sweeper (ou un unclaim concurrent) entre la
+      // vérification ci-dessus et l'écriture — jamais de succès partiel.
+      throw new ConflictException({
+        code: "TACHE_NON_RECLAMEE_PAR_VOUS",
+        message: "Cette tâche n'est plus réclamée par vous."
+      });
+    }
+
+    await this.cache.set(this.cleVerrou(tacheId), agentId, ttlSecondes);
     return this.trouver(tacheId);
   }
 

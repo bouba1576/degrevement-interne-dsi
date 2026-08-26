@@ -46,7 +46,7 @@ describe("E2E — circuit DF (Wholesale), palier 3 (>50M), parcours complet en H
   }
 
   it("parcours complet : soumission → 5 approbations bloquantes (DGA_DG avant-dernière) → VALIDE → contrôle FRA", async () => {
-    const initiateur = await creerActeur("initiateur", []);
+    const initiateur = await creerActeur("initiateur", ["INITIATEUR_DF"]);
     const responsable = await creerActeur("responsable", ["RESPONSABLE_DF"]);
     const manager = await creerActeur("manager", ["MANAGER_DF"]);
     const managerSenior = await creerActeur("manager-senior", ["MANAGER_SENIOR_DF"]);

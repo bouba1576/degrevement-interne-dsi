@@ -25,6 +25,8 @@ import { AdminCalendrierSlaService } from "./services/admin-calendrier-sla.servi
 import { AdminModulesController } from "./admin-modules.controller";
 import { AdminModulesService } from "./services/admin-modules.service";
 import { EscaladeManuelleService } from "./services/escalade-manuelle.service";
+import { AdminMoniteurController } from "./admin-moniteur.controller";
+import { MoniteurService } from "./services/moniteur.service";
 import { AdminUtilisateursController } from "./admin-utilisateurs.controller";
 import { AdminUtilisateursService } from "./services/admin-utilisateurs.service";
 import { LignesModule } from "../lignes/lignes.module";
@@ -48,6 +50,7 @@ import { AuthModule } from "../auth/auth.module";
     AdminParametresGlobauxController,
     AdminCalendrierSlaController,
     AdminModulesController,
+    AdminMoniteurController,
     AdminUtilisateursController
   ],
   providers: [
@@ -64,6 +67,7 @@ import { AuthModule } from "../auth/auth.module";
     AdminCalendrierSlaService,
     AdminModulesService,
     EscaladeManuelleService,
+    MoniteurService,
     AdminUtilisateursService
   ],
   // AdminMotifsService.listerActifs() est réutilisé par ReferentielsModule

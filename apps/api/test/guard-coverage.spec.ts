@@ -97,6 +97,7 @@ describe("Couverture structurelle des guards de portée — récidive des huit f
     trouver: [CorbeilleRoleGuard],
     claim: [CorbeilleRoleGuard],
     unclaim: [CorbeilleRoleGuard],
+    prolongerVerrou: [CorbeilleRoleGuard],
     approuver: [DelegationContextGuard, CorbeilleRoleGuard, SodGuard],
     rejeter: [DelegationContextGuard, CorbeilleRoleGuard, SodGuard],
     soumettreControle: [DelegationContextGuard, CorbeilleRoleGuard, SodGuard],
@@ -111,7 +112,11 @@ describe("Couverture structurelle des guards de portée — récidive des huit f
     // `definitions` est le catalogue KPI_DEFINITION (référentiel, pas de
     // donnée financière/nominative) — @Authenticated() seul est documenté
     // comme suffisant, ce n'est pas un oubli.
-    definitions: []
+    definitions: [],
+    // synthese() (26/08/2026, refonte Dashboard) — même lecture agrégée que
+    // calculer(), même guard : `profil=pilotage` (ou absent) exposerait les
+    // mêmes agrégats inter-circuits sans KpiPerimetreGuard.
+    synthese: [KpiPerimetreGuard]
   };
 
   // NotificationsController (Phase 9.2, question ouverte fermée) — `lister`

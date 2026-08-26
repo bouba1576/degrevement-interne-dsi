@@ -113,6 +113,9 @@ describe("KpiEngineService — agrégations DEMANDE (docs/04 §3.2)", () => {
     dateDemande?: Date;
     siHorodatage?: Date;
     initiateurId?: string;
+    statut?: "BROUILLON" | "SOUMIS" | "VALIDE" | "REJETE";
+    dateSoumission?: Date;
+    dateCloture?: Date;
   }) {
     const demande = await prisma.demande.create({
       data: {
@@ -128,7 +131,10 @@ describe("KpiEngineService — agrégations DEMANDE (docs/04 §3.2)", () => {
         motifId: options.motifId,
         siEtat: options.siEtat ?? "EN_ATTENTE",
         dateDemande: options.dateDemande ?? new Date(),
-        siHorodatage: options.siHorodatage
+        siHorodatage: options.siHorodatage,
+        statut: options.statut,
+        dateSoumission: options.dateSoumission,
+        dateCloture: options.dateCloture
       }
     });
     demandeIds.push(demande.id);
@@ -311,4 +317,161 @@ describe("KpiEngineService — agrégations DEMANDE (docs/04 §3.2)", () => {
   // kpi-perimetre.guard.spec.ts), pas par ce service, qui suppose
   // l'autorisation déjà acquise pour ce profil (même principe que
   // TacheWorkflowService vis-à-vis de SodGuard).
+
+  // synthese() (26/08/2026, refonte Dashboard) — entonnoir de statuts + SLA
+  // (Initiateur/Valideur), 4 tuiles d'en-tête (Pilotage). Delta avant/après
+  // sur des fenêtres de dates rares (années passées distinctes par cas),
+  // même discipline que reporting-service.integration.spec.ts — jamais une
+  // égalité absolue qui suppose un état ambiant propre.
+  describe("synthese()", () => {
+    it("initiateur — entonnoir de statuts scopé à mes dossiers, dateSoumission dans [debut, fin)", async () => {
+      const debut = "2013-02-01";
+      const fin = "2013-02-28";
+      const avant = await engine.synthese({ profil: "initiateur", debut, fin }, initiateurAppelant);
+      if (avant.profil !== "initiateur") throw new Error("forme de réponse inattendue");
+
+      await Promise.all([
+        creerDemande({ statut: "SOUMIS", dateSoumission: new Date("2013-02-10") }),
+        creerDemande({ statut: "VALIDE", dateSoumission: new Date("2013-02-12") }),
+        creerDemande({ statut: "REJETE", dateSoumission: new Date("2013-02-14") }),
+        creerDemande({ statut: "SOUMIS", dateSoumission: new Date("2013-03-01") }) // hors fenêtre
+      ]);
+
+      const apres = await engine.synthese({ profil: "initiateur", debut, fin }, initiateurAppelant);
+      if (apres.profil !== "initiateur") throw new Error("forme de réponse inattendue");
+      expect(apres.initiees - avant.initiees).toBe(3);
+      expect(apres.enCours - avant.enCours).toBe(1);
+      expect(apres.validees - avant.validees).toBe(1);
+      expect(apres.rejetees - avant.rejetees).toBe(1);
+    });
+
+    it("initiateur — slaOk instantané (indépendant de debut/fin), baisse quand une tâche de mes dossiers passe en retard", async () => {
+      const demandeOk = await creerDemande({});
+      await prisma.tache.create({
+        data: {
+          demandeId: demandeOk.id,
+          roleCorbeille: roleTestDetenu,
+          ordre: 1,
+          typeActeur: "V",
+          bloquant: true,
+          slaHeures: 8,
+          etat: "EN_CORBEILLE",
+          echeanceSla: new Date(Date.now() + 8 * 3600000)
+        }
+      });
+      const avant = await engine.synthese({ profil: "initiateur" }, initiateurAppelant);
+      if (avant.profil !== "initiateur") throw new Error("forme de réponse inattendue");
+
+      const demandeRetard = await creerDemande({});
+      await prisma.tache.create({
+        data: {
+          demandeId: demandeRetard.id,
+          roleCorbeille: roleTestDetenu,
+          ordre: 1,
+          typeActeur: "V",
+          bloquant: true,
+          slaHeures: 1,
+          etat: "EN_CORBEILLE",
+          echeanceSla: new Date(Date.now() - 3600000)
+        }
+      });
+
+      const apres = await engine.synthese({ profil: "initiateur", debut: "2020-06-01", fin: "2020-06-02" }, initiateurAppelant);
+      if (apres.profil !== "initiateur") throw new Error("forme de réponse inattendue");
+      expect(apres.slaOk).toBeLessThan(avant.slaOk);
+    });
+
+    it("valideur — enAttente/enCoursTraitement instantanés, valideesParMoi/rejeteesParMoi scopés à dateDecision dans la fenêtre", async () => {
+      const roleDetenu = valideurDobb.roles[0]!;
+      const debut = "2012-05-01";
+      const fin = "2012-05-31";
+      const avant = await engine.synthese({ profil: "valideur", debut, fin }, valideurDobb);
+      if (avant.profil !== "valideur") throw new Error("forme de réponse inattendue");
+
+      const [dApprouve, dRejete] = await Promise.all([creerDemande({}), creerDemande({})]);
+      await Promise.all([
+        creerDemandeAvecTache(roleDetenu),
+        creerDemandeAvecTache(roleDetenu),
+        prisma.tache.create({
+          data: {
+            demandeId: dApprouve.id,
+            roleCorbeille: roleDetenu,
+            ordre: 1,
+            typeActeur: "V",
+            bloquant: true,
+            slaHeures: 8,
+            etat: "APPROUVEE",
+            agentClaimId: agentId,
+            dateDecision: new Date("2012-05-15")
+          }
+        }),
+        prisma.tache.create({
+          data: {
+            demandeId: dRejete.id,
+            roleCorbeille: roleDetenu,
+            ordre: 1,
+            typeActeur: "V",
+            bloquant: true,
+            slaHeures: 8,
+            etat: "REJETEE",
+            agentClaimId: agentId,
+            dateDecision: new Date("2012-05-20")
+          }
+        })
+      ]);
+
+      const apres = await engine.synthese({ profil: "valideur", debut, fin }, valideurDobb);
+      if (apres.profil !== "valideur") throw new Error("forme de réponse inattendue");
+      expect(apres.enAttente - avant.enAttente).toBe(2);
+      expect(apres.valideesParMoi - avant.valideesParMoi).toBe(1);
+      expect(apres.rejeteesParMoi - avant.rejeteesParMoi).toBe(1);
+    });
+
+    it("pilotage — montantValideCumule/dossiersEnCircuit en delta, tauxApprobation/délaiMoyenHeures null si aucun dossier clôturé", async () => {
+      const debutVide = "2010-01-01";
+      const finVide = "2010-01-02";
+      const vide = await engine.synthese({ profil: "pilotage", circuit: "DOBB", debut: debutVide, fin: finVide }, admin);
+      if (vide.profil !== "pilotage") throw new Error("forme de réponse inattendue");
+      expect(vide.tauxApprobation).toBeNull();
+      expect(vide.delaiMoyenHeures).toBeNull();
+
+      const debut = "2011-07-01";
+      const fin = "2011-07-31";
+      const avant = await engine.synthese({ profil: "pilotage", circuit: "DOBB", debut, fin }, admin);
+      if (avant.profil !== "pilotage") throw new Error("forme de réponse inattendue");
+
+      await Promise.all([
+        creerDemande({
+          statut: "VALIDE",
+          dateSoumission: new Date("2011-07-01T00:00:00Z"),
+          dateCloture: new Date("2011-07-03T00:00:00Z"),
+          montantTtc: 100_000
+        }),
+        creerDemande({ statut: "SOUMIS" }) // dossier en circuit — instantané, pas borné par debut/fin
+      ]);
+
+      const apres = await engine.synthese({ profil: "pilotage", circuit: "DOBB", debut, fin }, admin);
+      if (apres.profil !== "pilotage") throw new Error("forme de réponse inattendue");
+      expect(apres.montantValideCumule - avant.montantValideCumule).toBe(100_000);
+      expect(apres.dossiersEnCircuit - avant.dossiersEnCircuit).toBe(1);
+      expect(apres.delaiMoyenHeures).not.toBeNull();
+    });
+
+    it("pilotage — tauxApprobation exact dans une fenêtre isolée (2 validés + 1 rejeté → 2/3, jamais 0,5)", async () => {
+      // Ratio délibérément asymétrique (pas 1 validé/1 rejeté) — un calcul
+      // sabotant tauxApprobation vers une constante à 0,5 doit être détecté
+      // ici, pas coïncider avec le résultat attendu.
+      const debut = "2009-11-01";
+      const fin = "2009-11-30";
+      await Promise.all([
+        creerDemande({ statut: "VALIDE", dateSoumission: new Date("2009-11-01"), dateCloture: new Date("2009-11-05") }),
+        creerDemande({ statut: "VALIDE", dateSoumission: new Date("2009-11-01"), dateCloture: new Date("2009-11-07") }),
+        creerDemande({ statut: "REJETE", dateSoumission: new Date("2009-11-01"), dateCloture: new Date("2009-11-06") })
+      ]);
+
+      const resultat = await engine.synthese({ profil: "pilotage", circuit: "DOBB", debut, fin }, admin);
+      if (resultat.profil !== "pilotage") throw new Error("forme de réponse inattendue");
+      expect(resultat.tauxApprobation).toBeCloseTo(2 / 3, 5);
+    });
+  });
 });

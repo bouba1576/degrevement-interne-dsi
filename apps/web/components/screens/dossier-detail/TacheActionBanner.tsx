@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, Icon, Modal, SlaTimer, TypeActeurBadge } from "@pgd/ui";
+import { Button, Icon, Modal, SlaTimer, TypeActeurBadge, useToast } from "@pgd/ui";
 import type { Demande, EtapeDossier, MembreRoleVue, RevueChamp, SessionUtilisateur, TacheVue } from "@pgd/contracts";
 import {
   ApiError,
@@ -9,6 +9,7 @@ import {
   claimTache,
   deleguerTache,
   listerMembresRole,
+  prolongerVerrouTache,
   rejeterTache,
   trouverTache,
   unclaimTache
@@ -40,12 +41,14 @@ export function TacheActionBanner({
     (e) => utilisateur.roles.includes(e.roleCode) && (e.etat === "EN_CORBEILLE" || e.etat === "RECLAMEE")
   );
 
+  const toast = useToast();
   const [tache, setTache] = useState<TacheVue | null>(null);
   const [chargement, setChargement] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [modalRejet, setModalRejet] = useState(false);
   const [modalExamen, setModalExamen] = useState(false);
   const [modalDeleguer, setModalDeleguer] = useState(false);
+  const [modalVerrouExpire, setModalVerrouExpire] = useState(false);
   // GET /api/referentiels/roles/:roleCode/membres (25/08/2026, bouton
   // Déléguer — cf. CLAUDE.md « Aucune route ne liste ou ne recherche les
   // utilisateurs »). Sert deux besoins avec un seul fetch : peupler le
@@ -90,6 +93,30 @@ export function TacheActionBanner({
     };
   }, [etapeActionnable]);
 
+  // Modal de confirmation d'expiration du verrou (25/08/2026, demande
+  // explicite) — surveille tache.verrouExpireAt tant que la tâche est
+  // réclamée PAR MOI, déclenche le modal dès que l'échéance est atteinte
+  // (même cadence de vérification — 1s — que SlaTimer, packages/ui). Ne se
+  // referme jamais tout seul (pas de setModalVerrouExpire(false) côté
+  // watcher) : seules les deux actions du modal (Continuer/Libérer) le
+  // ferment — le locks-sweeper (apps/worker, cron 5 min) libère de toute
+  // façon la tâche si personne ne répond, ce modal n'est qu'une chance
+  // donnée à l'humain d'agir avant cette libération automatique.
+  useEffect(() => {
+    const detenuParMoi = tache?.etat === "RECLAMEE" && tache.agentClaimId === utilisateur.id;
+    if (!detenuParMoi || !tache?.verrouExpireAt) {
+      setModalVerrouExpire(false);
+      return;
+    }
+    const echeance = new Date(tache.verrouExpireAt).getTime();
+    function verifier() {
+      if (Date.now() >= echeance) setModalVerrouExpire(true);
+    }
+    verifier();
+    const intervalle = setInterval(verifier, 1000);
+    return () => clearInterval(intervalle);
+  }, [tache, utilisateur.id]);
+
   if (!etapeActionnable || !tache) return null;
 
   const nomCollegue = membres?.find((m) => m.id === tache.agentClaimId)?.nom ?? null;
@@ -113,22 +140,35 @@ export function TacheActionBanner({
   const isFinal =
     etapesBloquantes.length > 0 && etapeActionnable.ordre === Math.max(...etapesBloquantes.map((e) => e.ordre));
 
-  async function executer(action: () => Promise<unknown>) {
+  // Retourne `true` en cas de succès, `false` en cas d'échec (erreur déjà
+  // posée dans `erreur`) — nécessaire depuis que les appelants (toast de
+  // confirmation, 25/08/2026) doivent distinguer les deux : avant, chaque
+  // appelant fermait sa modale et poursuivait inconditionnellement après
+  // `executer(...)`, même en échec (l'erreur restait affichée, mais la
+  // modale se fermait quand même — déjà le comportement existant, pas
+  // aggravé ici, seulement rendu explicite pour que le toast ne mente
+  // jamais sur un échec réel).
+  async function executer(action: () => Promise<unknown>): Promise<boolean> {
     setChargement(true);
     setErreur(null);
     try {
       await action();
       onActionEffectuee();
+      return true;
     } catch (e) {
       setErreur(e instanceof ApiError ? e.message : "Action impossible.");
+      return false;
     } finally {
       setChargement(false);
     }
   }
 
   async function handleApprouver(revue: RevueChamp[]) {
-    await executer(() => approuverTache(tache!.id, { revue }));
+    const succes = await executer(() => approuverTache(tache!.id, { revue }));
     setModalExamen(false);
+    if (succes) {
+      toast({ ton: "succes", titre: "Étape approuvée", message: `Dossier ${demande.reference} — ${etapeActionnable!.roleLibelle}.` });
+    }
   }
 
   // Rejet déclenché depuis l'examen (anomalie signalée) — toujours un
@@ -138,13 +178,41 @@ export function TacheActionBanner({
   // « Rejeter » dédié (modalRejet, ci-dessous), avec sa case « et
   // clôturer », reste le seul chemin vers une clôture terminale.
   async function handleRejeterDepuisExamen(motifCompile: string) {
-    await executer(() => rejeterTache(tache!.id, { motif: motifCompile, clore: false }));
+    const succes = await executer(() => rejeterTache(tache!.id, { motif: motifCompile, clore: false }));
     setModalExamen(false);
+    if (succes) {
+      toast({ ton: "info", titre: "Dossier rejeté et renvoyé", message: `Dossier ${demande.reference} — renvoyé à l'initiateur pour correction.` });
+    }
   }
 
   async function handleDeleguer(valeur: { delegataireId: string; debut: string; fin: string; noteInterim: string }) {
     await executer(() => deleguerTache(tache!.id, valeur));
     setModalDeleguer(false);
+  }
+
+  // « Continuer à garder la main » — pas via executer() (chargement/erreur
+  // partagés conviennent, mais on a besoin de la TacheVue à jour pour
+  // reposer tache.verrouExpireAt, executer() ne renvoie qu'un booléen).
+  async function handleContinuerVerrou() {
+    setChargement(true);
+    setErreur(null);
+    try {
+      const misAJour = await prolongerVerrouTache(tache!.id);
+      setTache(misAJour);
+      setModalVerrouExpire(false);
+    } catch (e) {
+      setErreur(e instanceof ApiError ? e.message : "Action impossible.");
+    } finally {
+      setChargement(false);
+    }
+  }
+
+  async function handleLibererDefinitivement() {
+    const succes = await executer(() => unclaimTache(tache!.id));
+    setModalVerrouExpire(false);
+    if (succes) {
+      toast({ ton: "info", titre: "Dossier libéré", message: `Dossier ${demande.reference} — remis en corbeille.` });
+    }
   }
 
   return (
@@ -239,6 +307,7 @@ export function TacheActionBanner({
                 }
                 onClick={() =>
                   executer(async () => {
+                    const cloreCeRejet = clore;
                     await rejeterTache(tache.id, {
                       motif: motifRejet.trim(),
                       clore,
@@ -248,6 +317,11 @@ export function TacheActionBanner({
                     setMotifRejet("");
                     setClore(false);
                     setMotifCloture("");
+                    toast({
+                      ton: "info",
+                      titre: cloreCeRejet ? "Dossier rejeté et clôturé" : "Dossier rejeté et renvoyé",
+                      message: `Dossier ${demande.reference}.`
+                    });
                   })
                 }
                 variante="danger"
@@ -318,6 +392,28 @@ export function TacheActionBanner({
           onConfirmer={handleDeleguer}
           chargement={chargement}
         />
+      )}
+
+      {modalVerrouExpire && (
+        // Pas de fermeture par Échap/clic extérieur/croix (onFermer no-op) —
+        // une décision explicite est requise, sans quoi le locks-sweeper
+        // (apps/worker, cron 5 min) libère la tâche de toute façon.
+        <Modal titre="Vous détenez cette tâche depuis longtemps" icone="lock" onFermer={() => {}}>
+          <div className="flex flex-col gap-4 text-13">
+            <p className="text-gris700">
+              Le délai de récupération de cette tâche est atteint. Souhaitez-vous continuer à la traiter, ou la
+              libérer pour qu&apos;un autre agent puisse la reprendre ?
+            </p>
+            <div className="flex justify-end gap-2.5">
+              <Button disabled={chargement} onClick={handleLibererDefinitivement} variante="fantome" taille="petite">
+                Libérer définitivement
+              </Button>
+              <Button disabled={chargement} onClick={handleContinuerVerrou} variante="sombre" taille="petite">
+                <Icon nom="lock" taille={14} /> Continuer à garder la main
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

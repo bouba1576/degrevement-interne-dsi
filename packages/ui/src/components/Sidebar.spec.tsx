@@ -2,13 +2,33 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { Sidebar } from "./Sidebar";
 
 describe("Sidebar", () => {
-  it("affiche les articles de l'espace de travail à tout utilisateur authentifié, quel que soit le rôle", () => {
-    render(<Sidebar roles={["AGENT_DXC"]} routeActuelle="home" onNaviguer={() => {}} />);
+  it("affiche les articles de l'espace de travail communs à tout utilisateur authentifié, quel que soit le rôle", () => {
+    render(<Sidebar roles={["RESPONSABLE_DXC"]} routeActuelle="home" onNaviguer={() => {}} />);
     expect(screen.getByText("Tableau de bord")).toBeInTheDocument();
-    expect(screen.getByText("Nouvelle demande")).toBeInTheDocument();
     expect(screen.getByText("Mes demandes")).toBeInTheDocument();
     expect(screen.getByText("Corbeilles")).toBeInTheDocument();
     expect(screen.getByText("Contrôle a posteriori")).toBeInTheDocument();
+  });
+
+  // 25/08/2026, demande explicite — POST /api/demandes porte désormais le
+  // même @Roles() côté serveur (DemandesController) : ce gate ici n'est
+  // qu'un confort de navigation, la vraie garantie reste le 403 serveur.
+  it("masque « Nouvelle demande » à un rôle qui n'est ni INITIATEUR_<CIRCUIT> ni ADMIN_PGD", () => {
+    render(<Sidebar roles={["RESPONSABLE_DXC"]} routeActuelle="home" onNaviguer={() => {}} />);
+    expect(screen.queryByText("Nouvelle demande")).not.toBeInTheDocument();
+  });
+
+  it.each(["INITIATEUR_DOBB", "INITIATEUR_DXC", "INITIATEUR_DF"])(
+    "affiche « Nouvelle demande » à un porteur du rôle %s",
+    (role) => {
+      render(<Sidebar roles={[role]} routeActuelle="home" onNaviguer={() => {}} />);
+      expect(screen.getByText("Nouvelle demande")).toBeInTheDocument();
+    }
+  );
+
+  it("affiche « Nouvelle demande » à ADMIN_PGD, même sans rôle INITIATEUR_<CIRCUIT>", () => {
+    render(<Sidebar roles={["ADMIN_PGD"]} routeActuelle="home" onNaviguer={() => {}} />);
+    expect(screen.getByText("Nouvelle demande")).toBeInTheDocument();
   });
 
   it("masque le groupe Pilotage sans le rôle ADMIN_PGD — confort d'affichage, pas un contrôle (les routes restent gardées côté serveur)", () => {
@@ -19,6 +39,7 @@ describe("Sidebar", () => {
     expect(screen.queryByText("Modules")).not.toBeInTheDocument();
     expect(screen.queryByText("Journal d'audit")).not.toBeInTheDocument();
     expect(screen.queryByText("Consultation")).not.toBeInTheDocument();
+    expect(screen.queryByText("Reporting")).not.toBeInTheDocument();
   });
 
   it("affiche le groupe Pilotage avec le rôle ADMIN_PGD", () => {
@@ -28,6 +49,7 @@ describe("Sidebar", () => {
     expect(screen.getByText("Intégrations")).toBeInTheDocument();
     expect(screen.getByText("Journal d'audit")).toBeInTheDocument();
     expect(screen.getByText("Consultation")).toBeInTheDocument();
+    expect(screen.getByText("Reporting")).toBeInTheDocument();
     // Pas d'entrée « Modules » séparée — couverte par l'onglet « Paramètres
     // système » d'AdminScreen, jamais dupliquée dans la Sidebar.
     expect(screen.queryByText("Modules")).not.toBeInTheDocument();

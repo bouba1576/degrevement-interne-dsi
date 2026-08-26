@@ -52,10 +52,25 @@ import { RuleEngineService } from "./services/rule-engine.service";
 import { CalendrierSlaService } from "./services/calendrier-sla.service";
 import { SiService } from "./services/si.service";
 
-// Aucune source ne restreint ces routes à un sous-ensemble de rôles (docs/06
-// §4) : la création/consultation d'une demande est ouverte à tout utilisateur
-// authentifié, quel que soit son rôle métier ou son circuit — comme pour les
-// lectures de lignes/comptes en Phase 3.
+// La CONSULTATION (lecture) de ces routes reste ouverte à tout utilisateur
+// authentifié, quel que soit son rôle métier ou son circuit (docs/06 §4,
+// comme pour les lectures de lignes/comptes en Phase 3) — inchangé.
+//
+// La CRÉATION (`creer`, ci-dessous) est restreinte depuis le 25/08/2026
+// (demande explicite) : seul un porteur d'un rôle INITIATEUR_<CIRCUIT> ou
+// ADMIN_PGD peut créer une demande. Avant ce chantier, n'importe quel
+// utilisateur authentifié — y compris un simple validateur/contrôleur sans
+// aucun rôle d'initiation — pouvait créer un dossier et en devenir
+// l'initiateur, ce que la maquette n'a jamais montré (le menu « Nouvelle
+// demande » suppose implicitement un profil initiateur) et qu'aucune source
+// ne justifiait explicitement une fois la question posée. Les 3 codes de
+// rôle listés couvrent l'intégralité du catalogue réel (`SELECT code FROM
+// role WHERE code LIKE 'INITIATEUR_%'`, vérifié avant d'écrire cette liste
+// — pas une supposition) ; `EnumCircuit` reste un enum Postgres à 3 valeurs
+// fixes (DOBB/DXC/DF), donc cette liste est exhaustive tant que ce schéma
+// ne change pas. `RbacGuard` (global, `@Roles()`) applique cette
+// restriction — un contrôle client (masquer le lien dans `Sidebar`) est un
+// confort de navigation, jamais la garantie (règle non négociable 2).
 @ApiTags("demandes")
 @Controller("demandes")
 export class DemandesController {
@@ -79,7 +94,7 @@ export class DemandesController {
   // du corps de la requête — `creerDemandeRequeteSchema` ne porte même pas
   // ce champ. Un appelant ne peut pas créer une demande au nom de quelqu'un
   // d'autre, structurellement, pas par un contrôle qu'on pourrait oublier.
-  @Authenticated()
+  @Roles("INITIATEUR_DOBB", "INITIATEUR_DXC", "INITIATEUR_DF", "ADMIN_PGD")
   @Post()
   @ApiZodBody(creerDemandeRequeteSchema)
   @ApiZodResponse(201, demandeDetailSchema)

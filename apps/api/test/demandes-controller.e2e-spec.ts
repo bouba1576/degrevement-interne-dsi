@@ -66,6 +66,46 @@ describe("E2E — DemandesController, routes restantes en HTTP réel", () => {
     return demandeId;
   }
 
+  // 25/08/2026, demande explicite — POST /api/demandes restreint à
+  // INITIATEUR_<CIRCUIT>/ADMIN_PGD (cf. DemandesController, en-tête). Les
+  // trois cas : un rôle non-initiateur (validateur pur) refusé, chacun des
+  // trois rôles INITIATEUR_<CIRCUIT> accepté, ADMIN_PGD accepté — jamais
+  // supposé symétrique entre les trois circuits sans le vérifier.
+  it("POST /api/demandes — 403 pour un authentifié sans rôle INITIATEUR_<CIRCUIT> ni ADMIN_PGD", async () => {
+    const validateur = await creerActeur("sans-role-initiateur", ["RESPONSABLE_DOBB"]);
+    await request(e2e.app.getHttpServer())
+      .post("/api/demandes")
+      .set("Cookie", validateur.cookie)
+      .send({ circuit: "DOBB", nomClient: "E2E RBAC creer", commentaire: `E2E RBAC ${suffixe}`, sousFlux: "Réclamation B2B" })
+      .expect(403);
+  });
+
+  it("POST /api/demandes — 201 pour chacun des trois rôles INITIATEUR_<CIRCUIT>", async () => {
+    for (const [circuit, sousFlux, role] of [
+      ["DOBB", "Réclamation B2B", "INITIATEUR_DOBB"],
+      ["DXC", "Réclamation", "INITIATEUR_DXC"],
+      ["DF", "Réclamation opérateur", "INITIATEUR_DF"]
+    ] as const) {
+      const initiateur = await creerActeur(`role-${role}`, [role]);
+      const creation = await request(e2e.app.getHttpServer())
+        .post("/api/demandes")
+        .set("Cookie", initiateur.cookie)
+        .send({ circuit, nomClient: `E2E RBAC ${role}`, commentaire: `E2E RBAC ${suffixe}`, sousFlux })
+        .expect(201);
+      demandeIds.push(creation.body.data.demande.id as string);
+    }
+  });
+
+  it("POST /api/demandes — 201 pour ADMIN_PGD, même sans rôle INITIATEUR_<CIRCUIT>", async () => {
+    const admin = await creerActeur("admin-creer", ["ADMIN_PGD"]);
+    const creation = await request(e2e.app.getHttpServer())
+      .post("/api/demandes")
+      .set("Cookie", admin.cookie)
+      .send({ circuit: "DOBB", nomClient: "E2E RBAC admin", commentaire: `E2E RBAC ${suffixe}`, sousFlux: "Réclamation B2B" })
+      .expect(201);
+    demandeIds.push(creation.body.data.demande.id as string);
+  });
+
   it("POST /api/demandes/{id}/apercu-routage — 404 sur un id de demande inconnu", async () => {
     const initiateur = await creerActeur("apercu-404", []);
     await request(e2e.app.getHttpServer())
@@ -75,8 +115,8 @@ describe("E2E — DemandesController, routes restantes en HTTP réel", () => {
   });
 
   it("GET /api/demandes — lister avec profil=initiateur ne renvoie que les dossiers de l'appelant", async () => {
-    const initiateurA = await creerActeur("lister-a", []);
-    const initiateurB = await creerActeur("lister-b", []);
+    const initiateurA = await creerActeur("lister-a", ["INITIATEUR_DOBB"]);
+    const initiateurB = await creerActeur("lister-b", ["INITIATEUR_DOBB"]);
     const demandeA = await creerBrouillon(initiateurA.cookie, "E2E Lister A");
     await creerBrouillon(initiateurB.cookie, "E2E Lister B");
 
@@ -92,7 +132,7 @@ describe("E2E — DemandesController, routes restantes en HTTP réel", () => {
   });
 
   it("DELETE /api/demandes/{id} — supprime un brouillon appartenant à l'initiateur", async () => {
-    const initiateur = await creerActeur("delete", []);
+    const initiateur = await creerActeur("delete", ["INITIATEUR_DOBB"]);
     const demandeId = await creerBrouillon(initiateur.cookie, "E2E Delete");
 
     await request(e2e.app.getHttpServer())
@@ -107,7 +147,7 @@ describe("E2E — DemandesController, routes restantes en HTTP réel", () => {
   });
 
   it("PATCH /api/demandes/{id} — modifie un brouillon (nomClient) avant toute soumission", async () => {
-    const initiateur = await creerActeur("modifier", []);
+    const initiateur = await creerActeur("modifier", ["INITIATEUR_DOBB"]);
     const demandeId = await creerBrouillon(initiateur.cookie, "E2E Avant Modification");
 
     const reponse = await request(e2e.app.getHttpServer())
@@ -120,7 +160,7 @@ describe("E2E — DemandesController, routes restantes en HTTP réel", () => {
   });
 
   it("POST /api/demandes/{id}/calcul — recalcule les montants depuis montant_ht sans toucher aux lignes", async () => {
-    const initiateur = await creerActeur("recalculer", []);
+    const initiateur = await creerActeur("recalculer", ["INITIATEUR_DOBB"]);
     const demandeId = await creerBrouillon(initiateur.cookie, "E2E Recalcul");
 
     const reponse = await request(e2e.app.getHttpServer())
@@ -132,7 +172,7 @@ describe("E2E — DemandesController, routes restantes en HTTP réel", () => {
   });
 
   it("POST /api/demandes/{id}/abandonner — un dossier SOUMIS, sans décision, devient ABANDONNE", async () => {
-    const initiateur = await creerActeur("abandonner", []);
+    const initiateur = await creerActeur("abandonner", ["INITIATEUR_DOBB"]);
     const demandeId = await creerEtSoumettre(initiateur.cookie, "E2E Abandon");
 
     const abandon = await request(e2e.app.getHttpServer())
@@ -149,7 +189,7 @@ describe("E2E — DemandesController, routes restantes en HTTP réel", () => {
   });
 
   it("POST /api/demandes/{id}/rappeler — un dossier SOUMIS, sans décision, redevient BROUILLON (chaîne de tâches supprimée)", async () => {
-    const initiateur = await creerActeur("rappeler", []);
+    const initiateur = await creerActeur("rappeler", ["INITIATEUR_DOBB"]);
     const demandeId = await creerEtSoumettre(initiateur.cookie, "E2E Rappel");
 
     const rappel = await request(e2e.app.getHttpServer())
@@ -172,7 +212,7 @@ describe("E2E — DemandesController, routes restantes en HTTP réel", () => {
   });
 
   it("POST /api/demandes/{id}/abandonner — rejeté (422) sur un brouillon jamais soumis", async () => {
-    const initiateur = await creerActeur("abandonner-brouillon", []);
+    const initiateur = await creerActeur("abandonner-brouillon", ["INITIATEUR_DOBB"]);
     const demandeId = await creerBrouillon(initiateur.cookie, "E2E Abandon Brouillon");
 
     await request(e2e.app.getHttpServer())
@@ -182,7 +222,7 @@ describe("E2E — DemandesController, routes restantes en HTTP réel", () => {
   });
 
   it("POST /api/demandes/{id}/pieces puis DELETE .../pieces/{pieceId} — ajoute et retire une pièce jointe", async () => {
-    const initiateur = await creerActeur("pieces", []);
+    const initiateur = await creerActeur("pieces", ["INITIATEUR_DOBB"]);
     const demandeId = await creerBrouillon(initiateur.cookie, "E2E Pièces");
 
     const ajout = await request(e2e.app.getHttpServer())
@@ -212,7 +252,7 @@ describe("E2E — DemandesController, routes restantes en HTTP réel", () => {
   });
 
   it("GET /api/demandes/{id}/si puis POST .../si/pousser — rejeu manuel réservé à ADMIN_PGD, uniquement pour un dossier en ERREUR", async () => {
-    const initiateur = await creerActeur("si", []);
+    const initiateur = await creerActeur("si", ["INITIATEUR_DOBB"]);
     const admin = await creerActeur("si-admin", ["ADMIN_PGD"]);
     const demandeId = await creerBrouillon(initiateur.cookie, "E2E SI");
 

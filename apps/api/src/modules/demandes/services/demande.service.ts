@@ -279,10 +279,22 @@ export class DemandeService {
     // gardant son propre `OR` interne intact.
     const conditions: Prisma.DemandeWhereInput[] = [filtreStatut];
     if (query.q) {
+      // `agentInitiateur`/`compteClient` ajoutés le 25/08/2026 (écran
+      // Consultation, docs/design/screens2.jsx DossierExplorer) — la
+      // maquette porte un filtre « Initiateur » séparé (menu déroulant des
+      // valeurs distinctes déjà chargées), jamais reproduit tel quel ici :
+      // énumérer les valeurs distinctes sur l'ensemble réel des demandes
+      // (pas seulement la page courante) exigerait une nouvelle route
+      // d'agrégation, hors de portée de ce chantier. Replié dans la
+      // recherche texte déjà existante — un utilisateur qui tape un nom
+      // d'agent le trouve, sans capacité serveur nouvelle au-delà d'élargir
+      // le même OR.
       conditions.push({
         OR: [
           { reference: { contains: query.q, mode: "insensitive" } },
-          { nomClient: { contains: query.q, mode: "insensitive" } }
+          { nomClient: { contains: query.q, mode: "insensitive" } },
+          { compteClient: { contains: query.q, mode: "insensitive" } },
+          { agentInitiateur: { contains: query.q, mode: "insensitive" } }
         ]
       });
     }

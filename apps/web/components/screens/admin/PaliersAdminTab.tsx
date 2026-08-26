@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Badge, Button, Card, CircuitPill, Empty, Icon, Money, TypeActeurBadge } from "@pgd/ui";
+import { Badge, Button, Card, CircuitPill, Empty, formatDuree, Icon, Money, TypeActeurBadge } from "@pgd/ui";
 import type { CircuitVue, EnumCircuit, PalierVue, RoleVue, TrouPalier } from "@pgd/contracts";
 import { ApiError, creerPalier, listerCircuits, listerPaliers, listerRoles, modifierPalier, supprimerPalier } from "@/lib/api";
 import { PalierModal, type PalierModalValeur } from "./PalierModal";
@@ -23,6 +23,26 @@ import { PalierModal, type PalierModalValeur } from "./PalierModal";
 // - Édition inline dans le canevas : le CRUD reste dans PalierModal, comme
 //   partout ailleurs dans AdminScreen (RoleModal, MotifModal) — cohérence de
 //   convention, pas une omission.
+// - Modèle « brouillon + Personnaliser/Publier/Annuler » (tout le circuit
+//   édité en mémoire, un seul appel atomique) : chaque palier s'enregistre
+//   immédiatement via PalierModal — divergence d'interaction assumée,
+//   signalée à l'audit du 25/08/2026 plutôt que rouverte silencieusement.
+//
+// Corrigés lors de l'audit du 25/08/2026 (fidélité, pas de nouvelle
+// capacité serveur) :
+// - Bandeau de synthèse (tranches/étapes/bloquantes/SLA cumulé max) —
+//   dérivé de paliersDuCircuit déjà chargé, absent avant ce tour.
+// - Chevauchement de bornes détecté et affiché en direct (bornesIssues,
+//   ci-dessous) — le trou seul était déjà signalé (trousDuCircuit,
+//   serveur) ; le chevauchement est déjà empêché par la contrainte GIST
+//   EXCLUDE en base, mais ne remontait qu'en erreur générique post-tentative.
+// - Timeline en pastilles reliées par un trait (même motif que
+//   WorkflowStepper/ApercuRoutage), pas une simple bordure gauche plate.
+// - Contrôle a posteriori (typeActeur='C') séparé visuellement (badge
+//   violet « Contrôle », « hors chaîne bloquante ») — le schéma reste
+//   inchangé (EtapeRegle.typeActeur='C' dans la même chaîne ordonnée que
+//   V/A, catégorie 3 de CLAUDE.md : la contrainte porte sur le schéma, pas
+//   sur l'apparence).
 export function PaliersAdminTab() {
   const [circuits, setCircuits] = useState<CircuitVue[] | null>(null);
   const [paliers, setPaliers] = useState<PalierVue[] | null>(null);
@@ -106,6 +126,37 @@ export function PaliersAdminTab() {
   const trousDuCircuit = (trous ?? []).filter((t) => t.circuit === circuitActif);
   const circuit = (circuits ?? []).find((c) => c.code === circuitActif);
 
+  // Synthèse (docs/design/screens3.jsx:632-637, pd-summary) — dérivée de
+  // paliersDuCircuit déjà chargé, aucun appel supplémentaire.
+  const totalEtapes = paliersDuCircuit.reduce((acc, p) => acc + p.etapesRegle.length, 0);
+  const totalBloquantes = paliersDuCircuit.reduce((acc, p) => acc + p.etapesRegle.filter((e) => e.bloquant).length, 0);
+  const slaCumuleMaxHeures = paliersDuCircuit.reduce(
+    (max, p) => Math.max(max, p.etapesRegle.reduce((s, e) => s + e.slaHeures, 0)),
+    0
+  );
+
+  // Chevauchement de bornes (docs/design/screens3.jsx:576-590, bornesIssues)
+  // — le trou seul vient du serveur (trousDuCircuit) ; le chevauchement est
+  // déjà empêché en base (EXCLUDE USING gist), mais la maquette le signale
+  // AVANT toute tentative, pas seulement via l'erreur générique d'un rejet.
+  // Recalculé côté client sur les paliers déjà chargés, aucune requête
+  // supplémentaire — jamais une seconde source de vérité sur la contrainte
+  // elle-même (le serveur reste seul juge à l'écriture).
+  const chevauchementsDuCircuit = (() => {
+    const tries = paliersDuCircuit.slice().sort((a, b) => a.borneMin - b.borneMin);
+    const issues: string[] = [];
+    for (let i = 1; i < tries.length; i++) {
+      const precedent = tries[i - 1]!;
+      const courant = tries[i]!;
+      if (courant.borneMin <= precedent.borneMax) {
+        issues.push(
+          `Chevauchement entre « ${precedent.labelPalier ?? precedent.segment} » et « ${courant.labelPalier ?? courant.segment} ».`
+        );
+      }
+    }
+    return issues;
+  })();
+
   const montantTest = simulateur !== "" ? Number(simulateur) : null;
   const palierDeclencheId =
     montantTest !== null && Number.isFinite(montantTest)
@@ -181,6 +232,37 @@ export function PaliersAdminTab() {
           </Button>
         </div>
 
+        {/* Synthèse (docs/design/screens3.jsx:632-637, pd-summary) */}
+        <div className="flex flex-wrap gap-4 rounded-6 border border-gris200 bg-gris50 p-3">
+          <div className="text-center">
+            <div className="text-18 font-bold">{paliersDuCircuit.length}</div>
+            <div className="text-11 text-gris600">Tranche(s)</div>
+          </div>
+          <div className="text-center">
+            <div className="text-18 font-bold">{totalEtapes}</div>
+            <div className="text-11 text-gris600">Étape(s)</div>
+          </div>
+          <div className="text-center">
+            <div className="text-18 font-bold">{totalBloquantes}</div>
+            <div className="text-11 text-gris600">Bloquante(s)</div>
+          </div>
+          <div className="text-center">
+            <div className="text-18 font-bold">{formatDuree(slaCumuleMaxHeures * 3600000)}</div>
+            <div className="text-11 text-gris600">SLA cumulé max</div>
+          </div>
+        </div>
+
+        {chevauchementsDuCircuit.length > 0 && (
+          <div className="rounded border border-rouge700 bg-rougeFond p-3">
+            <p className="mb-1 text-13 font-bold text-rouge700">Bornes à corriger — chevauchement entre tranches</p>
+            <ul className="text-12 text-gris700">
+              {chevauchementsDuCircuit.map((m, i) => (
+                <li key={i}>{m}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {trousDuCircuit.length > 0 && (
           <div className="rounded border border-jaune700 bg-jauneFond p-3">
             <p className="mb-1 text-13 font-bold text-jaune700">Trous détectés entre tranches — signalés, pas bloquants</p>
@@ -228,31 +310,79 @@ export function PaliersAdminTab() {
               </div>
             </div>
 
-            {/* Timeline verticale — Soumission → étapes ordonnées → Validé */}
-            <div className="flex flex-col gap-2 border-l-2 border-gris200 pl-4">
-              <div className="flex items-center gap-2 text-12 text-gris600">
-                <Icon nom="send" taille={13} /> Soumission de la demande
-              </div>
-              {p.etapesRegle
-                .slice()
-                .sort((a, b) => a.ordre - b.ordre)
-                .map((e) => (
-                  <div key={e.id} className="flex items-center gap-2 rounded border border-gris200 bg-gris50 p-2 text-13">
-                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-gris200 text-11 font-bold text-gris700">
-                      {e.ordre}
-                    </span>
-                    <span className="flex-1 font-semibold">{roleLibelle[e.roleCode] ?? e.roleCode}</span>
-                    <TypeActeurBadge type={e.typeActeur} />
-                    <span className="flex items-center gap-1 text-12 text-gris600">
-                      <Icon nom="clock" taille={12} /> {e.slaHeures} h
-                    </span>
-                    {!e.bloquant && <Badge ton="neutre">non bloquant</Badge>}
+            {/* Timeline verticale — pastilles reliées par un trait (même motif
+                que WorkflowStepper/ApercuRoutage), pas une bordure gauche
+                plate. Contrôle a posteriori (typeActeur='C') séparé
+                visuellement de la chaîne bloquante V/A — même schéma
+                (EtapeRegle.typeActeur='C', même chaîne ordonnée), présentation
+                seule distincte (CLAUDE.md, catégorie 3 : la contrainte porte
+                sur le schéma, pas sur l'apparence). */}
+            {(() => {
+              const etapes = p.etapesRegle.slice().sort((a, b) => a.ordre - b.ordre);
+              const chaineBloquante = etapes.filter((e) => e.typeActeur !== "C");
+              const controles = etapes.filter((e) => e.typeActeur === "C");
+              return (
+                <div className="flex flex-col">
+                  <div className="flex gap-3">
+                    <div className="flex flex-col items-center">
+                      <div className="grid h-[24px] w-[24px] shrink-0 place-items-center rounded-full border-2 border-gris300 bg-blanc text-gris600">
+                        <Icon nom="send" taille={12} />
+                      </div>
+                      <div className="min-h-3 w-0.5 flex-1 bg-gris200" />
+                    </div>
+                    <div className="pb-3 text-12 text-gris600">Soumission de la demande</div>
                   </div>
-                ))}
-              <div className="flex items-center gap-2 text-12 font-semibold text-vert700">
-                <Icon nom="check" taille={13} /> Demande validée — transmise au SI de facturation
-              </div>
-            </div>
+
+                  {chaineBloquante.map((e) => (
+                    <div className="flex gap-3" key={e.id}>
+                      <div className="flex flex-col items-center">
+                        <div className="grid h-[24px] w-[24px] shrink-0 place-items-center rounded-full border-2 border-gris300 bg-blanc text-11 font-extrabold text-gris600">
+                          {e.ordre}
+                        </div>
+                        <div className="min-h-3 w-0.5 flex-1 bg-gris200" />
+                      </div>
+                      <div className="flex-1 pb-3">
+                        <div className="flex flex-wrap items-center gap-2 rounded border border-gris200 bg-gris50 p-2 text-13">
+                          <span className="flex-1 font-semibold">{roleLibelle[e.roleCode] ?? e.roleCode}</span>
+                          <TypeActeurBadge type={e.typeActeur} />
+                          <span className="flex items-center gap-1 text-12 text-gris600">
+                            <Icon nom="clock" taille={12} /> {e.slaHeures} h
+                          </span>
+                          {!e.bloquant && <Badge ton="neutre">non bloquant</Badge>}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {controles.map((e) => (
+                    <div className="flex gap-3" key={e.id}>
+                      <div className="flex flex-col items-center">
+                        <div className="grid h-[24px] w-[24px] shrink-0 place-items-center rounded-full border-2 border-violetTexte bg-violetFond text-violetTexte">
+                          <Icon nom="shield" taille={12} />
+                        </div>
+                        <div className="min-h-3 w-0.5 flex-1 bg-gris200" />
+                      </div>
+                      <div className="flex-1 pb-3">
+                        <div className="flex flex-wrap items-center gap-2 rounded border border-violetFond bg-violetFond p-2 text-13">
+                          <span className="flex-1 font-semibold">{roleLibelle[e.roleCode] ?? e.roleCode}</span>
+                          <Badge ton="special">Contrôle</Badge>
+                          <span className="text-12 text-gris600">a posteriori (hors chaîne bloquante)</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  <div className="flex gap-3">
+                    <div className="grid h-[24px] w-[24px] shrink-0 place-items-center rounded-full border-2 border-vert700 bg-vertFond text-vertTexteSurClair">
+                      <Icon nom="check" taille={13} epaisseurTrait={3} />
+                    </div>
+                    <div className="pt-1 text-12 font-semibold text-vert700">
+                      Demande validée — transmise au SI de facturation
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         ))}
       </div>

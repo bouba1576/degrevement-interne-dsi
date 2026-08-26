@@ -26,21 +26,29 @@ export interface SidebarProps {
 }
 
 export function Sidebar({ roles, routeActuelle, onNaviguer, compteMesDemandes, compteCorbeilles }: SidebarProps) {
+  const estAdmin = roles.includes(ROLE_ADMIN);
+  // 25/08/2026, demande explicite — seuls les profils Initiateur (n'importe
+  // lequel des 3 rôles INITIATEUR_<CIRCUIT> réels du catalogue) ou Admin
+  // voient ce lien. Même discipline que le reste de ce fichier : un gate
+  // d'affichage, pas le contrôle — POST /api/demandes porte désormais le
+  // même `@Roles()` côté serveur (DemandesController), c'est CE guard-là qui
+  // protège réellement la création, pas ce `if`.
+  const estInitiateur = roles.some((r) => r.startsWith("INITIATEUR_"));
+
   const espaceTravail: ArticleNav[] = [
     { route: "home", libelle: "Tableau de bord", icone: "chart" },
-    { route: "nouvelle", libelle: "Nouvelle demande", icone: "plus" },
+    ...(estInitiateur || estAdmin ? [{ route: "nouvelle", libelle: "Nouvelle demande", icone: "plus" as NomIcone }] : []),
     { route: "mes", libelle: "Mes demandes", icone: "doc", compte: compteMesDemandes },
     { route: "corbeilles", libelle: "Corbeilles", icone: "inbox", compte: compteCorbeilles },
     { route: "controle", libelle: "Contrôle a posteriori", icone: "shield" }
   ];
-
-  const estAdmin = roles.includes(ROLE_ADMIN);
   // Pas d'entrée « Modules » séparée : couverte par l'onglet « Paramètres
   // système » d'AdminScreen (Phase 9.2) — une entrée dédiée aurait été
   // redondante avec une route déjà servie ailleurs, pas un gap à combler.
   const pilotage: ArticleNav[] = estAdmin
     ? [
         { route: "consultation", libelle: "Consultation", icone: "search" },
+        { route: "reporting", libelle: "Reporting", icone: "calc" },
         { route: "audit", libelle: "Journal d'audit", icone: "lock" },
         { route: "admin", libelle: "Administration", icone: "gear" },
         { route: "integrations", libelle: "Intégrations", icone: "flow" }
