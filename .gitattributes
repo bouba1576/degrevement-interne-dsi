@@ -1,0 +1,8 @@
+# Trouvé en ajoutant docker/all-in-one/healthcheck.sh (26/08/2026) : Git a
+# averti d'une conversion CRLF sur ce fichier — sans .gitattributes, un futur
+# clone sur une machine Windows avec core.autocrlf=true réécrirait les fins
+# de ligne en CRLF au checkout, cassant silencieusement tout script shell
+# construit ensuite dans une image Linux (`\r` corrompt le shebang/les
+# commentaires). Même risque latent, jamais corrigé, sur
+# docker/backup/backup.sh (déjà dans le dépôt) — corrigé ici pour les deux.
+*.sh text eol=lf
