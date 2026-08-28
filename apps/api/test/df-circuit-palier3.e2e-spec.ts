@@ -4,10 +4,15 @@ import { demarrerAppE2e, cookieSession, type AppE2e } from "./helpers/e2e-app";
 
 // Dette de couverture comblée (Phase 10.6, décomposition NouvelleDemandeScreen)
 // — cf. df-circuit-palier1.e2e-spec.ts pour le contexte complet (trois
-// paliers réels DF, un seul jamais exercé jusqu'ici). Palier haut (>50M) :
-// chaîne à 6 étapes, RESPONSABLE_DF → MANAGER_DF → MANAGER_SENIOR_DF → DF →
-// DGA_DG (bloquantes) → FRA (contrôle post-clôture) — DGA_DG s'intercale
-// entre DF et FRA (R2, « au-delà des seuils, terminaison DF puis DGA/DG »),
+// paliers réels DF, un seul jamais exercé jusqu'ici). Palier haut (>50M).
+//
+// RÉÉCRIT le 27/08/2026 (docs/14, correction FRA/FIABILISATION, commit
+// séparé de la correction du rôle de contrôle) — chaîne à SEPT étapes
+// désormais : RESPONSABLE_DF → MANAGER_DF → FRA → MANAGER_SENIOR_DF → DF →
+// DGA_DG (bloquantes) → FIABILISATION (contrôle post-clôture) — DGA_DG
+// s'intercale entre DF et FIABILISATION (R2, « au-delà des seuils,
+// terminaison DF puis DGA/DG »), FRA entre MANAGER_DF et MANAGER_SENIOR_DF
+// (position confirmée explicitement par la personne pilotant le projet),
 // vérifié en base avant d'écrire ce test, pas supposé.
 //
 // dga.dg@orange.com (socle d'identités persistantes) vient d'être ajouté et
@@ -45,19 +50,22 @@ describe("E2E — circuit DF (Wholesale), palier 3 (>50M), parcours complet en H
     return { utilisateur, cookie };
   }
 
-  it("parcours complet : soumission → 5 approbations bloquantes (DGA_DG avant-dernière) → VALIDE → contrôle FRA", async () => {
+  it("parcours complet : soumission → 6 approbations bloquantes (FRA incluse, DGA_DG avant-dernière) → VALIDE → contrôle FIABILISATION", async () => {
     const initiateur = await creerActeur("initiateur", ["INITIATEUR_DF"]);
     const responsable = await creerActeur("responsable", ["RESPONSABLE_DF"]);
     const manager = await creerActeur("manager", ["MANAGER_DF"]);
+    // FRA — étape bloquante (typeActeur='V'), réinsérée le 27/08/2026 entre
+    // MANAGER_DF et MANAGER_SENIOR_DF. Distincte de l'acteur FIABILISATION
+    // ci-dessous : deux rôles, deux identités, jamais confondus.
+    const fra = await creerActeur("fra", ["FRA"]);
     const managerSenior = await creerActeur("manager-senior", ["MANAGER_SENIOR_DF"]);
     const df = await creerActeur("df", ["DF"]);
     const dgaDg = await creerActeur("dga-dg", ["DGA_DG"]);
     // Distinct de dgaDg (dernier approbateur bloquant) — R24 interdirait
     // sinon le contrôle par la même identité (cf. sod-service.integration.spec.ts).
-    // Rôle de contrôle corrigé le 27/08/2026 (docs/14, FRA/FIABILISATION) —
-    // variable/libellé "fra" volontairement inchangés (minimal pour ce
-    // commit, cf. CLAUDE.md) : seul le rôle réellement détenu change.
-    const fra = await creerActeur("fra", ["FIABILISATION"]);
+    // Rôle de contrôle a posteriori — FIABILISATION, pas FRA (corrigé le
+    // 27/08/2026, docs/14).
+    const fiabilisation = await creerActeur("fiabilisation", ["FIABILISATION"]);
 
     const creation = await request(e2e.app.getHttpServer())
       .post("/api/demandes")
@@ -84,6 +92,7 @@ describe("E2E — circuit DF (Wholesale), palier 3 (>50M), parcours complet en H
     expect(apercu.body.data.etapes.map((e: { roleCode: string; typeActeur: string }) => [e.roleCode, e.typeActeur])).toEqual([
       ["RESPONSABLE_DF", "V"],
       ["MANAGER_DF", "V"],
+      ["FRA", "V"],
       ["MANAGER_SENIOR_DF", "V"],
       ["DF", "V"],
       ["DGA_DG", "V"],
@@ -96,7 +105,7 @@ describe("E2E — circuit DF (Wholesale), palier 3 (>50M), parcours complet en H
       .expect(200);
     expect(soumission.body.data.statut).toBe("SOUMIS");
 
-    for (const acteur of [responsable, manager, managerSenior, df, dgaDg]) {
+    for (const acteur of [responsable, manager, fra, managerSenior, df, dgaDg]) {
       const taches = await request(e2e.app.getHttpServer())
         .get(`/api/demandes/${demandeId}/taches`)
         .set("Cookie", acteur.cookie)
@@ -124,14 +133,14 @@ describe("E2E — circuit DF (Wholesale), palier 3 (>50M), parcours complet en H
 
     const tachesFinales = await request(e2e.app.getHttpServer())
       .get(`/api/demandes/${demandeId}/taches`)
-      .set("Cookie", fra.cookie)
+      .set("Cookie", fiabilisation.cookie)
       .expect(200);
     const tacheControle = tachesFinales.body.data.find((t: { roleCode: string }) => t.roleCode === "FIABILISATION");
     expect(tacheControle.etat).toBe("POST_CLOTURE");
 
     const controle = await request(e2e.app.getHttpServer())
       .post(`/api/taches/${tacheControle.id}/controle`)
-      .set("Cookie", fra.cookie)
+      .set("Cookie", fiabilisation.cookie)
       .send({ constat: "CONFORME" })
       .expect(200);
     expect(controle.body.data.niveau).toBe("FIABILISATION");

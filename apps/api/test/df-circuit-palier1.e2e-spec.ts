@@ -7,10 +7,19 @@ import { demarrerAppE2e, cookieSession, type AppE2e } from "./helpers/e2e-app";
 // exclusivement le palier intermédiaire (5M–50M) de DF. Trouvé en vérifiant
 // le nombre réel de paliers DF (3, pas 1, cf. CLAUDE.md) : le palier bas
 // (0–5M) n'avait jamais été exercé de bout en bout, ni manuellement ni en
-// e2e. Chaîne réelle vérifiée en base avant d'écrire ce test (`etape_regle`,
-// pas supposée par analogie) : 3 étapes seulement, RESPONSABLE_DF →
-// MANAGER_DF → MANAGER_SENIOR_DF — aucune validation `DF`, aucun contrôle
-// FRA sur ce palier.
+// e2e.
+//
+// RÉÉCRIT le 27/08/2026 (docs/14, correction FRA/FIABILISATION, commit
+// séparé de la correction du rôle de contrôle) — FRA réinséré comme étape
+// BLOQUANTE (typeActeur='V'), entre MANAGER_DF et MANAGER_SENIOR_DF, position
+// confirmée explicitement par la personne pilotant le projet. Chaîne réelle
+// vérifiée en base avant de réécrire ce test, pas supposée : 4 étapes
+// bloquantes désormais — RESPONSABLE_DF → MANAGER_DF → FRA →
+// MANAGER_SENIOR_DF — toujours aucune validation `DF`, toujours aucun
+// contrôle a posteriori (FIABILISATION) sur ce palier, R12 ne se déclenchant
+// qu'au-delà de 5M. FRA, lui, n'est plus conditionné par ce seuil : c'est
+// une étape bloquante ordinaire du circuit DF, présente sur les trois
+// paliers.
 //
 // Fichier séparé plutôt qu'un `it()` de plus dans df-circuit.e2e-spec.ts —
 // même principe que le reste de cette phase (isoler par cas coûte peu à la
@@ -47,10 +56,11 @@ describe("E2E — circuit DF (Wholesale), palier 1 (0–5M), parcours complet en
     return { utilisateur, cookie };
   }
 
-  it("parcours complet : soumission → 3 approbations bloquantes → VALIDE, aucun contrôle FRA instancié (R12 ne se déclenche pas sous 5M)", async () => {
+  it("parcours complet : soumission → 4 approbations bloquantes (FRA incluse) → VALIDE, aucun contrôle a posteriori instancié (R12 ne se déclenche pas sous 5M)", async () => {
     const initiateur = await creerActeur("initiateur", ["INITIATEUR_DF"]);
     const responsable = await creerActeur("responsable", ["RESPONSABLE_DF"]);
     const manager = await creerActeur("manager", ["MANAGER_DF"]);
+    const fra = await creerActeur("fra", ["FRA"]);
     const managerSenior = await creerActeur("manager-senior", ["MANAGER_SENIOR_DF"]);
 
     const creation = await request(e2e.app.getHttpServer())
@@ -78,6 +88,7 @@ describe("E2E — circuit DF (Wholesale), palier 1 (0–5M), parcours complet en
     expect(apercu.body.data.etapes.map((e: { roleCode: string; typeActeur: string }) => [e.roleCode, e.typeActeur])).toEqual([
       ["RESPONSABLE_DF", "V"],
       ["MANAGER_DF", "V"],
+      ["FRA", "V"],
       ["MANAGER_SENIOR_DF", "V"]
     ]);
 
@@ -87,7 +98,7 @@ describe("E2E — circuit DF (Wholesale), palier 1 (0–5M), parcours complet en
       .expect(200);
     expect(soumission.body.data.statut).toBe("SOUMIS");
 
-    for (const acteur of [responsable, manager, managerSenior]) {
+    for (const acteur of [responsable, manager, fra, managerSenior]) {
       const taches = await request(e2e.app.getHttpServer())
         .get(`/api/demandes/${demandeId}/taches`)
         .set("Cookie", acteur.cookie)
@@ -113,16 +124,18 @@ describe("E2E — circuit DF (Wholesale), palier 1 (0–5M), parcours complet en
       .expect(200);
     expect(detailFinal.body.data.demande.statut).toBe("VALIDE");
 
-    // Preuve négative — aucune tâche FRA n'a jamais été instanciée sur ce
-    // dossier, à aucun moment de la chaîne (pas seulement "pas encore
-    // réclamée"). Complémentaire du test R12 déjà existant qui prouve le
+    // Preuve négative — aucune tâche FIABILISATION (contrôle a posteriori)
+    // n'a jamais été instanciée sur ce dossier, à aucun moment de la
+    // chaîne. Complémentaire du test R12 déjà existant qui prouve le
     // déclenchement au-dessus du seuil : celui-ci prouve l'absence en
-    // dessous.
+    // dessous. Distinct de FRA (réinsérée le 27/08/2026 comme étape
+    // bloquante ordinaire, jamais conditionnée par ce seuil) : FRA existe
+    // bel et bien sur ce palier, cf. la boucle d'approbation ci-dessus.
     const tachesFinales = await request(e2e.app.getHttpServer())
       .get(`/api/demandes/${demandeId}/taches`)
       .set("Cookie", initiateur.cookie)
       .expect(200);
-    expect(tachesFinales.body.data.some((t: { roleCode: string }) => t.roleCode === "FRA")).toBe(false);
+    expect(tachesFinales.body.data.some((t: { roleCode: string }) => t.roleCode === "FIABILISATION")).toBe(false);
   });
 
   // R14 assouplie pour DF (24/08/2026, demande explicite) — reste
@@ -134,6 +147,7 @@ describe("E2E — circuit DF (Wholesale), palier 1 (0–5M), parcours complet en
     const initiateur = await creerActeur("initiateur-r14", ["INITIATEUR_DF"]);
     const responsable = await creerActeur("responsable-r14", ["RESPONSABLE_DF"]);
     const manager = await creerActeur("manager-r14", ["MANAGER_DF"]);
+    const fra = await creerActeur("fra-r14", ["FRA"]);
     const managerSenior = await creerActeur("manager-senior-r14", ["MANAGER_SENIOR_DF"]);
 
     const creation = await request(e2e.app.getHttpServer())
@@ -158,7 +172,7 @@ describe("E2E — circuit DF (Wholesale), palier 1 (0–5M), parcours complet en
       .expect(200);
     expect(soumission.body.data.statut).toBe("SOUMIS");
 
-    for (const acteur of [responsable, manager, managerSenior]) {
+    for (const acteur of [responsable, manager, fra, managerSenior]) {
       const taches = await request(e2e.app.getHttpServer())
         .get(`/api/demandes/${demandeId}/taches`)
         .set("Cookie", acteur.cookie)

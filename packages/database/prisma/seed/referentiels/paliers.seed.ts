@@ -83,26 +83,32 @@ async function seedPaliersDf(prisma: PrismaClient): Promise<void> {
   // R12/PGD-041 : TTC > 5M exige un contrôle a posteriori. Les deux tranches
   // dépassant 5M portent donc une étape supplémentaire POST_CLOTURE
   // (roleCode=FIABILISATION, typeActeur=C, déjà seedé — cf. roles.seed.ts) ;
-  // la tranche ≤5M n'en a pas besoin. Rôle corrigé le 27/08/2026 (docs/14,
-  // correction FRA/FIABILISATION — FRA n'a jamais "valider"/effectuer de
-  // contrôle dans cette source, FIABILISATION porte le vocabulaire de
-  // contrôle explicite) — était roleCode=FRA depuis la Phase 5. FRA n'est
-  // PAS réinséré ici comme étape bloquante : sa position exacte dans la
-  // chaîne (avant DF, position vs MANAGER_SENIOR_DF) reste en attente de
-  // confirmation métier séparée, cf. CLAUDE.md.
+  // la tranche ≤5M n'en a pas besoin. Rôle de contrôle corrigé le
+  // 27/08/2026 (docs/14, correction FRA/FIABILISATION — FRA n'a jamais
+  // "valider"/effectuer de contrôle dans cette source, FIABILISATION porte
+  // le vocabulaire de contrôle explicite) — était roleCode=FRA depuis la
+  // Phase 5.
+  //
+  // FRA réinséré comme étape BLOQUANTE (typeActeur='V'), entre MANAGER_DF
+  // et MANAGER_SENIOR_DF, sur LES TROIS tranches — position confirmée
+  // explicitement par la personne pilotant le projet (27/08/2026), pas
+  // déduite. Uniforme sur les trois tranches : rien dans docs/14 ne
+  // conditionne l'étape FRA elle-même (par opposition au contrôle
+  // FIABILISATION, lui bien conditionné par le seuil R12 à 5M) au montant —
+  // seul le contrôle a posteriori (FIABILISATION) reste absent sous 5M.
   const tranches: Array<{ label: string; min: string; max: string; roles: string[]; controleR12: boolean }> = [
     {
       label: "JUSQU_5M",
       min: "0",
       max: "5000000",
-      roles: ["RESPONSABLE_DF", "MANAGER_DF", "MANAGER_SENIOR_DF"],
+      roles: ["RESPONSABLE_DF", "MANAGER_DF", "FRA", "MANAGER_SENIOR_DF"],
       controleR12: false
     },
     {
       label: "5M_A_50M",
       min: "5000000.01",
       max: "50000000",
-      roles: ["RESPONSABLE_DF", "MANAGER_DF", "MANAGER_SENIOR_DF", "DF"],
+      roles: ["RESPONSABLE_DF", "MANAGER_DF", "FRA", "MANAGER_SENIOR_DF", "DF"],
       controleR12: true
     },
     {
@@ -110,7 +116,7 @@ async function seedPaliersDf(prisma: PrismaClient): Promise<void> {
       min: "50000000.01",
       max: BORNE_SANS_PLAFOND,
       // R2 : au-delà des seuils, la chaîne se termine par DF puis DGA/DG.
-      roles: ["RESPONSABLE_DF", "MANAGER_DF", "MANAGER_SENIOR_DF", "DF", "DGA_DG"],
+      roles: ["RESPONSABLE_DF", "MANAGER_DF", "FRA", "MANAGER_SENIOR_DF", "DF", "DGA_DG"],
       controleR12: true
     }
   ];

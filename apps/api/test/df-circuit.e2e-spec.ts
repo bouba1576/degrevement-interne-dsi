@@ -4,16 +4,26 @@ import { demarrerAppE2e, cookieSession, type AppE2e } from "./helpers/e2e-app";
 
 // docs/05 §10.3 — e2e du circuit DF (Wholesale) de bout en bout, en HTTP
 // réel. Formalise le parcours vérifié à la main en clôture de Phase 9
-// (dossier DF-2026-AF5715, 6,5M HT) : palier 5M_A_50M, cinq étapes —
-// RESPONSABLE_DF → MANAGER_DF → MANAGER_SENIOR_DF → DF (bloquantes) → FRA
-// (contrôle a posteriori, typeActeur='C', instancié directement en
-// POST_CLOTURE dès la soumission, hors chaîne bloquante — cf.
-// RuleEngineService.instancierChaine).
+// (dossier DF-2026-AF5715, 6,5M HT) : palier 5M_A_50M.
+//
+// RÉÉCRIT le 27/08/2026 (docs/14, correction FRA/FIABILISATION, commit
+// séparé de la correction du rôle de contrôle) — chaîne à SIX étapes
+// désormais : RESPONSABLE_DF → MANAGER_DF → FRA → MANAGER_SENIOR_DF → DF
+// (bloquantes) → FIABILISATION (contrôle a posteriori, typeActeur='C',
+// instancié directement en POST_CLOTURE dès la soumission, hors chaîne
+// bloquante — cf. RuleEngineService.instancierChaine). FRA réinsérée
+// comme étape bloquante entre MANAGER_DF et MANAGER_SENIOR_DF, position
+// confirmée explicitement par la personne pilotant le projet — vérifiée en
+// base avant de réécrire ce test, pas supposée. FIABILISATION remplace FRA
+// comme rôle de contrôle (commit précédent) : FRA n'a jamais "valider"/
+// effectuer de contrôle dans docs/14, seulement recevoir/commenter/faire
+// suivre/rejeter/renvoyer, SLA 48h (ordre d'une étape bloquante).
 //
 // Montant volontairement DANS la fourchette 5M–50M (contrairement à
 // DOBB/DXC) : DF est le seul circuit dont les paliers seedés incluent
-// réellement une étape FRA (confirmé par requête directe), donc le seul où
-// un parcours nominal au-delà de 5M est aujourd'hui soumissible.
+// réellement une étape de contrôle a posteriori (confirmé par requête
+// directe), donc le seul où un parcours nominal au-delà de 5M est
+// aujourd'hui soumissible.
 describe("E2E — circuit DF (Wholesale), parcours complet en HTTP réel", () => {
   let e2e: AppE2e;
   let prisma: PrismaService;
@@ -45,10 +55,14 @@ describe("E2E — circuit DF (Wholesale), parcours complet en HTTP réel", () =>
     return { utilisateur, cookie };
   }
 
-  it("parcours complet : soumission → 4 approbations bloquantes → VALIDE → contrôle FRA", async () => {
+  it("parcours complet : soumission → 5 approbations bloquantes (FRA incluse) → VALIDE → contrôle FIABILISATION", async () => {
     const initiateur = await creerActeur("initiateur", ["INITIATEUR_DF"]);
     const responsable = await creerActeur("responsable", ["RESPONSABLE_DF"]);
     const manager = await creerActeur("manager", ["MANAGER_DF"]);
+    // FRA — étape bloquante (typeActeur='V'), réinsérée le 27/08/2026 entre
+    // MANAGER_DF et MANAGER_SENIOR_DF. Distincte de l'acteur FIABILISATION
+    // ci-dessous : deux rôles, deux identités, jamais confondus.
+    const fra = await creerActeur("fra", ["FRA"]);
     const managerSenior = await creerActeur("manager-senior", ["MANAGER_SENIOR_DF"]);
     // Acteur distinct du dernier approbateur bloquant (DF) : R24 (cf.
     // sod-service.integration.spec.ts) interdit au même acteur d'approuver
@@ -57,10 +71,9 @@ describe("E2E — circuit DF (Wholesale), parcours complet en HTTP réel", () =>
     // sod-service.integration.spec.ts) : deux identités séparées, comme en
     // conditions réelles (cf. CLAUDE.md, section R24).
     const df = await creerActeur("df", ["DF"]);
-    // Rôle de contrôle corrigé le 27/08/2026 (docs/14, FRA/FIABILISATION) —
-    // variable/libellé "fra" volontairement inchangés (minimal pour ce
-    // commit, cf. CLAUDE.md) : seul le rôle réellement détenu change.
-    const fra = await creerActeur("fra", ["FIABILISATION"]);
+    // Rôle de contrôle a posteriori — FIABILISATION, pas FRA (corrigé le
+    // 27/08/2026, docs/14).
+    const fiabilisation = await creerActeur("fiabilisation", ["FIABILISATION"]);
 
     const creation = await request(e2e.app.getHttpServer())
       .post("/api/demandes")
@@ -85,6 +98,7 @@ describe("E2E — circuit DF (Wholesale), parcours complet en HTTP réel", () =>
     expect(apercu.body.data.etapes.map((e: { roleCode: string; typeActeur: string }) => [e.roleCode, e.typeActeur])).toEqual([
       ["RESPONSABLE_DF", "V"],
       ["MANAGER_DF", "V"],
+      ["FRA", "V"],
       ["MANAGER_SENIOR_DF", "V"],
       ["DF", "V"],
       ["FIABILISATION", "C"]
@@ -96,7 +110,7 @@ describe("E2E — circuit DF (Wholesale), parcours complet en HTTP réel", () =>
       .expect(200);
     expect(soumission.body.data.statut).toBe("SOUMIS");
 
-    for (const acteur of [responsable, manager, managerSenior, df]) {
+    for (const acteur of [responsable, manager, fra, managerSenior, df]) {
       const taches = await request(e2e.app.getHttpServer())
         .get(`/api/demandes/${demandeId}/taches`)
         .set("Cookie", acteur.cookie)
@@ -124,14 +138,14 @@ describe("E2E — circuit DF (Wholesale), parcours complet en HTTP réel", () =>
 
     const tachesFinales = await request(e2e.app.getHttpServer())
       .get(`/api/demandes/${demandeId}/taches`)
-      .set("Cookie", fra.cookie)
+      .set("Cookie", fiabilisation.cookie)
       .expect(200);
     const tacheControle = tachesFinales.body.data.find((t: { roleCode: string }) => t.roleCode === "FIABILISATION");
     expect(tacheControle.etat).toBe("POST_CLOTURE");
 
     const controle = await request(e2e.app.getHttpServer())
       .post(`/api/taches/${tacheControle.id}/controle`)
-      .set("Cookie", fra.cookie)
+      .set("Cookie", fiabilisation.cookie)
       .send({ constat: "CONFORME" })
       .expect(200);
     expect(controle.body.data.niveau).toBe("FIABILISATION");
