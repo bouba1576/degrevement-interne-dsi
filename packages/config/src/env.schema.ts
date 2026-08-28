@@ -32,7 +32,22 @@ export const envSchema = z.object({
   REFRESH_TOKEN_EXPIRES_IN: z.string().default("7d"),
   SESSION_COOKIE_NAME: z.string().default("pgd_session"),
   REFRESH_COOKIE_NAME: z.string().default("pgd_refresh"),
-  COOKIE_SECURE: z.coerce.boolean().default(true),
+  // z.coerce.boolean() était le bug réel : Boolean("false") === true en JS
+  // (toute chaîne non vide est truthy) — COOKIE_SECURE=false n'avait donc
+  // JAMAIS d'effet, quelle que soit la valeur écrite dans .env. Invisible en
+  // dev (Chrome/Firefox traitent http://localhost comme un contexte
+  // sécurisé même sans HTTPS — le cookie Secure s'y stocke quand même),
+  // découvert en prod (vraie IP, cette exception ne s'applique plus :
+  // Set-Cookie émis mais silencieusement rejeté par le navigateur, session
+  // jamais utilisable). z.enum + transform, jamais un simple .transform sur
+  // z.string() : une valeur ni "true" ni "false" (typo, "False", "0") doit
+  // faire échouer loadEnv() au démarrage, pas se réinterpréter en silence —
+  // même discipline d'échec fermé que le reste du projet (AdApiProvider,
+  // KeycloakDirectGrantProvider).
+  COOKIE_SECURE: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((v) => v === "true"),
 
   // --- KeycloakPort (fournisseur cible d'authentification) — AUTH_PROVIDER
   // restaure une sélection à deux fournisseurs (AdApiProvider, mesure
