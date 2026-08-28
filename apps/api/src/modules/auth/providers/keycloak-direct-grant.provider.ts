@@ -86,7 +86,19 @@ export class KeycloakDirectGrantProvider implements KeycloakPort {
             // LdapProvider/AdApiProvider : pas de complétion de domaine, pas
             // de casse forcée).
             username: identifiantAd,
-            password: motDePasse
+            password: motDePasse,
+            // scope=openid explicite — trouvé manquant le 26/08/2026 en
+            // diagnostiquant un /userinfo 403 juste après un /token 200 pour
+            // un compte DUO réel (le jeton était donc émis, mais sans les
+            // droits OIDC nécessaires à /userinfo). Sans ce paramètre,
+            // Keycloak retombe sur les Default Client Scopes du client — si
+            // "openid" n'y figure pas en scope par défaut (juste optionnel,
+            // ou absent), le jeton émis reste un jeton OAuth2 nu. Le demander
+            // explicitement ne dépend plus de cette configuration côté
+            // royaume. "profile email" ajoutés pour garantir preferred_username/
+            // name/given_name/family_name (déjà lus par resoudreUtilisateur)
+            // même si un de ces deux scopes n'était pas non plus par défaut.
+            scope: "openid profile email"
           }),
           signal: controleur.signal
         });
