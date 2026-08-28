@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { enumProfilSysteme } from "./enums";
 
 // docs/06_Contrats_API.md §2 — Authentification.
 //
@@ -25,6 +26,12 @@ export const sessionUtilisateurSchema = z.object({
   identifiantAd: z.string(),
   nom: z.string(),
   roles: z.array(z.string()),
-  sousFluxId: z.string().uuid().nullable()
+  sousFluxId: z.string().uuid().nullable(),
+  // Chantier 2 (28/08/2026, docs/14) — cumul des Role.profilSysteme des rôles
+  // détenus à la connexion, figé en JWT/session comme roles/sousFluxId
+  // (même principe déjà posé : cohérence plutôt que fraîcheur). Remplace les
+  // proxies fragiles par préfixe/complément sur `roles` (startsWith
+  // "INITIATEUR_", r !== "ADMIN_PGD" && ...) trouvés côté front.
+  profils: z.array(enumProfilSysteme)
 });
 export type SessionUtilisateur = z.infer<typeof sessionUtilisateurSchema>;

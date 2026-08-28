@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge, Button, Card, CardHeader, type TonBadge } from "@pgd/ui";
-import type { EnumTypeRole, RoleVue } from "@pgd/contracts";
+import type { EnumProfilSysteme, EnumTypeRole, RoleVue } from "@pgd/contracts";
 import { ApiError, creerRole, listerRoles, modifierRole, supprimerRole } from "@/lib/api";
 import { RoleModal, type RoleModalValeur } from "./RoleModal";
 
@@ -25,6 +25,15 @@ import { RoleModal, type RoleModalValeur } from "./RoleModal";
 // - Avatars des membres par rôle — catégorie 2, même trou que
 //   CorbeillesScreen/Processus (aucune route de listing d'utilisateurs).
 const TON_TYPE: Record<EnumTypeRole, TonBadge> = { METIER: "info", PIVOT: "accent", SYSTEME: "fort" };
+// Chantier 2 (28/08/2026, docs/14) — axe CAPACITÉ, distinct de TON_TYPE
+// ci-dessus (PORTÉE). Colonne ajoutée à ce tableau : c'est précisément ce
+// champ, éditable ici, qui rend l'ajout d'un futur rôle d'initiation/
+// validation possible sans toucher au code serveur.
+const TON_PROFIL: Record<EnumProfilSysteme, TonBadge> = {
+  INITIATEUR: "succes",
+  VALIDATEUR: "info",
+  ADMINISTRATEUR: "fort"
+};
 
 export function RolesAdminTab() {
   const [roles, setRoles] = useState<RoleVue[] | null>(null);
@@ -53,6 +62,7 @@ export function RolesAdminTab() {
         groupeAd: v.groupeAd,
         niveau: Number(v.niveau),
         type: v.type,
+        profilSysteme: v.profilSysteme,
         dansMatrice: v.dansMatrice,
         requiertMfa: v.requiertMfa
       };
@@ -115,6 +125,7 @@ export function RolesAdminTab() {
               <th className="px-3 py-2">Code</th>
               <th className="px-3 py-2">Libellé</th>
               <th className="px-3 py-2">Type</th>
+              <th className="px-3 py-2">Profil système</th>
               <th className="px-3 py-2">Niveau</th>
               <th className="px-3 py-2">MFA</th>
               <th className="px-3 py-2">Statut</th>
@@ -128,6 +139,9 @@ export function RolesAdminTab() {
                 <td className="px-3 py-2">{r.libelle}</td>
                 <td className="px-3 py-2">
                   <Badge ton={TON_TYPE[r.type]}>{r.type}</Badge>
+                </td>
+                <td className="px-3 py-2">
+                  <Badge ton={TON_PROFIL[r.profilSysteme]}>{r.profilSysteme}</Badge>
                 </td>
                 <td className="px-3 py-2 text-12">{r.niveau}</td>
                 <td className="px-3 py-2">{r.requiertMfa ? <Badge ton="alerte">MFA</Badge> : <span className="text-12 text-gris500">simple</span>}</td>

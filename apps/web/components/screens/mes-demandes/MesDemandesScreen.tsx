@@ -69,11 +69,14 @@ const CLES_ONGLET = ONGLETS.map((o) => o.cle);
 export function MesDemandesScreen({ utilisateur, onOuvrirDossier, onNaviguer }: MesDemandesScreenProps) {
   // 25/08/2026, demande explicite — même gate que Sidebar/HomeScreen : le
   // bouton « + Nouvelle demande » de cet écran menait au même formulaire,
-  // désormais réservé à INITIATEUR_<CIRCUIT>/ADMIN_PGD côté serveur
-  // (DemandesController.creer). Cet écran lui-même reste accessible à tout
-  // authentifié (profil=initiateur le scope déjà à ses propres dossiers,
-  // vides pour un non-initiateur — rien à masquer sur l'écran en entier).
-  const estInitiateurOuAdmin = utilisateur.roles.some((r) => r.startsWith("INITIATEUR_") || r === "ADMIN_PGD");
+  // désormais réservé à INITIATEUR/ADMINISTRATEUR côté serveur
+  // (DemandesController.creer, `@ProfilRequis`). Cet écran lui-même reste
+  // accessible à tout authentifié (profil=initiateur le scope déjà à ses
+  // propres dossiers, vides pour un non-initiateur — rien à masquer sur
+  // l'écran en entier). Rebranché sur `profils` (Chantier 2, 28/08/2026,
+  // docs/14) — reflète exactement le même axe que le guard serveur réel,
+  // remplace le proxy par préfixe/code unique qui précédait.
+  const estInitiateurOuAdmin = utilisateur.profils.includes("INITIATEUR") || utilisateur.profils.includes("ADMINISTRATEUR");
   // 26/08/2026, correction explicite — hors ADMIN_PGD, personne ne doit
   // avoir à choisir un circuit ici : un rôle INITIATEUR_<CIRCUIT> (ou tout
   // autre rôle métier réel) n'opère jamais que sur un seul circuit, le

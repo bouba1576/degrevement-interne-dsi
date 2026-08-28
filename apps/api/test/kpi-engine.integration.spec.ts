@@ -40,9 +40,9 @@ describe("KpiEngineService — agrégations DEMANDE (docs/04 §3.2)", () => {
     agentId = agent.id;
     autreAgentId = autreAgent.id;
 
-    admin = { id: agentId, identifiantAd: agent.identifiantAd, roles: ["ADMIN_PGD"], sousFluxId: null, jti: "test" };
-    initiateurAppelant = { id: agentId, identifiantAd: agent.identifiantAd, roles: [], sousFluxId: null, jti: "test" };
-    initiateurAutre = { id: autreAgentId, identifiantAd: autreAgent.identifiantAd, roles: [], sousFluxId: null, jti: "test" };
+    admin = { id: agentId, identifiantAd: agent.identifiantAd, roles: ["ADMIN_PGD"], sousFluxId: null, profils: ["ADMINISTRATEUR"], jti: "test" };
+    initiateurAppelant = { id: agentId, identifiantAd: agent.identifiantAd, roles: [], sousFluxId: null, profils: [], jti: "test" };
+    initiateurAutre = { id: autreAgentId, identifiantAd: autreAgent.identifiantAd, roles: [], sousFluxId: null, profils: [], jti: "test" };
     // Tache.roleCorbeille est une FK vers Role (contrainte réelle en base) —
     // deux rôles jetables et uniques à ce run rendent le test hermétique au
     // bruit des autres fichiers exécutés en parallèle (un vrai
@@ -50,15 +50,23 @@ describe("KpiEngineService — agrégations DEMANDE (docs/04 §3.2)", () => {
     roleTestDetenu = `TEST_ROLE_DETENU_${suffixe}`.slice(0, 40);
     roleTestNonDetenu = `TEST_ROLE_NON_DETENU_${suffixe}`.slice(0, 40);
     await Promise.all([
-      prisma.role.create({ data: { code: roleTestDetenu, libelle: roleTestDetenu, groupeAd: `GG-${roleTestDetenu}`, niveau: 1, type: "METIER" } }),
-      prisma.role.create({ data: { code: roleTestNonDetenu, libelle: roleTestNonDetenu, groupeAd: `GG-${roleTestNonDetenu}`, niveau: 1, type: "METIER" } })
+      prisma.role.create({ data: { code: roleTestDetenu, libelle: roleTestDetenu, groupeAd: `GG-${roleTestDetenu}`, niveau: 1, type: "METIER", profilSysteme: "VALIDATEUR" } }),
+      prisma.role.create({ data: { code: roleTestNonDetenu, libelle: roleTestNonDetenu, groupeAd: `GG-${roleTestNonDetenu}`, niveau: 1, type: "METIER", profilSysteme: "VALIDATEUR" } })
     ]);
-    valideurDobb = { id: agentId, identifiantAd: agent.identifiantAd, roles: [roleTestDetenu], sousFluxId: null, jti: "test" };
+    valideurDobb = {
+      id: agentId,
+      identifiantAd: agent.identifiantAd,
+      roles: [roleTestDetenu],
+      sousFluxId: null,
+      profils: ["VALIDATEUR"],
+      jti: "test"
+    };
     valideurAutreRole = {
       id: agentId,
       identifiantAd: agent.identifiantAd,
       roles: [roleTestNonDetenu],
       sousFluxId: null,
+      profils: ["VALIDATEUR"],
       jti: "test"
     };
 

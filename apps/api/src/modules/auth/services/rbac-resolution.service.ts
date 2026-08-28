@@ -1,10 +1,10 @@
 import { Injectable } from "@nestjs/common";
-import type { Utilisateur } from "@pgd/database";
+import type { EnumProfilSysteme, Utilisateur } from "@pgd/database";
 import { PrismaService } from "../../../infra/prisma/prisma.service";
 import type { UtilisateurAd } from "../ports/keycloak.port";
 
 export type ResolutionRbac =
-  | { statut: "AUTORISE"; utilisateur: Utilisateur; roles: string[] }
+  | { statut: "AUTORISE"; utilisateur: Utilisateur; roles: string[]; profils: EnumProfilSysteme[] }
   | { statut: "NON_PROVISIONNE"; utilisateurId: string | null };
 
 // Pré-enregistrement des utilisateurs AD, Temps 2 (12/08/2026, CLAUDE.md) —
@@ -39,13 +39,18 @@ export class RbacResolutionService {
 
     const membresRole = await this.prisma.membreRole.findMany({
       where: { utilisateurId: utilisateur.id },
-      select: { roleCode: true }
+      select: { roleCode: true, role: { select: { profilSysteme: true } } }
     });
 
     if (membresRole.length === 0) {
       return { statut: "NON_PROVISIONNE", utilisateurId: utilisateur.id };
     }
 
-    return { statut: "AUTORISE", utilisateur, roles: membresRole.map((m) => m.roleCode) };
+    // Cumul par rôle, jamais par utilisateur (Chantier 2, docs/14) — un
+    // utilisateur cumule les profils de tous les rôles qu'il détient, figé à
+    // la connexion comme `roles`/`sousFluxId` (cohérence plutôt que fraîcheur).
+    const profils = [...new Set(membresRole.map((m) => m.role.profilSysteme))];
+
+    return { statut: "AUTORISE", utilisateur, roles: membresRole.map((m) => m.roleCode), profils };
   }
 }

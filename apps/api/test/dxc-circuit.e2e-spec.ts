@@ -34,7 +34,7 @@ describe("E2E — circuit DXC (B2C), parcours complet en HTTP réel", () => {
       data: { identifiantAd: `e2e.dxc.${libelle}-${suffixe}@orange.com`, nom: `E2E DXC ${libelle}` }
     });
     utilisateurIds.push(utilisateur.id);
-    const cookie = await cookieSession(e2e.sessionService, { id: utilisateur.id, identifiantAd: utilisateur.identifiantAd, roles });
+    const cookie = await cookieSession(e2e.sessionService, { id: utilisateur.id, identifiantAd: utilisateur.identifiantAd, roles }, prisma);
     return { utilisateur, cookie };
   }
 

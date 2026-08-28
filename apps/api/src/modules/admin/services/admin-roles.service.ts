@@ -28,6 +28,7 @@ export class AdminRolesService {
         groupeAd: dto.groupeAd,
         niveau: dto.niveau,
         type: dto.type,
+        profilSysteme: dto.profilSysteme,
         dansMatrice: dto.dansMatrice ?? false,
         requiertMfa: dto.requiertMfa ?? false
       }
@@ -44,6 +45,7 @@ export class AdminRolesService {
         groupeAd: dto.groupeAd,
         niveau: dto.niveau,
         type: dto.type,
+        profilSysteme: dto.profilSysteme,
         dansMatrice: dto.dansMatrice,
         requiertMfa: dto.requiertMfa
       }
@@ -75,6 +77,7 @@ export class AdminRolesService {
     groupeAd: string;
     niveau: number;
     type: string;
+    profilSysteme: string;
     dansMatrice: boolean;
     requiertMfa: boolean;
   }): RoleVue {
@@ -84,6 +87,7 @@ export class AdminRolesService {
       groupeAd: role.groupeAd,
       niveau: role.niveau,
       type: role.type as never,
+      profilSysteme: role.profilSysteme as never,
       dansMatrice: role.dansMatrice,
       requiertMfa: role.requiertMfa
     };

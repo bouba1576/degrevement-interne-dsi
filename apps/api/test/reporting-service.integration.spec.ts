@@ -126,7 +126,7 @@ describe("ReportingService — rapports de dégrèvements (26/08/2026)", () => {
 
   it("en cours — instantané indépendant de la période demandée, groupé par rôle, ancienneté dérivée de dateSoumission", async () => {
     const roleTest = `TEST_ROLE_REPORTING_${suffixe}`.slice(0, 40);
-    await prisma.role.create({ data: { code: roleTest, libelle: roleTest, groupeAd: `GG-${roleTest}`, niveau: 1, type: "METIER" } });
+    await prisma.role.create({ data: { code: roleTest, libelle: roleTest, groupeAd: `GG-${roleTest}`, niveau: 1, type: "METIER", profilSysteme: "VALIDATEUR" } });
     roleCodes.push(roleTest);
 
     const ancienDe10Jours = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);

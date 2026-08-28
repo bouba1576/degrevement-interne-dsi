@@ -1,6 +1,7 @@
 import { JwtService } from "@nestjs/jwt";
 import Redis from "ioredis";
 import { loadEnv } from "@pgd/config";
+import type { EnumProfilSysteme } from "@pgd/database";
 import { CacheService } from "../src/infra/redis/cache.service";
 import { SessionService } from "../src/modules/auth/services/session.service";
 
@@ -15,7 +16,12 @@ describe("SessionService — SF-PGD-003 (JWT + révocation Redis)", () => {
   const jwt = new JwtService({});
   const sessionService = new SessionService(jwt, cache);
 
-  const utilisateur = { id: "33333333-3333-3333-3333-333333333333", identifiantAd: "test.session@orange.com", roles: ["DOBB"] };
+  const utilisateur = {
+    id: "33333333-3333-3333-3333-333333333333",
+    identifiantAd: "test.session@orange.com",
+    roles: ["DOBB"],
+    profils: ["VALIDATEUR"] as EnumProfilSysteme[]
+  };
 
   afterAll(async () => {
     await redis.quit();

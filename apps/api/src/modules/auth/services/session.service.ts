@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { randomUUID } from "node:crypto";
 import { loadEnv } from "@pgd/config";
+import type { EnumProfilSysteme } from "@pgd/database";
 import { CacheService } from "../../../infra/redis/cache.service";
 
 // @nestjs/jwt 11 type `expiresIn` en `StringValue` (type de `ms`, non
@@ -26,6 +27,9 @@ export interface SessionEnregistree {
   identifiantAd: string;
   roles: string[];
   sousFluxId: string | null;
+  // Chantier 2 (28/08/2026, docs/14) — même règle que sousFluxId ci-dessus :
+  // figé à la connexion, jamais recalculé à `rafraichir()`/`session()`.
+  profils: EnumProfilSysteme[];
   mfaSatisfaite: boolean;
   creeLe: string;
 }
@@ -40,6 +44,7 @@ interface AccessPayload {
   identifiantAd: string;
   roles: string[];
   sousFluxId: string | null;
+  profils: EnumProfilSysteme[];
   jti: string;
 }
 
@@ -71,6 +76,7 @@ export class SessionService {
     identifiantAd: string;
     roles: string[];
     sousFluxId?: string | null;
+    profils: EnumProfilSysteme[];
   }): Promise<PaireJetons> {
     const env = loadEnv();
     const jti = randomUUID();
@@ -80,12 +86,13 @@ export class SessionService {
       identifiantAd: utilisateur.identifiantAd,
       roles: utilisateur.roles,
       sousFluxId: utilisateur.sousFluxId ?? null,
+      profils: utilisateur.profils,
       mfaSatisfaite: false,
       creeLe: new Date().toISOString()
     };
     await this.cache.set(this.cleSession(jti), session, this.dureeEnSecondes(env.REFRESH_TOKEN_EXPIRES_IN));
 
-    return this.emettreJetons({ ...utilisateur, sousFluxId: session.sousFluxId }, jti);
+    return this.emettreJetons({ ...utilisateur, sousFluxId: session.sousFluxId, profils: session.profils }, jti);
   }
 
   async marquerMfaSatisfaite(jti: string): Promise<void> {
@@ -127,7 +134,8 @@ export class SessionService {
         id: session.utilisateurId,
         identifiantAd: session.identifiantAd,
         roles: session.roles,
-        sousFluxId: session.sousFluxId
+        sousFluxId: session.sousFluxId,
+        profils: session.profils
       },
       payload.jti
     );
@@ -138,7 +146,13 @@ export class SessionService {
   }
 
   private async emettreJetons(
-    utilisateur: { id: string; identifiantAd: string; roles: string[]; sousFluxId?: string | null },
+    utilisateur: {
+      id: string;
+      identifiantAd: string;
+      roles: string[];
+      sousFluxId?: string | null;
+      profils: EnumProfilSysteme[];
+    },
     jti: string
   ): Promise<PaireJetons> {
     const env = loadEnv();
@@ -148,6 +162,7 @@ export class SessionService {
         identifiantAd: utilisateur.identifiantAd,
         roles: utilisateur.roles,
         sousFluxId: utilisateur.sousFluxId ?? null,
+        profils: utilisateur.profils,
         jti
       } satisfies AccessPayload,
       { secret: env.JWT_SECRET, expiresIn: env.JWT_EXPIRES_IN as DureeJwt }

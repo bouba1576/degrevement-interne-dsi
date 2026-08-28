@@ -741,6 +741,7 @@ describe("DemandeService.listerTaches — chaîne réelle, acteurNom seulement s
         groupeAd: `GG-TEST-${suffixe}`,
         niveau: 1,
         type: "METIER",
+        profilSysteme: "VALIDATEUR",
         dansMatrice: false,
         requiertMfa: false
       }

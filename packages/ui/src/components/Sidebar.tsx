@@ -19,21 +19,30 @@ interface ArticleNav {
 
 export interface SidebarProps {
   roles: string[];
+  // Chantier 2 (28/08/2026, docs/14) — cumul de Role.profilSysteme des rôles
+  // détenus, figé en session comme `roles`. Remplace ici le proxy fragile par
+  // préfixe (`roles.some(r => r.startsWith("INITIATEUR_"))`, cf. commentaire
+  // ci-dessous avant ce chantier) : ajouter un futur rôle d'initiation
+  // n'exige plus de toucher ce fichier, seulement `profilSysteme` sur la
+  // nouvelle ligne `Role`. `roles` reste utile tel quel : `estAdmin`
+  // (ADMIN_PGD, un code unique et stable, jamais un préfixe) et
+  // `AppShell.libelleRole` en dépendent encore, sans fragilité comparable.
+  profils: string[];
   routeActuelle: string;
   onNaviguer: (route: string) => void;
   compteMesDemandes?: number;
   compteCorbeilles?: number;
 }
 
-export function Sidebar({ roles, routeActuelle, onNaviguer, compteMesDemandes, compteCorbeilles }: SidebarProps) {
+export function Sidebar({ roles, profils, routeActuelle, onNaviguer, compteMesDemandes, compteCorbeilles }: SidebarProps) {
   const estAdmin = roles.includes(ROLE_ADMIN);
-  // 25/08/2026, demande explicite — seuls les profils Initiateur (n'importe
-  // lequel des 3 rôles INITIATEUR_<CIRCUIT> réels du catalogue) ou Admin
+  // 25/08/2026, demande explicite — seuls les profils Initiateur ou Admin
   // voient ce lien. Même discipline que le reste de ce fichier : un gate
-  // d'affichage, pas le contrôle — POST /api/demandes porte désormais le
-  // même `@Roles()` côté serveur (DemandesController), c'est CE guard-là qui
-  // protège réellement la création, pas ce `if`.
-  const estInitiateur = roles.some((r) => r.startsWith("INITIATEUR_"));
+  // d'affichage, pas le contrôle — POST /api/demandes porte désormais
+  // `@ProfilRequis("INITIATEUR", "ADMINISTRATEUR")` côté serveur
+  // (DemandesController), c'est CE guard-là qui protège réellement la
+  // création, pas ce `if`.
+  const estInitiateur = profils.includes("INITIATEUR");
 
   const espaceTravail: ArticleNav[] = [
     { route: "home", libelle: "Tableau de bord", icone: "chart" },

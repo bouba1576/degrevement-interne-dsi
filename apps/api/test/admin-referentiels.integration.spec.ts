@@ -75,7 +75,7 @@ describe("Admin — référentiels (circuits, rôles, motifs, paramètres globau
 
   it("Role — CRUD complet, et ROLE_EN_USAGE (422) si référencé par une étape de palier", async () => {
     const code = `TEST_ROLE_${Date.now()}`;
-    const cree = await roles.creer({ code, libelle: "Rôle test", groupeAd: "GG-TEST", niveau: 1, type: "METIER" });
+    const cree = await roles.creer({ code, libelle: "Rôle test", groupeAd: "GG-TEST", niveau: 1, type: "METIER", profilSysteme: "VALIDATEUR" });
     expect(cree.code).toBe(code);
 
     const modifie = await roles.modifier(code, { libelle: "Rôle test modifié" });

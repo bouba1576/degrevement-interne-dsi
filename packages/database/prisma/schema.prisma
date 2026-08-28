@@ -134,6 +134,18 @@ enum EnumTypeRole {
   @@map("enum_type_role")
 }
 
+// Profil système de permission (docs/14_Matrice_SoD_et_WF_SLA_KPI.md,
+// matrice SoD) — axe distinct d'EnumTypeRole (portée), celui-ci répond à une
+// question de CAPACITÉ. Trois valeurs fixes, jamais amenées à en accueillir
+// une quatrième (contrairement au catalogue de rôles métier, ouvert).
+enum EnumProfilSysteme {
+  INITIATEUR
+  VALIDATEUR
+  ADMINISTRATEUR
+
+  @@map("enum_profil_systeme")
+}
+
 enum EnumEvenementSecurite {
   LOGIN
   LOGOUT
@@ -247,13 +259,23 @@ model Utilisateur {
 }
 
 model Role {
-  code        String       @id
-  libelle     String
-  groupeAd    String       @map("groupe_ad")
-  niveau      Int
-  type        EnumTypeRole
-  dansMatrice Boolean      @default(false) @map("dans_matrice")
-  requiertMfa Boolean      @default(false) @map("requiert_mfa")
+  code          String           @id
+  libelle       String
+  groupeAd      String           @map("groupe_ad")
+  niveau        Int
+  type          EnumTypeRole
+  // Ajouté le 28/08/2026 (docs/14, chantier profils système) — axe DISTINCT
+  // de `type` (EnumTypeRole répond à une question de PORTÉE : un circuit,
+  // plusieurs circuits, hors circuit ; profilSysteme répond à une question
+  // de CAPACITÉ : que peut faire cette personne). Vérifié avant d'ajouter ce
+  // champ, pas supposé : EnumTypeRole n'est utilisé nulle part comme proxy
+  // de permission (aucun guard, RbacGuard compare exclusivement des codes de
+  // rôle) — les deux axes coexistent sans redondance. Porté PAR RÔLE, pas par
+  // utilisateur (cohérent avec `type`, déjà modélisé ainsi) : un utilisateur
+  // cumulant plusieurs rôles cumule les profils de chacun.
+  profilSysteme EnumProfilSysteme @map("profil_systeme")
+  dansMatrice   Boolean          @default(false) @map("dans_matrice")
+  requiertMfa   Boolean          @default(false) @map("requiert_mfa")
 
   membres     MembreRole[]
   taches      Tache[]

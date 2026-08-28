@@ -41,6 +41,7 @@ import { ApiZodBody, ApiZodQuery, ApiZodResponse } from "../../common/swagger/zo
 import { Authenticated } from "../../common/decorators/authenticated.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { Roles } from "../../common/decorators/roles.decorator";
+import { ProfilRequis } from "../../common/decorators/profil-requis.decorator";
 import type { UtilisateurRequete } from "../../common/guards/auth.guard";
 import { InitiateurDemandeGuard } from "../../common/guards/initiateur-demande.guard";
 import { PrismaService } from "../../infra/prisma/prisma.service";
@@ -63,14 +64,20 @@ import { SiService } from "./services/si.service";
 // aucun rôle d'initiation — pouvait créer un dossier et en devenir
 // l'initiateur, ce que la maquette n'a jamais montré (le menu « Nouvelle
 // demande » suppose implicitement un profil initiateur) et qu'aucune source
-// ne justifiait explicitement une fois la question posée. Les 3 codes de
-// rôle listés couvrent l'intégralité du catalogue réel (`SELECT code FROM
-// role WHERE code LIKE 'INITIATEUR_%'`, vérifié avant d'écrire cette liste
-// — pas une supposition) ; `EnumCircuit` reste un enum Postgres à 3 valeurs
-// fixes (DOBB/DXC/DF), donc cette liste est exhaustive tant que ce schéma
-// ne change pas. `RbacGuard` (global, `@Roles()`) applique cette
-// restriction — un contrôle client (masquer le lien dans `Sidebar`) est un
-// confort de navigation, jamais la garantie (règle non négociable 2).
+// ne justifiait explicitement une fois la question posée.
+//
+// RECONVERTI en @ProfilRequis (Chantier 2, 28/08/2026, docs/14) : l'ancienne
+// liste `@Roles("INITIATEUR_DOBB", "INITIATEUR_DXC", "INITIATEUR_DF",
+// "ADMIN_PGD")` était un exemple canonique de « Famille B » — un contrôle par
+// ÉNUMÉRATION OUVERTE de codes de rôle, qui casse silencieusement à l'ajout
+// d'un nouveau circuit/rôle d'initiation (rien n'aurait rappelé de mettre à
+// jour cette liste). `@ProfilRequis("INITIATEUR", "ADMINISTRATEUR")` porte la
+// même autorisation via `Role.profilSysteme` (donnée, jamais code) — ajouter
+// un futur circuit/rôle d'initiation n'exige plus qu'un `profilSysteme:
+// "INITIATEUR"` sur la nouvelle ligne `Role`, aucun changement de code ici.
+// `ProfilGuard` (global) applique cette restriction — un contrôle client
+// (masquer le lien dans `Sidebar`) reste un confort de navigation, jamais la
+// garantie (règle non négociable 2).
 @ApiTags("demandes")
 @Controller("demandes")
 export class DemandesController {
@@ -94,7 +101,7 @@ export class DemandesController {
   // du corps de la requête — `creerDemandeRequeteSchema` ne porte même pas
   // ce champ. Un appelant ne peut pas créer une demande au nom de quelqu'un
   // d'autre, structurellement, pas par un contrôle qu'on pourrait oublier.
-  @Roles("INITIATEUR_DOBB", "INITIATEUR_DXC", "INITIATEUR_DF", "ADMIN_PGD")
+  @ProfilRequis("INITIATEUR", "ADMINISTRATEUR")
   @Post()
   @ApiZodBody(creerDemandeRequeteSchema)
   @ApiZodResponse(201, demandeDetailSchema)

@@ -5,13 +5,19 @@ import { AppModule } from "../src/app.module";
 import { PUBLIC_KEY } from "../src/common/decorators/public.decorator";
 import { ROLES_KEY } from "../src/common/decorators/roles.decorator";
 import { AUTHENTICATED_KEY } from "../src/common/decorators/authenticated.decorator";
+import { PROFIL_REQUIS_KEY } from "../src/common/decorators/profil-requis.decorator";
 
 // PGD-014 : « Test : aucune route mutative sans décorateur de rôle. »
 // Élargi à toute route (mutative ou de lecture sensible, SF-PGD-203) : chaque
 // handler HTTP doit porter soit @Public() (explicitement ouvert), soit
-// @Roles() (RBAC appliqué) — sur la méthode ou sur la classe. Un handler sans
-// aucun des deux échoue le test plutôt que de se retrouver protégé par défaut
-// « par oubli », ce qui serait invisible en revue de code.
+// @Roles() (RBAC appliqué), soit @ProfilRequis() — ajouté Chantier 2
+// (28/08/2026, docs/14) : DemandesController.creer() est passé de
+// @Roles(liste de codes) à @ProfilRequis(...), un contrôle tout aussi réel
+// (ProfilGuard, global) mais sur un axe différent (Role.profilSysteme plutôt
+// que roleCode) — ce test ne connaissait pas encore ce troisième décorateur
+// et aurait signalé cette route comme non couverte sans cet ajout. Un
+// handler sans aucun des trois échoue le test plutôt que de se retrouver
+// protégé par défaut « par oubli », ce qui serait invisible en revue de code.
 describe("Couverture RBAC — zéro route sans décorateur (SF-PGD-203)", () => {
   it("chaque route HTTP porte @Public() ou @Roles()", async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -31,6 +37,7 @@ describe("Couverture RBAC — zéro route sans décorateur (SF-PGD-203)", () => 
         const classePublique = Reflect.getMetadata(PUBLIC_KEY, metatype) === true;
         const classeRoles = Reflect.getMetadata(ROLES_KEY, metatype) !== undefined;
         const classeAuthentifiee = Reflect.getMetadata(AUTHENTICATED_KEY, metatype) === true;
+        const classeProfilRequis = Reflect.getMetadata(PROFIL_REQUIS_KEY, metatype) !== undefined;
 
         for (const nomMethode of scanner.getAllMethodNames(prototype)) {
           const handler = (prototype as Record<string, unknown>)[nomMethode];
@@ -41,14 +48,17 @@ describe("Couverture RBAC — zéro route sans décorateur (SF-PGD-203)", () => 
           const methodePublique = Reflect.getMetadata(PUBLIC_KEY, handler as object) === true;
           const methodeRoles = Reflect.getMetadata(ROLES_KEY, handler as object) !== undefined;
           const methodeAuthentifiee = Reflect.getMetadata(AUTHENTICATED_KEY, handler as object) === true;
+          const methodeProfilRequis = Reflect.getMetadata(PROFIL_REQUIS_KEY, handler as object) !== undefined;
 
           const couvert =
             classePublique ||
             classeRoles ||
             classeAuthentifiee ||
+            classeProfilRequis ||
             methodePublique ||
             methodeRoles ||
-            methodeAuthentifiee;
+            methodeAuthentifiee ||
+            methodeProfilRequis;
           if (!couvert) {
             routesSansDecorateur.push(`${metatype.name}.${nomMethode}`);
           }

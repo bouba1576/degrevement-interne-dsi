@@ -25,7 +25,7 @@ describe("RbacResolutionService — pré-enregistrement (Temps 2, sans JIT ni re
 
   beforeAll(async () => {
     await prisma.role.create({
-      data: { code: roleTest, libelle: roleTest, groupeAd: `GG-${roleTest}`, niveau: 1, type: "METIER" }
+      data: { code: roleTest, libelle: roleTest, groupeAd: `GG-${roleTest}`, niveau: 1, type: "METIER", profilSysteme: "VALIDATEUR" }
     });
   });
 
@@ -89,6 +89,9 @@ describe("RbacResolutionService — pré-enregistrement (Temps 2, sans JIT ni re
     if (resultat.statut === "AUTORISE") {
       expect(resultat.utilisateur.id).toBe(utilisateur.id);
       expect(resultat.roles).toEqual([roleTest]);
+      // Chantier 2 (28/08/2026, docs/14) — profils dérivés de
+      // Role.profilSysteme, roleTest étant seedé VALIDATEUR ci-dessus.
+      expect(resultat.profils).toEqual(["VALIDATEUR"]);
     }
   });
 

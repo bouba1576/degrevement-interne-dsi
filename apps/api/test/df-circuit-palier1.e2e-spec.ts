@@ -52,7 +52,7 @@ describe("E2E — circuit DF (Wholesale), palier 1 (0–5M), parcours complet en
       data: { identifiantAd: `e2e.df.p1.${libelle}-${suffixe}@orange.com`, nom: `E2E DF P1 ${libelle}` }
     });
     utilisateurIds.push(utilisateur.id);
-    const cookie = await cookieSession(e2e.sessionService, { id: utilisateur.id, identifiantAd: utilisateur.identifiantAd, roles });
+    const cookie = await cookieSession(e2e.sessionService, { id: utilisateur.id, identifiantAd: utilisateur.identifiantAd, roles }, prisma);
     return { utilisateur, cookie };
   }
 

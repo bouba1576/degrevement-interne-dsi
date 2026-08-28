@@ -61,6 +61,7 @@ export function AppShell({
     <div className="flex min-h-screen">
       <Sidebar
         roles={utilisateur.roles}
+        profils={utilisateur.profils}
         routeActuelle={routeActuelle}
         onNaviguer={onNaviguer}
         compteMesDemandes={compteMesDemandes}

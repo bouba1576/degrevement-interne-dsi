@@ -46,7 +46,7 @@ describe("E2E — circuit DF (Wholesale), palier 3 (>50M), parcours complet en H
       data: { identifiantAd: `e2e.df.p3.${libelle}-${suffixe}@orange.com`, nom: `E2E DF P3 ${libelle}` }
     });
     utilisateurIds.push(utilisateur.id);
-    const cookie = await cookieSession(e2e.sessionService, { id: utilisateur.id, identifiantAd: utilisateur.identifiantAd, roles });
+    const cookie = await cookieSession(e2e.sessionService, { id: utilisateur.id, identifiantAd: utilisateur.identifiantAd, roles }, prisma);
     return { utilisateur, cookie };
   }
 

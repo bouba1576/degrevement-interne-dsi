@@ -105,7 +105,7 @@ describe("E2E — POST /api/auth/login, refus d'un compte non pré-enregistré",
   it("accorde une session pour un Utilisateur pré-enregistré avec au moins un MembreRole", async () => {
     const roleTest = `TEST_E2E_LOGIN_${suffixe}`;
     await prisma.role.create({
-      data: { code: roleTest, libelle: roleTest, groupeAd: `GG-${roleTest}`, niveau: 1, type: "METIER", requiertMfa: false }
+      data: { code: roleTest, libelle: roleTest, groupeAd: `GG-${roleTest}`, niveau: 1, type: "METIER", profilSysteme: "VALIDATEUR", requiertMfa: false }
     });
     const identifiantProvisionne = `e2e.provisionne.${suffixe}@orange.com`;
     const utilisateur = await prisma.utilisateur.create({

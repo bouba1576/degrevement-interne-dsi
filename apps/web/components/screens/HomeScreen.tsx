@@ -93,14 +93,27 @@ function ongletParDefaut(
 // défaut (observation des compteurs réels, pas une déduction de rôle).
 export function HomeScreen({ utilisateur, onNaviguer, compteMesDemandes, compteCorbeilles }: HomeScreenProps) {
   const prenom = utilisateur.nom.split(" ")[0];
+  // ADMIN_PGD reste un code unique et stable (Famille A) — laissé tel quel,
+  // jamais rebranché sur `profils` : la portée Pilotage réelle côté serveur
+  // (KpiPerimetreGuard) reste elle aussi câblée sur ce seul code, pas sur
+  // ADMINISTRATEUR au sens large (SUPERVISEUR/SERVICE_TECHNIQUE n'ont aucune
+  // route Pilotage réelle derrière eux) — élargir ce `estAdmin` ouvrirait un
+  // onglet que le serveur refuserait ensuite en 403.
   const estAdmin = utilisateur.roles.includes(ROLE_ADMIN);
-  const estInitiateur = utilisateur.roles.some((r) => r.startsWith("INITIATEUR_"));
-  // Tout rôle réel qui n'est ni INITIATEUR_<CIRCUIT> ni ADMIN_PGD est une
-  // corbeille de validation (RESPONSABLE_*/MANAGER_*/DOBB-DXC-DF/FRA/
-  // DGA_DG/CONTROLE_N1-N2, etc.) — pas une réintroduction de la taxonomie
-  // I/V/A/C déjà écartée (DIVERGENCES.md) : une lecture structurelle des
-  // codes de rôle réels, jamais une catégorie inventée.
-  const estValideur = utilisateur.roles.some((r) => r !== ROLE_ADMIN && !r.startsWith("INITIATEUR_"));
+  // Chantier 2 (28/08/2026, docs/14) — rebranché sur Role.profilSysteme
+  // (session `profils`), remplace les deux proxies fragiles par
+  // préfixe/complément qui précédaient (`startsWith("INITIATEUR_")` et
+  // surtout `r !== ROLE_ADMIN && !r.startsWith("INITIATEUR_")`, qui
+  // classifiait à tort SUPERVISEUR/SERVICE_TECHNIQUE — tous deux
+  // ADMINISTRATEUR, ni l'un ni l'autre VALIDATEUR — comme "valideur", bug
+  // trouvé en revue avant ce chantier). Un compte SUPERVISEUR/
+  // SERVICE_TECHNIQUE pur (jamais ADMIN_PGD) ne voit donc plus aucun des
+  // trois onglets : conséquence correcte, pas une régression — ces deux
+  // rôles n'ont aucune capacité réelle câblée nulle part dans ce dépôt
+  // (vérifié, cf. commentaire de la migration profilSysteme), un faux
+  // "Valideur" aurait été pire qu'un tableau de bord vide.
+  const estInitiateur = utilisateur.profils.includes("INITIATEUR");
+  const estValideur = utilisateur.profils.includes("VALIDATEUR");
   const [onglet, setOnglet] = useState<Onglet>(() =>
     ongletParDefaut(estAdmin, estInitiateur, estValideur, compteMesDemandes, compteCorbeilles)
   );

@@ -2,6 +2,7 @@ import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from
 import { Reflector } from "@nestjs/core";
 import type { Request } from "express";
 import { loadEnv } from "@pgd/config";
+import type { EnumProfilSysteme } from "@pgd/database";
 import { PUBLIC_KEY } from "../decorators/public.decorator";
 import { SessionService } from "../../modules/auth/services/session.service";
 
@@ -10,6 +11,7 @@ export interface UtilisateurRequete {
   identifiantAd: string;
   roles: string[];
   sousFluxId: string | null;
+  profils: EnumProfilSysteme[];
   jti: string;
 }
 
@@ -48,6 +50,7 @@ export class AuthGuard implements CanActivate {
       identifiantAd: resultat.identifiantAd,
       roles: resultat.roles,
       sousFluxId: resultat.sousFluxId,
+      profils: resultat.profils,
       jti: resultat.jti
     };
     return true;

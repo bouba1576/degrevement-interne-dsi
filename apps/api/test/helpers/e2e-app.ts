@@ -6,6 +6,7 @@ import { AppModule } from "../../src/app.module";
 import { HttpExceptionFilter } from "../../src/common/filters/http-exception.filter";
 import { LoggingInterceptor } from "../../src/common/interceptors/logging.interceptor";
 import { ResponseEnvelopeInterceptor } from "../../src/common/interceptors/response-envelope.interceptor";
+import { PrismaService } from "../../src/infra/prisma/prisma.service";
 import { SessionService } from "../../src/modules/auth/services/session.service";
 
 export interface AppE2e {
@@ -46,11 +47,25 @@ export async function demarrerAppE2e(overrides?: Array<{ provider: unknown; useV
 // ailleurs (ldap-provider.integration.spec.ts, LoginScreen). Ce que ces e2e
 // vérifient, c'est le CIRCUIT une fois authentifié, pas l'authentification
 // elle-même. Retourne l'en-tête Cookie prêt à poser sur une requête supertest.
+//
+// `profils` (Chantier 2, 28/08/2026, docs/14) — dérivé par une VRAIE requête
+// Prisma contre Role.profilSysteme, jamais une réimplémentation locale de la
+// convention de nommage (INITIATEUR_* → INITIATEUR, etc.) : ce test exerce le
+// même mécanisme que RbacResolutionService.resoudre(), contre les mêmes
+// données réelles déjà seedées, pas une approximation qui pourrait diverger
+// du seed en silence.
 export async function cookieSession(
   sessionService: SessionService,
-  utilisateur: { id: string; identifiantAd: string; roles: string[]; sousFluxId?: string | null }
+  utilisateur: { id: string; identifiantAd: string; roles: string[]; sousFluxId?: string | null },
+  prisma: PrismaService
 ): Promise<string> {
-  const { accessToken } = await sessionService.creerSession(utilisateur);
+  const definitionsRole = await prisma.role.findMany({
+    where: { code: { in: utilisateur.roles } },
+    select: { profilSysteme: true }
+  });
+  const profils = [...new Set(definitionsRole.map((r) => r.profilSysteme))];
+
+  const { accessToken } = await sessionService.creerSession({ ...utilisateur, profils });
   const env = loadEnv();
   return `${env.SESSION_COOKIE_NAME}=${accessToken}`;
 }

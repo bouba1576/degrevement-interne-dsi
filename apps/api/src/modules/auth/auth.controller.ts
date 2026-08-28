@@ -73,6 +73,8 @@ export class AuthController {
     // AdApiProvider ».
     const facteurAuth = loadEnv().AUTH_PROVIDER === "ad-api" ? "AD" : "KEYCLOAK";
     const resultatAuth = await this.keycloak.authentifier(identifiantAd, motDePasse);
+    console.log(`Resultat Auth: ${resultatAuth.statut}`)
+    
     if (resultatAuth.statut === "ECHEC") {
       const { verrouille } = await this.rateLimit.enregistrerEchec("login", identifiantAd);
       // codeEchec/messageEchec : détail interne (JOURNAL_SECURITE
@@ -113,7 +115,8 @@ export class AuthController {
         message: "Ce compte n'a pas été pré-enregistré. Contactez votre administrateur."
       });
     }
-    const { utilisateur, roles } = resolution;
+    const { utilisateur, roles, profils } = resolution;
+    console.log(`Données resolues: ${JSON.stringify(resolution)}`)
     await this.journal.consigner({
       utilisateurId: utilisateur.id,
       evenement: "LOGIN",
@@ -125,8 +128,10 @@ export class AuthController {
       id: utilisateur.id,
       identifiantAd,
       roles,
-      sousFluxId: utilisateur.sousFluxId
+      sousFluxId: utilisateur.sousFluxId,
+      profils
     });
+    console.log(`Jetons: ${JSON.stringify(jetons)}`)
     poserCookiesSession(res, jetons);
     return { connecte: true };
   }
@@ -164,12 +169,14 @@ export class AuthController {
   @ApiZodResponse(200, sessionUtilisateurSchema)
   async session(@CurrentUser() utilisateur: UtilisateurRequete): Promise<SessionUtilisateur> {
     const enBase = await this.prisma.utilisateur.findUniqueOrThrow({ where: { id: utilisateur.id } });
+    
     return {
       id: enBase.id,
       identifiantAd: enBase.identifiantAd,
       nom: enBase.nom,
       roles: utilisateur.roles,
-      sousFluxId: utilisateur.sousFluxId
+      sousFluxId: utilisateur.sousFluxId,
+      profils: utilisateur.profils
     };
   }
 }

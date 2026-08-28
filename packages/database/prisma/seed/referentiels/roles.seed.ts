@@ -1,4 +1,4 @@
-import type { EnumTypeRole, PrismaClient } from "@prisma/client";
+import type { EnumProfilSysteme, EnumTypeRole, PrismaClient } from "@prisma/client";
 
 // ATTENTION — catalogue PROVISOIRE, 25 rôles construits sur les 34 annoncés.
 // docs/01_PRD_Consolide.md §2 : « Le catalogue consolidé comprend 34 rôles
@@ -43,6 +43,11 @@ interface DefinitionRole {
   groupeAd: string;
   niveau: number;
   type: EnumTypeRole;
+  // Profil système (docs/14_Matrice_SoD_et_WF_SLA_KPI.md) — axe distinct de
+  // `type` (PORTÉE) : celui-ci répond à une question de CAPACITÉ. Chantier 2,
+  // 28/08/2026 — cf. migration 20260828120000_role_profil_systeme pour le
+  // détail complet des sources et inférences par catégorie.
+  profilSysteme: EnumProfilSysteme;
   dansMatrice: boolean;
   requiertMfa: boolean;
   slaHeures: number;
@@ -58,16 +63,18 @@ const METIER_PAR_CIRCUIT: Array<{
   niveau: number;
   slaHeures: number;
   minuteurBloquant: boolean;
+  profilSysteme: EnumProfilSysteme;
 }> = [
-  { suffixe: "INITIATEUR", libelle: "Initiateur", niveau: 1, slaHeures: 0, minuteurBloquant: false },
-  { suffixe: "RESPONSABLE", libelle: "Responsable", niveau: 2, slaHeures: 8, minuteurBloquant: true },
-  { suffixe: "MANAGER", libelle: "Manager", niveau: 3, slaHeures: 8, minuteurBloquant: true },
+  { suffixe: "INITIATEUR", libelle: "Initiateur", niveau: 1, slaHeures: 0, minuteurBloquant: false, profilSysteme: "INITIATEUR" },
+  { suffixe: "RESPONSABLE", libelle: "Responsable", niveau: 2, slaHeures: 8, minuteurBloquant: true, profilSysteme: "VALIDATEUR" },
+  { suffixe: "MANAGER", libelle: "Manager", niveau: 3, slaHeures: 8, minuteurBloquant: true, profilSysteme: "VALIDATEUR" },
   {
     suffixe: "MANAGER_SENIOR",
     libelle: "Manager Senior",
     niveau: 4,
     slaHeures: 8,
-    minuteurBloquant: true
+    minuteurBloquant: true,
+    profilSysteme: "VALIDATEUR"
   }
 ];
 
@@ -81,6 +88,7 @@ function rolesMetier(): DefinitionRole[] {
         groupeAd: `GG-DGR-${def.suffixe}-${circuit}`,
         niveau: def.niveau,
         type: "METIER",
+        profilSysteme: def.profilSysteme,
         dansMatrice: true,
         requiertMfa: false,
         slaHeures: def.slaHeures,
@@ -96,6 +104,7 @@ function rolesMetier(): DefinitionRole[] {
     groupeAd: "GG-DGR-DOBB",
     niveau: 5,
     type: "METIER",
+    profilSysteme: "VALIDATEUR",
     dansMatrice: true,
     requiertMfa: true,
     slaHeures: 24,
@@ -107,6 +116,7 @@ function rolesMetier(): DefinitionRole[] {
     groupeAd: "GG-DGR-DXC",
     niveau: 5,
     type: "METIER",
+    profilSysteme: "VALIDATEUR",
     dansMatrice: true,
     requiertMfa: true,
     slaHeures: 24,
@@ -143,6 +153,7 @@ const ROLES_DOBB_DIFFERENCIES: DefinitionRole[] = [
     groupeAd: "GG-DGR-RESPONSABLE-RECLAMATION-B2B-DOBB",
     niveau: 2,
     type: "METIER",
+    profilSysteme: "VALIDATEUR",
     dansMatrice: true,
     requiertMfa: false,
     slaHeures: 8,
@@ -155,6 +166,7 @@ const ROLES_DOBB_DIFFERENCIES: DefinitionRole[] = [
     groupeAd: "GG-DGR-MANAGER-RECLAMATION-B2B-DOBB",
     niveau: 3,
     type: "METIER",
+    profilSysteme: "VALIDATEUR",
     dansMatrice: true,
     requiertMfa: false,
     slaHeures: 8,
@@ -167,6 +179,7 @@ const ROLES_DOBB_DIFFERENCIES: DefinitionRole[] = [
     groupeAd: "GG-DGR-RESPONSABLE-RECOUVREMENT-DOBB",
     niveau: 2,
     type: "METIER",
+    profilSysteme: "VALIDATEUR",
     dansMatrice: true,
     requiertMfa: false,
     slaHeures: 8,
@@ -179,6 +192,7 @@ const ROLES_DOBB_DIFFERENCIES: DefinitionRole[] = [
     groupeAd: "GG-DGR-MANAGER-RECOUVREMENT-DOBB",
     niveau: 3,
     type: "METIER",
+    profilSysteme: "VALIDATEUR",
     dansMatrice: true,
     requiertMfa: false,
     slaHeures: 8,
@@ -191,6 +205,7 @@ const ROLES_DOBB_DIFFERENCIES: DefinitionRole[] = [
     groupeAd: "GG-DGR-RESPONSABLE-ADV-DOBB",
     niveau: 2,
     type: "METIER",
+    profilSysteme: "VALIDATEUR",
     dansMatrice: true,
     requiertMfa: false,
     slaHeures: 8,
@@ -203,6 +218,7 @@ const ROLES_DOBB_DIFFERENCIES: DefinitionRole[] = [
     groupeAd: "GG-DGR-RESPONSABLE-FACTURATION-DOBB",
     niveau: 2,
     type: "METIER",
+    profilSysteme: "VALIDATEUR",
     dansMatrice: true,
     requiertMfa: false,
     slaHeures: 8,
@@ -215,6 +231,7 @@ const ROLES_DOBB_DIFFERENCIES: DefinitionRole[] = [
     groupeAd: "GG-DGR-MANAGER-SERVICE-OPERATIONS-CLIENT-DOBB",
     niveau: 3,
     type: "METIER",
+    profilSysteme: "VALIDATEUR",
     dansMatrice: true,
     requiertMfa: false,
     slaHeures: 8,
@@ -227,6 +244,7 @@ const ROLES_DOBB_DIFFERENCIES: DefinitionRole[] = [
     groupeAd: "GG-DGR-MANAGER-SENIOR-RELATION-CLIENT-B2B-DOBB",
     niveau: 4,
     type: "METIER",
+    profilSysteme: "VALIDATEUR",
     dansMatrice: true,
     requiertMfa: false,
     slaHeures: 8,
@@ -239,6 +257,7 @@ const ROLES_DOBB_DIFFERENCIES: DefinitionRole[] = [
     groupeAd: "GG-DGR-DAOB-DOBB",
     niveau: 6,
     type: "METIER",
+    profilSysteme: "VALIDATEUR",
     dansMatrice: true,
     requiertMfa: true,
     slaHeures: 24,
@@ -254,6 +273,7 @@ const ROLES_PIVOT: DefinitionRole[] = [
     groupeAd: "GG-DGR-SM-MOA-FINANCE-FRA",
     niveau: 6,
     type: "PIVOT",
+    profilSysteme: "VALIDATEUR",
     dansMatrice: true,
     requiertMfa: true,
     slaHeures: 48,
@@ -265,6 +285,7 @@ const ROLES_PIVOT: DefinitionRole[] = [
     groupeAd: "GG-DGR-DFA",
     niveau: 6,
     type: "PIVOT",
+    profilSysteme: "VALIDATEUR",
     dansMatrice: true,
     requiertMfa: true,
     slaHeures: 24,
@@ -277,6 +298,7 @@ const ROLES_PIVOT: DefinitionRole[] = [
     groupeAd: "GG-DGR-DF",
     niveau: 7,
     type: "PIVOT",
+    profilSysteme: "VALIDATEUR",
     dansMatrice: true,
     requiertMfa: true,
     slaHeures: 24,
@@ -288,6 +310,7 @@ const ROLES_PIVOT: DefinitionRole[] = [
     groupeAd: "GG-DGR-DGA-DG",
     niveau: 8,
     type: "PIVOT",
+    profilSysteme: "VALIDATEUR",
     dansMatrice: true,
     requiertMfa: true,
     slaHeures: 24,
@@ -311,6 +334,7 @@ const ROLES_CONTROLE: DefinitionRole[] = [
     groupeAd: "GG-DGR-FRA",
     niveau: 9,
     type: "PIVOT",
+    profilSysteme: "VALIDATEUR",
     dansMatrice: true,
     requiertMfa: true,
     slaHeures: 48,
@@ -322,6 +346,7 @@ const ROLES_CONTROLE: DefinitionRole[] = [
     groupeAd: "GG-DGR-CONTROLE-N1",
     niveau: 10,
     type: "PIVOT",
+    profilSysteme: "VALIDATEUR",
     dansMatrice: true,
     requiertMfa: true,
     slaHeures: 240,
@@ -333,6 +358,7 @@ const ROLES_CONTROLE: DefinitionRole[] = [
     groupeAd: "GG-DGR-CONTROLE-N2",
     niveau: 11,
     type: "PIVOT",
+    profilSysteme: "VALIDATEUR",
     dansMatrice: true,
     requiertMfa: true,
     slaHeures: 240,
@@ -344,6 +370,7 @@ const ROLES_CONTROLE: DefinitionRole[] = [
     groupeAd: "GG-DGR-FIABILISATION",
     niveau: 10,
     type: "PIVOT",
+    profilSysteme: "VALIDATEUR",
     dansMatrice: true,
     requiertMfa: true,
     slaHeures: 240,
@@ -358,6 +385,7 @@ const ROLES_SYSTEME: DefinitionRole[] = [
     groupeAd: "GG-DGR-ADMIN-PGD",
     niveau: 0,
     type: "SYSTEME",
+    profilSysteme: "ADMINISTRATEUR",
     dansMatrice: false,
     requiertMfa: true,
     slaHeures: 0,
@@ -369,6 +397,10 @@ const ROLES_SYSTEME: DefinitionRole[] = [
     groupeAd: "GG-DGR-SUPERVISEUR",
     niveau: 0,
     type: "SYSTEME",
+    // ESTIMÉ par analogie (même EnumTypeRole=SYSTEME qu'ADMIN_PGD, jamais
+    // vérifié ailleurs dans le code applicatif) — cf. migration
+    // 20260828120000_role_profil_systeme.
+    profilSysteme: "ADMINISTRATEUR",
     dansMatrice: false,
     requiertMfa: true,
     slaHeures: 0,
@@ -380,6 +412,8 @@ const ROLES_SYSTEME: DefinitionRole[] = [
     groupeAd: "GG-DGR-SERVICE-TECHNIQUE",
     niveau: 0,
     type: "SYSTEME",
+    // ESTIMÉ par analogie, même réserve que SUPERVISEUR ci-dessus.
+    profilSysteme: "ADMINISTRATEUR",
     dansMatrice: false,
     requiertMfa: true,
     slaHeures: 0,
@@ -400,6 +434,7 @@ export async function seedRoles(prisma: PrismaClient): Promise<void> {
         groupeAd: role.groupeAd,
         niveau: role.niveau,
         type: role.type,
+        profilSysteme: role.profilSysteme,
         dansMatrice: role.dansMatrice,
         requiertMfa: role.requiertMfa
       }

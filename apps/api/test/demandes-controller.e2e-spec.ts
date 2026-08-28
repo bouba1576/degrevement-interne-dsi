@@ -31,7 +31,7 @@ describe("E2E — DemandesController, routes restantes en HTTP réel", () => {
       data: { identifiantAd: `e2e.demandes.${libelle}-${suffixe}@orange.com`, nom: `E2E Demandes ${libelle}` }
     });
     utilisateurIds.push(utilisateur.id);
-    const cookie = await cookieSession(e2e.sessionService, { id: utilisateur.id, identifiantAd: utilisateur.identifiantAd, roles });
+    const cookie = await cookieSession(e2e.sessionService, { id: utilisateur.id, identifiantAd: utilisateur.identifiantAd, roles }, prisma);
     return { utilisateur, cookie };
   }
 

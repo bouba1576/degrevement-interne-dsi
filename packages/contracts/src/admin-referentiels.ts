@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { enumCircuit, enumTypeRole } from "./enums";
+import { enumCircuit, enumProfilSysteme, enumTypeRole } from "./enums";
 
 // docs/06_Contrats_API.md §9 (PGD-043) — CRUD des référentiels d'administration
 // hors paliers (admin-palier.ts) et paramètres de calcul (admin-parametre-calcul.ts,
@@ -35,6 +35,10 @@ export const roleVueSchema = z.object({
   groupeAd: z.string(),
   niveau: z.number(),
   type: enumTypeRole,
+  // Chantier 2 (28/08/2026, docs/14) — axe CAPACITÉ, distinct de `type`
+  // (PORTÉE). NOT NULL en base : jamais de valeur devinée pour un rôle
+  // existant ou nouveau, l'admin doit la fixer explicitement à la création.
+  profilSysteme: enumProfilSysteme,
   dansMatrice: z.boolean(),
   requiertMfa: z.boolean()
 });
@@ -46,6 +50,7 @@ export const creerRoleRequeteSchema = z.object({
   groupeAd: z.string().min(1),
   niveau: z.number().int(),
   type: enumTypeRole,
+  profilSysteme: enumProfilSysteme,
   dansMatrice: z.boolean().optional(),
   requiertMfa: z.boolean().optional()
 });

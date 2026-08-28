@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button, Modal } from "@pgd/ui";
-import type { EnumTypeRole, RoleVue } from "@pgd/contracts";
+import type { EnumProfilSysteme, EnumTypeRole, RoleVue } from "@pgd/contracts";
 
 export interface RoleModalValeur {
   code: string;
@@ -10,6 +10,12 @@ export interface RoleModalValeur {
   groupeAd: string;
   niveau: string;
   type: EnumTypeRole;
+  // Chantier 2 (28/08/2026, docs/14) — axe CAPACITÉ, distinct de `type`
+  // (PORTÉE). NOT NULL en base, aucun défaut deviné : l'admin choisit
+  // explicitement à chaque création — c'est précisément ce champ qui rend
+  // l'ajout d'un futur rôle d'initiation/validation possible par la donnée
+  // seule, sans jamais toucher au code serveur (cf. DemandesController).
+  profilSysteme: EnumProfilSysteme;
   dansMatrice: boolean;
   requiertMfa: boolean;
 }
@@ -30,10 +36,20 @@ export function RoleModal({ role, onFermer, onConfirmer, chargement }: RoleModal
           groupeAd: role.groupeAd,
           niveau: String(role.niveau),
           type: role.type,
+          profilSysteme: role.profilSysteme,
           dansMatrice: role.dansMatrice,
           requiertMfa: role.requiertMfa
         }
-      : { code: "", libelle: "", groupeAd: "", niveau: "1", type: "METIER", dansMatrice: true, requiertMfa: false }
+      : {
+          code: "",
+          libelle: "",
+          groupeAd: "",
+          niveau: "1",
+          type: "METIER",
+          profilSysteme: "VALIDATEUR",
+          dansMatrice: true,
+          requiertMfa: false
+        }
   );
 
   const valide =
@@ -103,6 +119,18 @@ export function RoleModal({ role, onFermer, onConfirmer, chargement }: RoleModal
             </select>
           </label>
         </div>
+        <label className="flex flex-col gap-1 text-13">
+          Profil système
+          <select
+            value={valeur.profilSysteme}
+            onChange={(e) => setValeur((v) => ({ ...v, profilSysteme: e.target.value as EnumProfilSysteme }))}
+            className="rounded border border-gris300 px-2 py-1 text-13"
+          >
+            <option value="INITIATEUR">INITIATEUR</option>
+            <option value="VALIDATEUR">VALIDATEUR</option>
+            <option value="ADMINISTRATEUR">ADMINISTRATEUR</option>
+          </select>
+        </label>
         <label className="flex items-center gap-2 text-13">
           <input type="checkbox" checked={valeur.dansMatrice} onChange={(e) => setValeur((v) => ({ ...v, dansMatrice: e.target.checked }))} />
           Utilisable dans la matrice de routage

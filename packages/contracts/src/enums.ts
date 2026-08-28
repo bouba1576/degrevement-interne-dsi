@@ -24,7 +24,14 @@ export const enumTypeActeur = z.enum(["V", "A", "C"]);
 export const enumAffectation = z.enum(["PULL"]);
 export const enumOrigine = z.enum(["CREATION", "MODIFICATION", "RECALCUL"]);
 export const enumLocalisation = z.enum(["NATIONAL", "INTERNATIONAL"]);
-export const enumNiveauControle = z.enum(["FRA", "N1", "N2"]);
+// FIABILISATION ajoutée le 27/08/2026 (docs/14, correction FRA/FIABILISATION
+// — FIABILISATION remplace FRA comme rôle de contrôle a posteriori réel,
+// schema.prisma/EnumNiveauControle et paliers.seed.ts déjà mis à jour à cette
+// date) — omission trouvée le 28/08/2026 en travaillant sur Chantier 2 :
+// cette valeur manquait ici alors que controleVueSchema.niveau (controle.ts)
+// la valide côté client (apps/web/lib/api.ts, soumettreControle) ; un
+// contrôle FIABILISATION réel aurait fait échouer le parse Zod côté web.
+export const enumNiveauControle = z.enum(["FRA", "N1", "N2", "FIABILISATION"]);
 export const enumConstat = z.enum(["CONFORME", "ANOMALIE"]);
 export const enumTypeNotification = z.enum([
   "NOUVELLE_TACHE",
@@ -36,6 +43,14 @@ export const enumTypeNotification = z.enum([
 ]);
 export const enumUniteKpi = z.enum(["MONTANT", "VOLUME", "TAUX"]);
 export const enumTypeRole = z.enum(["METIER", "PIVOT", "SYSTEME"]);
+// Profil système (docs/14_Matrice_SoD_et_WF_SLA_KPI.md) — axe distinct de
+// enumTypeRole (PORTÉE : un circuit / plusieurs / aucun) : celui-ci répond à
+// une question de CAPACITÉ (quelles actions le rôle autorise-t-il). Chantier
+// 2, 28/08/2026 — cf. packages/database, migration
+// 20260828120000_role_profil_systeme. Cumulé par RÔLE, jamais par
+// utilisateur (cohérent avec EnumTypeRole, déjà modélisé ainsi) : un
+// utilisateur cumule les profils de tous les rôles qu'il détient.
+export const enumProfilSysteme = z.enum(["INITIATEUR", "VALIDATEUR", "ADMINISTRATEUR"]);
 // Miroir de EnumEvenementSecurite (schema.prisma) — deux valeurs manquaient
 // ici (ACCES_NON_PROVISIONNE, TOTP_ENROLEMENT_ADMIN, ajoutées au schéma le
 // 12/08 et le 19/08/2026) : trouvé en vérifiant en direct AuditSecuriteScreen
@@ -76,6 +91,7 @@ export type EnumConstat = z.infer<typeof enumConstat>;
 export type EnumTypeNotification = z.infer<typeof enumTypeNotification>;
 export type EnumUniteKpi = z.infer<typeof enumUniteKpi>;
 export type EnumTypeRole = z.infer<typeof enumTypeRole>;
+export type EnumProfilSysteme = z.infer<typeof enumProfilSysteme>;
 export type EnumEvenementSecurite = z.infer<typeof enumEvenementSecurite>;
 export type EnumFacteurAuth = z.infer<typeof enumFacteurAuth>;
 export type EnumStatutLigne = z.infer<typeof enumStatutLigne>;
