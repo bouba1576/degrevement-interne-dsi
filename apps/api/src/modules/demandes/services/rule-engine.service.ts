@@ -28,22 +28,33 @@ interface ConfigurationCache {
 const TTL_CACHE_SECONDES = 300;
 
 // CONVENTION R12 — À NE PAS CASSER (documentée aussi dans CLAUDE.md) :
-// un contrôle FRA se reconnaît par roleCode === ROLE_CODE_FRA ET typeActeur
-// === "C" sur une étape de palier. Ce n'est PAS un nouveau champ de schéma :
-// EtapeRegle n'a aucun moyen de distinguer un contrôle FRA d'un N1/N2
-// générique (typeActeur=C est le seul signal commun), donc R12 s'appuie sur
-// l'identifiant du rôle "FRA" — déjà seedé, sans ambiguïté aujourd'hui.
+// un contrôle a posteriori R12 se reconnaît par roleCode === ROLE_CODE_FIABILISATION
+// ET typeActeur === "C" sur une étape de palier. Ce n'est PAS un nouveau
+// champ de schéma : EtapeRegle n'a aucun moyen de distinguer ce contrôle
+// d'un N1/N2 générique (typeActeur=C est le seul signal commun), donc R12
+// s'appuie sur l'identifiant du rôle — déjà seedé, sans ambiguïté aujourd'hui.
 //
-// FRAGILITÉ ASSUMÉE : le catalogue de rôles est actuellement à 25/34 (cf.
-// CLAUDE.md « Questions ouvertes ») et sera corrigé. Si le rôle FRA est un
-// jour renommé ou supprimé sans mettre à jour cette convention, R12 ne lève
-// PAS d'erreur — une chaîne sans étape "FRA" se lit simplement comme
-// « aucun contrôle FRA requis », silencieusement. Le test
-// rule-engine.integration.spec.ts « le rôle FRA existe dans le référentiel »
-// est la seule chose qui rend cette dérive détectable : si ROLE_CODE_FRA
-// disparaît du référentiel des rôles, ce test échoue en CI plutôt que de
-// laisser R12 s'éteindre en silence.
-export const ROLE_CODE_FRA = "FRA";
+// CORRIGÉ le 27/08/2026 (docs/14_Matrice_SoD_et_WF_SLA_KPI.md, transcrit
+// d'un document source réel) — la convention reposait sur FRA depuis la
+// Phase 5, mais docs/14 montre que FRA n'a JAMAIS "valider"/effectuer un
+// contrôle dans ses actions listées (reçoit/commente/fait suivre au DF/
+// rejette/renvoie — jamais "valide"), SLA 48h (ordre d'une étape bloquante,
+// pas d'un contrôle a posteriori). FIABILISATION, elle, porte un
+// vocabulaire de contrôle explicite ("valide le contrôle du dossier",
+// "invalide le dossier suite au contrôle"), SLA 10 jours — incompatible
+// avec une étape bloquante, cohérent avec un contrôle a posteriori.
+// ROLE_CODE_FRA (nom d'origine de cette constante) est retiré : FRA n'est
+// plus le rôle désigné par cette convention.
+//
+// FRAGILITÉ ASSUMÉE, inchangée par cette correction : EtapeRegle ne porte
+// toujours aucun champ dédié pour distinguer ce contrôle d'un N1/N2
+// générique. Si le rôle FIABILISATION est un jour renommé ou supprimé sans
+// mettre à jour cette convention, R12 ne lève PAS d'erreur — une chaîne
+// sans étape "FIABILISATION" se lit simplement comme « aucun contrôle
+// requis », silencieusement. Le test rule-engine.integration.spec.ts
+// « le rôle FIABILISATION existe dans le référentiel » est la seule chose
+// qui rend cette dérive détectable.
+export const ROLE_CODE_FIABILISATION = "FIABILISATION";
 
 // RuleEngineService — Phase 4 (moteur minimal, lecture directe) + Phase 5
 // (cache Redis + invalidation, PGD-040). Interface inchangée depuis la Phase 4
@@ -150,17 +161,19 @@ export class RuleEngineService {
     return configuration;
   }
 
-  // R12/PGD-041 : TTC > 5M exige un contrôle FRA dans la chaîne — cf. la
-  // convention ROLE_CODE_FRA documentée en tête de fichier.
-  possedeControleFra(configuration: ConfigurationCache): boolean {
-    return configuration.etapesRegle.some((e) => e.typeActeur === "C" && e.roleCode === ROLE_CODE_FRA);
+  // R12/PGD-041 : TTC > 5M exige un contrôle a posteriori dans la chaîne —
+  // cf. la convention ROLE_CODE_FIABILISATION documentée en tête de fichier.
+  // Renommée le 27/08/2026 (était possedeControleFra) — le nom d'origine
+  // impliquait à tort que FRA était ce rôle de contrôle.
+  possedeControleR12(configuration: ConfigurationCache): boolean {
+    return configuration.etapesRegle.some((e) => e.typeActeur === "C" && e.roleCode === ROLE_CODE_FIABILISATION);
   }
 
   // Instanciation (CLAUDE.md « Moteur de règles pivot ») : première étape
   // non-contrôle -> EN_CORBEILLE (avec échéance SLA), étapes non-contrôle
   // suivantes -> EN_ATTENTE, type_acteur=C -> POST_CLOTURE (contrôle a
   // posteriori, hors chaîne bloquante). L'obligation R12 est vérifiée par
-  // l'appelant (DemandeWorkflowService) via possedeControleFra avant
+  // l'appelant (DemandeWorkflowService) via possedeControleR12 avant
   // d'instancier — EnumTypeActeur reste par ailleurs non glosé, aucune autre
   // logique ne s'appuie dessus.
   async instancierChaine(demandeId: string, configuration: ConfigurationCache, client: Prisma.TransactionClient): Promise<void> {

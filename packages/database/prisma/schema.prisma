@@ -90,6 +90,12 @@ enum EnumNiveauControle {
   FRA
   N1
   N2
+  // Ajouté le 27/08/2026 (docs/14, correction FRA/FIABILISATION) — FRA
+  // reste dans cet enum (jamais retiré, cf. règle non négociable de
+  // non-destruction de l'historique : un Controle.niveau=FRA réel existe
+  // déjà, Phase 9) mais n'est plus le rôle de contrôle a posteriori
+  // désigné par la convention R12 — FIABILISATION l'est désormais.
+  FIABILISATION
 
   @@map("enum_niveau_controle")
 }

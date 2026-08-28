@@ -99,7 +99,7 @@ export class DemandeWorkflowService {
       montantTtc: Number(demande.montantTtc)
     });
 
-    if (Number(demande.montantTtc) > 5_000_000 && !this.ruleEngine.possedeControleFra(configuration)) {
+    if (Number(demande.montantTtc) > 5_000_000 && !this.ruleEngine.possedeControleR12(configuration)) {
       erreurs.push({
         code: "R12_CONTROLE_FRA",
         message: "Contrôle FRA obligatoire au-delà de 5 000 000 XOF — absent du palier sélectionné.",
@@ -204,7 +204,7 @@ export class DemandeWorkflowService {
         tx
       );
 
-      if (Number(demandeMaj.montantTtc) > 5_000_000 && !this.ruleEngine.possedeControleFra(configuration)) {
+      if (Number(demandeMaj.montantTtc) > 5_000_000 && !this.ruleEngine.possedeControleR12(configuration)) {
         throw new UnprocessableEntityException({
           code: "R12_CONTROLE_FRA",
           message: "Contrôle FRA obligatoire au-delà de 5 000 000 XOF — absent du nouveau palier sélectionné.",

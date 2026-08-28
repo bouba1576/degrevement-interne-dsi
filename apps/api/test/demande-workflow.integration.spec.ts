@@ -304,10 +304,11 @@ describe("DemandeWorkflowService.soumettre — R13/R14 + instanciation", () => {
     }
   });
 
-  // R12/PGD-041 — TTC > 5M exige un contrôle FRA (roleCode=FRA, typeActeur=C)
-  // dans le palier sélectionné. Segment isolé pour ne pas dépendre du palier
-  // DF réel (déjà corrigé en seed, mais on veut ici isoler la règle elle-même).
-  describe("R12 — contrôle FRA obligatoire au-delà de 5 000 000 XOF", () => {
+  // R12/PGD-041 — TTC > 5M exige un contrôle a posteriori (roleCode=FIABILISATION,
+  // typeActeur=C, corrigé le 27/08/2026 — docs/14, était roleCode=FRA) dans
+  // le palier sélectionné. Segment isolé pour ne pas dépendre du palier DF
+  // réel (déjà corrigé en seed, mais on veut ici isoler la règle elle-même).
+  describe("R12 — contrôle a posteriori obligatoire au-delà de 5 000 000 XOF", () => {
     const segmentTest = `TEST_R12_${suffixe}`;
     let ligneGrosMontantId: string;
     let formuleGrosMontantId: string;
@@ -356,7 +357,7 @@ describe("DemandeWorkflowService.soumettre — R13/R14 + instanciation", () => {
       return { demandeId, montantTtc: Number(demande.montantTtc) };
     }
 
-    it("rejette avec 422 R12_CONTROLE_FRA quand le palier sélectionné n'a pas de contrôle FRA", async () => {
+    it("rejette avec 422 R12_CONTROLE_FRA quand le palier sélectionné n'a pas de contrôle a posteriori", async () => {
       const config = await prisma.configurationCircuit.create({
         data: { circuit: "DOBB", segment: segmentTest, borneMin: 0, borneMax: 999_999_999 }
       });
@@ -375,15 +376,17 @@ describe("DemandeWorkflowService.soumettre — R13/R14 + instanciation", () => {
       });
     });
 
-    it("soumet avec succès quand le palier sélectionné porte un contrôle FRA (POST_CLOTURE)", async () => {
+    it("soumet avec succès quand le palier sélectionné porte un contrôle a posteriori (FIABILISATION, POST_CLOTURE)", async () => {
       const config = await prisma.configurationCircuit.create({
         data: { circuit: "DOBB", segment: segmentTest, borneMin: 0, borneMax: 999_999_999 }
       });
       await prisma.etapeRegle.create({
         data: { configurationCircuitId: config.id, ordre: 1, roleCode: "RESPONSABLE_DOBB", typeActeur: "V", bloquant: true, slaHeures: 8 }
       });
+      // FIABILISATION, pas FRA (corrigé le 27/08/2026, docs/14) — le vrai
+      // rôle de contrôle a posteriori désigné par la convention R12.
       await prisma.etapeRegle.create({
-        data: { configurationCircuitId: config.id, ordre: 2, roleCode: "FRA", typeActeur: "C", bloquant: true, slaHeures: 48 }
+        data: { configurationCircuitId: config.id, ordre: 2, roleCode: "FIABILISATION", typeActeur: "C", bloquant: true, slaHeures: 240 }
       });
 
       const { demandeId, montantTtc } = await preparerDemandeGrosMontant();
@@ -392,8 +395,8 @@ describe("DemandeWorkflowService.soumettre — R13/R14 + instanciation", () => {
       const reponse = await workflow.soumettre(demandeId, acteur);
       expect(reponse.statut).toBe("SOUMIS");
 
-      const tacheFra = await prisma.tache.findFirstOrThrow({ where: { demandeId, roleCorbeille: "FRA" } });
-      expect(tacheFra.etat).toBe("POST_CLOTURE");
+      const tacheControle = await prisma.tache.findFirstOrThrow({ where: { demandeId, roleCorbeille: "FIABILISATION" } });
+      expect(tacheControle.etat).toBe("POST_CLOTURE");
     });
   });
 });

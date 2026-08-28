@@ -3,7 +3,7 @@ import Redis from "ioredis";
 import { loadEnv } from "@pgd/config";
 import { PrismaService } from "../src/infra/prisma/prisma.service";
 import { CacheService } from "../src/infra/redis/cache.service";
-import { RuleEngineService, ROLE_CODE_FRA } from "../src/modules/demandes/services/rule-engine.service";
+import { RuleEngineService, ROLE_CODE_FIABILISATION } from "../src/modules/demandes/services/rule-engine.service";
 import { CalendrierSlaService } from "../src/modules/demandes/services/calendrier-sla.service";
 
 // Intégration réelle contre Postgres ET Redis (pas de mock de cache) —
@@ -34,14 +34,17 @@ describe("RuleEngineService — sélection de palier + cache Redis (Phase 4/5)",
     await redis.quit();
   });
 
-  // Garde-fou de convention (R12) — signalé après vérification de la Phase 5 :
-  // possedeControleFra() n'a AUCUN moyen de savoir que le rôle "FRA" a changé
-  // de nom dans le référentiel ; une chaîne sans étape "FRA" se lit comme
-  // « pas de contrôle requis », pas comme une erreur. Ce test est la seule
-  // chose qui rend la dérive détectable : si ROLE_CODE_FRA disparaît du
-  // catalogue de rôles (25/34, en cours de correction), il échoue en CI.
-  it("le rôle FRA (convention R12) existe dans le référentiel des rôles", async () => {
-    const role = await prisma.role.findUnique({ where: { code: ROLE_CODE_FRA } });
+  // Garde-fou de convention (R12) — signalé après vérification de la Phase 5,
+  // CORRIGÉ le 27/08/2026 (docs/14, correction FRA/FIABILISATION — le rôle
+  // désigné par cette convention est désormais FIABILISATION, jamais FRA,
+  // cf. rule-engine.service.ts). possedeControleR12() n'a AUCUN moyen de
+  // savoir que le rôle "FIABILISATION" a changé de nom dans le référentiel ;
+  // une chaîne sans étape "FIABILISATION" se lit comme « pas de contrôle
+  // requis », pas comme une erreur. Ce test est la seule chose qui rend la
+  // dérive détectable : si ROLE_CODE_FIABILISATION disparaît du catalogue de
+  // rôles, il échoue en CI.
+  it("le rôle FIABILISATION (convention R12) existe dans le référentiel des rôles", async () => {
+    const role = await prisma.role.findUnique({ where: { code: ROLE_CODE_FIABILISATION } });
     expect(role).not.toBeNull();
   });
 

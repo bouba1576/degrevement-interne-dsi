@@ -8,14 +8,21 @@ export interface ActeurControle {
 }
 
 // role_code -> niveau_controle : les codes de rôle (packages/database/prisma/seed/
-// referentiels/roles.seed.ts) sont FRA, CONTROLE_N1, CONTROLE_N2 — distincts
-// des valeurs de l'enum EnumNiveauControle (FRA/N1/N2). Correspondance
-// explicite plutôt qu'un cast direct, qui aurait silencieusement produit
-// "CONTROLE_N1" au lieu de "N1" en base.
-const NIVEAU_PAR_ROLE: Record<string, "FRA" | "N1" | "N2"> = {
+// referentiels/roles.seed.ts) sont FRA, CONTROLE_N1, CONTROLE_N2, FIABILISATION
+// — distincts des valeurs de l'enum EnumNiveauControle (FRA/N1/N2/FIABILISATION).
+// Correspondance explicite plutôt qu'un cast direct, qui aurait silencieusement
+// produit "CONTROLE_N1" au lieu de "N1" en base.
+// FIABILISATION ajoutée le 27/08/2026 (docs/14, correction FRA/FIABILISATION)
+// — c'est désormais le rôle réellement chargé du contrôle a posteriori
+// (R12), FRA n'ayant jamais "validé" de contrôle dans la source (docs/14) :
+// entrée FRA conservée quand même, jamais retirée (un Controle.niveau=FRA
+// réel existe déjà en base, Phase 9 — et rien n'empêche structurellement une
+// tâche typeActeur='C' portée par le rôle FRA d'exister un jour ailleurs).
+const NIVEAU_PAR_ROLE: Record<string, "FRA" | "N1" | "N2" | "FIABILISATION"> = {
   FRA: "FRA",
   CONTROLE_N1: "N1",
-  CONTROLE_N2: "N2"
+  CONTROLE_N2: "N2",
+  FIABILISATION: "FIABILISATION"
 };
 
 // PGD-070 (SF-PGD-100) — contrôle a posteriori FRA/N1/N2. La tâche est en

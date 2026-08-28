@@ -54,7 +54,10 @@ describe("E2E — circuit DF (Wholesale), palier 3 (>50M), parcours complet en H
     const dgaDg = await creerActeur("dga-dg", ["DGA_DG"]);
     // Distinct de dgaDg (dernier approbateur bloquant) — R24 interdirait
     // sinon le contrôle par la même identité (cf. sod-service.integration.spec.ts).
-    const fra = await creerActeur("fra", ["FRA"]);
+    // Rôle de contrôle corrigé le 27/08/2026 (docs/14, FRA/FIABILISATION) —
+    // variable/libellé "fra" volontairement inchangés (minimal pour ce
+    // commit, cf. CLAUDE.md) : seul le rôle réellement détenu change.
+    const fra = await creerActeur("fra", ["FIABILISATION"]);
 
     const creation = await request(e2e.app.getHttpServer())
       .post("/api/demandes")
@@ -84,7 +87,7 @@ describe("E2E — circuit DF (Wholesale), palier 3 (>50M), parcours complet en H
       ["MANAGER_SENIOR_DF", "V"],
       ["DF", "V"],
       ["DGA_DG", "V"],
-      ["FRA", "C"]
+      ["FIABILISATION", "C"]
     ]);
 
     const soumission = await request(e2e.app.getHttpServer())
@@ -123,7 +126,7 @@ describe("E2E — circuit DF (Wholesale), palier 3 (>50M), parcours complet en H
       .get(`/api/demandes/${demandeId}/taches`)
       .set("Cookie", fra.cookie)
       .expect(200);
-    const tacheControle = tachesFinales.body.data.find((t: { roleCode: string }) => t.roleCode === "FRA");
+    const tacheControle = tachesFinales.body.data.find((t: { roleCode: string }) => t.roleCode === "FIABILISATION");
     expect(tacheControle.etat).toBe("POST_CLOTURE");
 
     const controle = await request(e2e.app.getHttpServer())
@@ -131,7 +134,7 @@ describe("E2E — circuit DF (Wholesale), palier 3 (>50M), parcours complet en H
       .set("Cookie", fra.cookie)
       .send({ constat: "CONFORME" })
       .expect(200);
-    expect(controle.body.data.niveau).toBe("FRA");
+    expect(controle.body.data.niveau).toBe("FIABILISATION");
     expect(controle.body.data.constat).toBe("CONFORME");
   });
 });

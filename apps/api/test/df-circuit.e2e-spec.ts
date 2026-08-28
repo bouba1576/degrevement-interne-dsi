@@ -57,7 +57,10 @@ describe("E2E — circuit DF (Wholesale), parcours complet en HTTP réel", () =>
     // sod-service.integration.spec.ts) : deux identités séparées, comme en
     // conditions réelles (cf. CLAUDE.md, section R24).
     const df = await creerActeur("df", ["DF"]);
-    const fra = await creerActeur("fra", ["FRA"]);
+    // Rôle de contrôle corrigé le 27/08/2026 (docs/14, FRA/FIABILISATION) —
+    // variable/libellé "fra" volontairement inchangés (minimal pour ce
+    // commit, cf. CLAUDE.md) : seul le rôle réellement détenu change.
+    const fra = await creerActeur("fra", ["FIABILISATION"]);
 
     const creation = await request(e2e.app.getHttpServer())
       .post("/api/demandes")
@@ -84,7 +87,7 @@ describe("E2E — circuit DF (Wholesale), parcours complet en HTTP réel", () =>
       ["MANAGER_DF", "V"],
       ["MANAGER_SENIOR_DF", "V"],
       ["DF", "V"],
-      ["FRA", "C"]
+      ["FIABILISATION", "C"]
     ]);
 
     const soumission = await request(e2e.app.getHttpServer())
@@ -123,7 +126,7 @@ describe("E2E — circuit DF (Wholesale), parcours complet en HTTP réel", () =>
       .get(`/api/demandes/${demandeId}/taches`)
       .set("Cookie", fra.cookie)
       .expect(200);
-    const tacheControle = tachesFinales.body.data.find((t: { roleCode: string }) => t.roleCode === "FRA");
+    const tacheControle = tachesFinales.body.data.find((t: { roleCode: string }) => t.roleCode === "FIABILISATION");
     expect(tacheControle.etat).toBe("POST_CLOTURE");
 
     const controle = await request(e2e.app.getHttpServer())
@@ -131,7 +134,7 @@ describe("E2E — circuit DF (Wholesale), parcours complet en HTTP réel", () =>
       .set("Cookie", fra.cookie)
       .send({ constat: "CONFORME" })
       .expect(200);
-    expect(controle.body.data.niveau).toBe("FRA");
+    expect(controle.body.data.niveau).toBe("FIABILISATION");
     expect(controle.body.data.constat).toBe("CONFORME");
   });
 });

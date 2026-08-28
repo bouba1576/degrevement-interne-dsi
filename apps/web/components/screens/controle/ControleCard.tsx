@@ -10,12 +10,16 @@ export interface ControleCardProps {
 // Libellé résolu localement à partir du code de rôle brut (`roleCorbeille`)
 // — même convention et même fragilité assumée que `LIBELLE_TYPE_ACTEUR`
 // (ApercuRoutage.tsx) et que `ControleService.NIVEAU_PAR_ROLE` côté serveur :
-// si l'un des trois codes est renommé sans mettre à jour cette table, le
+// si l'un de ces codes est renommé sans mettre à jour cette table, le
 // badge retombe sur le code brut plutôt que d'échouer silencieusement.
+// FIABILISATION ajoutée le 27/08/2026 (docs/14, correction FRA/FIABILISATION)
+// — devient le vrai rôle de contrôle a posteriori désigné par R12 ; FRA
+// reste dans cette table (jamais retiré, historique).
 const LIBELLE_NIVEAU: Record<string, string> = {
   FRA: "FRA",
   CONTROLE_N1: "Contrôle N1",
-  CONTROLE_N2: "Contrôle N2"
+  CONTROLE_N2: "Contrôle N2",
+  FIABILISATION: "Fiabilisation"
 };
 
 // Port de docs/design/screens3.jsx:466-477 (ControleScreen, carte de file) —
