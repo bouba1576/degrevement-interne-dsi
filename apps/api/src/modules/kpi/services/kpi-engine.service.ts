@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import type { KpiDefinition, Prisma } from "@pgd/database";
-import type { KpiDefinitionVue, KpiQuery, KpiRepartition, KpiValeur, SyntheseQuery, SyntheseReponse } from "@pgd/contracts";
+import { enumCircuit, type KpiDefinitionVue, type KpiQuery, type KpiRepartition, type KpiValeur, type SyntheseQuery, type SyntheseReponse } from "@pgd/contracts";
 import { PrismaService } from "../../../infra/prisma/prisma.service";
 import { CacheService } from "../../../infra/redis/cache.service";
 import type { UtilisateurRequete } from "../../../common/guards/auth.guard";
@@ -125,6 +125,43 @@ export class KpiEngineService {
     }));
   }
 
+  // Borne de concurrence pour calculer() — 01/09/2026, diagnostic P2037
+  // ("too many clients already", cf. incident Pilotage). Avant ce correctif,
+  // Promise.all(definitions.map(...)) lançait les 26 KPI_DEFINITION en même
+  // temps, plusieurs faisant 2 à 4 requêtes chacune (répartition+libellés,
+  // évolution courant/précédent, deux dimensions croisées) — ~55 requêtes
+  // Postgres concurrentes pour UN seul appel, comptées précisément sur le
+  // référentiel réel avant ce correctif. Fixe et INDÉPENDANT du nombre de
+  // définitions : un 27e KPI ajouté demain (règle non négociable 1, ajout
+  // par la donnée) n'aggrave jamais ce chiffre — contrairement à
+  // Promise.all, qui aurait simplement lancé une requête de plus en
+  // parallèle. 5 travailleurs × ~4 sous-requêtes max (calculerDeuxDimensions
+  // en TAUX, le pire cas) ≈ 20 requêtes concurrentes au plus par appel,
+  // cohérent avec le connection_limit=20 désormais explicite côté
+  // apps/api (docker-compose.yml/docker-compose.prod.yml) : ce dernier
+  // protège contre PLUSIEURS utilisateurs chargeant Pilotage en même temps
+  // (file d'attente Prisma, jamais un P2037), ce bornage-ci réduit ce
+  // qu'UN seul appel consomme en premier lieu — les deux sont complémentaires,
+  // ni l'un ni l'autre ne suffit seul.
+  private static readonly CONCURRENCE_MAX_KPI = 5;
+
+  private async executerAvecConcurrenceBornee<T, R>(
+    items: T[],
+    concurrenceMax: number,
+    tache: (item: T) => Promise<R>
+  ): Promise<R[]> {
+    const resultats: R[] = new Array(items.length);
+    let curseur = 0;
+    const travailleur = async (): Promise<void> => {
+      while (curseur < items.length) {
+        const i = curseur++;
+        resultats[i] = await tache(items[i] as T);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(concurrenceMax, items.length) }, travailleur));
+    return resultats;
+  }
+
   async calculer(query: KpiQuery, utilisateur: UtilisateurRequete): Promise<KpiValeur[]> {
     const cle = `kpi:resultats:${JSON.stringify(query)}:${this.cleScope(query, utilisateur)}`;
     const enCache = await this.cache.get<KpiValeur[]>(cle);
@@ -133,7 +170,9 @@ export class KpiEngineService {
     }
 
     const definitions = await this.prisma.kpiDefinition.findMany();
-    const resultats = await Promise.all(definitions.map((def) => this.calculerUn(def, query, utilisateur)));
+    const resultats = await this.executerAvecConcurrenceBornee(definitions, KpiEngineService.CONCURRENCE_MAX_KPI, (def) =>
+      this.calculerUn(def, query, utilisateur)
+    );
 
     await this.cache.set(cle, resultats, TTL_CACHE_SECONDES);
     return resultats;
@@ -230,7 +269,7 @@ export class KpiEngineService {
     const circuitFiltre: DemandeWhere = query.circuit ? { circuit: query.circuit } : {};
     const clotureWhere = (query.debut || query.fin) ? { dateCloture: periode } : {};
 
-    const [valides, rejetes, montantValideCumule, dossiersEnCircuit, dureesValides] = await Promise.all([
+    const [valides, rejetes, montantValideCumule, dossiersEnCircuit, dureesValides, groupesParCircuit] = await Promise.all([
       this.prisma.demande.count({ where: { ...circuitFiltre, ...clotureWhere, statut: "VALIDE" } }),
       this.prisma.demande.count({ where: { ...circuitFiltre, ...clotureWhere, statut: "REJETE" } }),
       this.prisma.demande.aggregate({
@@ -243,7 +282,12 @@ export class KpiEngineService {
       this.prisma.demande.findMany({
         where: { ...circuitFiltre, ...clotureWhere, statut: "VALIDE", dateSoumission: { not: null } },
         select: { dateSoumission: true, dateCloture: true }
-      })
+      }),
+      // volumesParCircuit (01/09/2026) — un seul groupBy, jamais filtré par
+      // `circuitFiltre` (comparatif entre circuits, cf. commentaire du
+      // contrat) ni par période (RECUS_VOLUME n'était déjà borné par aucune
+      // des deux côté appelant avant ce correctif — comportement préservé).
+      this.prisma.demande.groupBy({ by: ["circuit"], _count: { _all: true } })
     ]);
 
     const denominateur = valides + rejetes;
@@ -252,12 +296,23 @@ export class KpiEngineService {
       .map((d) => (d.dateCloture.getTime() - d.dateSoumission.getTime()) / 3600000);
     const delaiMoyenHeures = heures.length > 0 ? heures.reduce((a, b) => a + b, 0) / heures.length : null;
 
+    // groupBy omet un circuit sans aucune demande — les trois circuits
+    // doivent toujours apparaître (0 explicite), comme le faisait déjà
+    // chaque appel individuel de RECUS_VOLUME (calculerScalaire → count(),
+    // jamais absent) avant ce correctif.
+    const totalParCircuit = new Map(groupesParCircuit.map((g) => [g.circuit, g._count._all]));
+    const volumesParCircuit = enumCircuit.options.map((circuit) => ({
+      circuit,
+      total: totalParCircuit.get(circuit) ?? 0
+    }));
+
     return {
       profil: "pilotage",
       delaiMoyenHeures: delaiMoyenHeures !== null ? Math.round(delaiMoyenHeures * 10) / 10 : null,
       tauxApprobation: denominateur > 0 ? valides / denominateur : null,
       dossiersEnCircuit,
-      montantValideCumule: Number(montantValideCumule._sum.montantTtc ?? 0)
+      montantValideCumule: Number(montantValideCumule._sum.montantTtc ?? 0),
+      volumesParCircuit
     };
   }
 

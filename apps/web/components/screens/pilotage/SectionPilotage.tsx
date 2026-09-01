@@ -38,12 +38,25 @@ const STATUTS: Array<{ code: "SOUMIS" | "VALIDE" | "REJETE" | "ABANDONNE"; cle: 
 ];
 
 // « Volume par circuit » et « Répartition des statuts » — ni l'un ni
-// l'autre n'est un code KPI_DEFINITION : dérivés d'appels déjà existants
-// (RECUS_VOLUME par circuit, GET /api/demandes?statut=X&limit=1). Restent
-// délibérément NON bornés par la période (`debut`/`fin`) — listerDemandes
-// (GET /api/demandes) n'a aucun filtre de date aujourd'hui
-// (listerDemandesQuerySchema), l'étendre serait un chantier séparé ; une
-// vue "tout historique" reste cohérente et utile en attendant.
+// l'autre n'est un code KPI_DEFINITION.
+//
+// « Volume par circuit » — 01/09/2026, diagnostic P2037 ("too many clients
+// already") : portait jusqu'ici 3 appels GET /api/kpi?profil=pilotage&circuit=X
+// en parallèle (un par DOBB/DXC/DF), chacun déclenchant le moteur complet à
+// 26 définitions (~55 requêtes Postgres) pour n'en extraire qu'UNE seule
+// valeur (RECUS_VOLUME). Remplacé par la lecture de
+// `volumesParCircuit` sur GET /api/kpi/synthese?profil=pilotage — déjà
+// appelé une seule fois par SectionEnTetePilotage (4 tuiles d'en-tête),
+// désormais étendu côté serveur d'un seul groupBy supplémentaire
+// (KpiEngineService.synthesePilotage) plutôt qu'une route dédiée de plus.
+// Reste délibérément NON filtré par circuit (comparatif entre les trois) ni
+// par période (comportement inchangé — ce bloc n'a jamais reçu `periode`).
+//
+// « Répartition des statuts » — dérivé de GET /api/demandes?statut=X&limit=1,
+// 4 appels. Restent délibérément NON bornés par la période (`debut`/`fin`) —
+// listerDemandes (GET /api/demandes) n'a aucun filtre de date aujourd'hui
+// (listerDemandesQuerySchema), l'étendre serait un chantier séparé ; une vue
+// "tout historique" reste cohérente et utile en attendant.
 function SectionVolumeEtStatuts({ circuit }: { circuit: EnumCircuit | null }) {
   const [volumes, setVolumes] = useState<Array<{ circuit: EnumCircuit; total: number }> | null>(null);
   const [statuts, setStatuts] = useState<Array<{ cle: StatutDemande; total: number }> | null>(null);
@@ -52,14 +65,7 @@ function SectionVolumeEtStatuts({ circuit }: { circuit: EnumCircuit | null }) {
   useEffect(() => {
     let annule = false;
     Promise.all([
-      Promise.all(
-        CIRCUITS.map((c) =>
-          fetchKpi("pilotage", c).then((v) => ({
-            circuit: c,
-            total: v.find((k) => k.code === "RECUS_VOLUME")?.valeur ?? 0
-          }))
-        )
-      ),
+      fetchSynthese({ profil: "pilotage" }).then((s) => (s.profil === "pilotage" ? s.volumesParCircuit : [])),
       Promise.all(
         STATUTS.map((s) =>
           listerDemandes({ statut: s.code, circuit: circuit ?? undefined, page: 1, limit: 1 }).then((r) => ({

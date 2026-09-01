@@ -87,7 +87,16 @@ export const synthesePilotageSchema = z.object({
   delaiMoyenHeures: z.number().nullable(),
   tauxApprobation: z.number().nullable(),
   dossiersEnCircuit: z.number(),
-  montantValideCumule: z.number()
+  montantValideCumule: z.number(),
+  // volumesParCircuit (01/09/2026, diagnostic P2037) — remplace les 3 appels
+  // séparés GET /api/kpi?profil=pilotage&circuit=X que SectionVolumeEtStatuts
+  // faisait pour peupler "Volume par circuit" (chacun déclenchant le moteur
+  // complet à 26 définitions rien que pour en extraire RECUS_VOLUME).
+  // TOUJOURS calculé sur les trois circuits, jamais filtré par `circuit` —
+  // c'est un comparatif entre circuits, un filtre single-circuit n'aurait
+  // pas de sens ici (même principe que le reste de cette section : ignore le
+  // filtre `circuit` de la requête, contrairement à delaiMoyenHeures/etc.).
+  volumesParCircuit: z.array(z.object({ circuit: enumCircuit, total: z.number() }))
 });
 export type SynthesePilotage = z.infer<typeof synthesePilotageSchema>;
 

@@ -167,7 +167,17 @@ services:
       # plus une variable fournie dans .env.prod (elle l'était quand
       # l'hébergement était externe) : construite ici depuis les identifiants
       # Postgres, seule source de vérité désormais.
-      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER doit être défini dans .env.prod}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD doit être défini dans .env.prod}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB doit être défini dans .env.prod}?schema=public
+      # connection_limit explicite (01/09/2026, diagnostic P2037 "too many
+      # clients already") — sans lui, Prisma retombe sur num_cpus*2+1, une
+      # valeur qui varie silencieusement avec le CPU réel du serveur de prod
+      # et n'offre donc aucune garantie connue à l'échelle. 20, même
+      # dimensionnement que docker-compose.yml (dev) — dimensionné pour le
+      # pire cas d'UN chargement Pilotage après bornage de
+      # KpiEngineService.calculer() (concurrenceMax=5). ⚠️ Si `api` est un
+      # jour répliqué (plusieurs conteneurs), ce budget doit être revu :
+      # c'est connection_limit × nombre de répliques qui compte face à
+      # max_connections Postgres, pas cette seule valeur.
+      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER doit être défini dans .env.prod}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD doit être défini dans .env.prod}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB doit être défini dans .env.prod}?schema=public&connection_limit=20
       REDIS_URL: redis://redis:6379
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
@@ -225,7 +235,11 @@ services:
     environment:
       NODE_ENV: production
       WORKER_HEALTH_PORT: 3002
-      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER doit être défini dans .env.prod}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD doit être défini dans .env.prod}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB doit être défini dans .env.prod}?schema=public
+      # connection_limit explicite, même raisonnement que le service api
+      # ci-dessus — 10, plus bas : worker n'a aucun chemin de code comparable
+      # au fan-out de KpiEngineService (cron SLA/verrous, notifications,
+      # si-push, tous à prefetch=1/traitement séquentiel par message).
+      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER doit être défini dans .env.prod}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD doit être défini dans .env.prod}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB doit être défini dans .env.prod}?schema=public&connection_limit=10
       REDIS_URL: redis://redis:6379
       # packages/config expose un schéma Zod partagé par toutes les apps
       # (Phase 1, choix documenté dans docker-compose.yml) — loadEnv()

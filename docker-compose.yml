@@ -49,7 +49,21 @@ services:
     environment:
       NODE_ENV: production
       API_PORT: 3000
-      DATABASE_URL: postgresql://${POSTGRES_USER:-pgd}:${POSTGRES_PASSWORD:-pgd}@postgres:5432/${POSTGRES_DB:-pgd}?schema=public
+      # connection_limit explicite (01/09/2026, diagnostic P2037 "too many
+      # clients already") — sans lui, Prisma retombe sur son défaut
+      # num_cpus*2+1, une valeur qui varie silencieusement avec le nombre de
+      # cœurs de l'hôte et n'offre donc aucune garantie connue. 20 est
+      # dimensionné pour couvrir le pire cas d'UN chargement Pilotage après
+      # bornage de KpiEngineService (concurrenceMax=5, ~4 sous-requêtes max
+      # par définition ≈ 20) sans forcer de file d'attente pour un seul
+      # utilisateur, tout en restant un budget FIXE et connu plutôt que de
+      # dépendre du CPU — un second chargement Pilotage concurrent est mis en
+      # file d'attente par Prisma (dégradation, pas un échec), jamais un
+      # nouveau P2037. max_connections Postgres = 100 (dev) ; api(20) +
+      # worker(10, ci-dessous) + processus internes Postgres (~6) laissent
+      # une marge large pour Adminer/psql et une éventuelle réplique
+      # supplémentaire — à revisiter si le nombre de répliques api augmente.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pgd}:${POSTGRES_PASSWORD:-pgd}@postgres:5432/${POSTGRES_DB:-pgd}?schema=public&connection_limit=20
       REDIS_URL: redis://redis:6379
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
@@ -101,7 +115,12 @@ services:
     environment:
       NODE_ENV: production
       WORKER_HEALTH_PORT: 3002
-      DATABASE_URL: postgresql://${POSTGRES_USER:-pgd}:${POSTGRES_PASSWORD:-pgd}@postgres:5432/${POSTGRES_DB:-pgd}?schema=public
+      # connection_limit explicite, même raisonnement que le service api
+      # ci-dessus — 10, plus bas que api : worker n'a aucun chemin de code
+      # comparable au fan-out de KpiEngineService (cron SLA/verrous,
+      # notifications, si-push, tous à prefetch=1/traitement séquentiel par
+      # message, cf. CLAUDE.md).
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pgd}:${POSTGRES_PASSWORD:-pgd}@postgres:5432/${POSTGRES_DB:-pgd}?schema=public&connection_limit=10
       REDIS_URL: redis://redis:6379
       # apps/worker n'utilise aucune de ces variables — packages/config expose
       # un schéma Zod partagé par toutes les apps (choix de Phase 1), donc
@@ -143,6 +162,23 @@ services:
       - "3001:3001"
     depends_on:
       - api
+
+  # Adminer — client web léger pour PostgreSQL, outil de dev/debug
+  # uniquement (jamais ajouté à docker-compose.prod*.yml : un accès web
+  # direct à la base, même authentifié par les identifiants Postgres, est
+  # une surface qui n'a rien à faire en production). ADMINER_DEFAULT_SERVER
+  # pré-remplit le champ « Serveur » du formulaire de connexion avec le nom
+  # du service Postgres interne — reste un identifiant/mot de passe à
+  # saisir à chaque connexion, rien n'est stocké en clair ici.
+  adminer:
+    image: adminer:4
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   pgd_postgres_data:
