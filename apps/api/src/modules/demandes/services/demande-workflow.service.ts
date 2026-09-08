@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, UnprocessableEntityException } from "@nestjs/common";
+import type { Demande as DemandePrisma } from "@pgd/database";
 import type { DemandeDetail, ModifierDemandeRequete, ModifierTaxesRequete, SoumissionReponse } from "@pgd/contracts";
 import { PrismaService } from "../../../infra/prisma/prisma.service";
 import { DemandeService } from "./demande.service";
@@ -70,6 +71,133 @@ export class DemandeWorkflowService {
       erreurs.push({ code: "SOUS_FLUX_REQUIS", message: "Le sous-flux est obligatoire à la soumission." });
     }
 
+    // Motif/Libellé obligatoires à la soumission — DOBB (01/09/2026, demande
+    // explicite), étendu à DXC le 07/09/2026 (demande explicite, « tous les
+    // champs deviennent obligatoires »). Toujours pas DF — Objet (le même
+    // champ `libelle`, cf. OBJET_REQUIS plus bas) a sa propre règle distincte
+    // pour ce circuit. Même mécanisme cumulable que R13/R14/sous-flux : un
+    // BROUILLON peut exister sans motif/libellé, tant qu'il n'est pas soumis.
+    // "Autre (non référencé)" (07/09/2026) — motifAutre satisfait la même
+    // obligation qu'un motifId réel : un motif signalé "hors catalogue" reste
+    // un motif fourni, jamais un motif manquant.
+    const motifLibelleRequis = demande.circuit === "DOBB" || demande.circuit === "DXC";
+    if (motifLibelleRequis && !demande.motifId && (!demande.motifAutre || demande.motifAutre.trim() === "")) {
+      erreurs.push({ code: "MOTIF_REQUIS", message: "Le motif est obligatoire à la soumission." });
+    }
+    if (motifLibelleRequis && (!demande.libelle || demande.libelle.trim() === "")) {
+      erreurs.push({ code: "LIBELLE_REQUIS", message: "Le libellé est obligatoire à la soumission." });
+    }
+
+    // Univers FMI / Facteur de dégrèvement obligatoires à la soumission —
+    // les TROIS circuits (01/09/2026, demande explicite). Même mécanisme
+    // cumulable que le reste de cette méthode.
+    if (!demande.universFmiCode) {
+      erreurs.push({ code: "UNIVERS_FMI_REQUIS", message: "L'univers FMI est obligatoire à la soumission." });
+    }
+    if (!demande.facteurCode) {
+      erreurs.push({ code: "FACTEUR_REQUIS", message: "Le facteur de dégrèvement est obligatoire à la soumission." });
+    }
+
+    // Compte client — obligatoire à la soumission pour DXC uniquement
+    // (07/09/2026, « tous les champs deviennent obligatoires »), jamais
+    // demandé pour DOBB. Numéro Case et Montant récurrent mensuel restent
+    // délibérément exclus des deux circuits — le premier reste documenté
+    // comme purement indicatif (jamais une FK), le second a une valeur 0
+    // structurellement légitime (non-récurrent), une exigence dessus ne
+    // ferait que forcer une valeur déjà par défaut.
+    if (demande.circuit === "DXC" && (!demande.compteClient || demande.compteClient.trim() === "")) {
+      erreurs.push({ code: "COMPTE_CLIENT_REQUIS", message: "Le compte client est obligatoire à la soumission (DXC)." });
+    }
+
+    // Formule d'abonnement / Période contestée — obligatoires à la
+    // soumission pour DXC (07/09/2026), étendues à DOBB le 07/09/2026
+    // (demande explicite, huit champs DOBB deviennent obligatoires). Messages
+    // génériques désormais (plus de mention « (DXC) » en dur) puisque partagés
+    // par les deux circuits, même principe déjà appliqué à MOTIF_REQUIS/
+    // LIBELLE_REQUIS ci-dessus.
+    const formulePeriodeRequis = demande.circuit === "DOBB" || demande.circuit === "DXC";
+    if (formulePeriodeRequis && (!demande.formuleAbonnement || demande.formuleAbonnement.trim() === "")) {
+      erreurs.push({
+        code: "FORMULE_ABONNEMENT_REQUIS",
+        message: "La formule d'abonnement est obligatoire à la soumission."
+      });
+    }
+    if (formulePeriodeRequis && !demande.debutPeriodeContestee) {
+      erreurs.push({
+        code: "DEBUT_PERIODE_CONTESTEE_REQUIS",
+        message: "Le début de la période contestée est obligatoire à la soumission."
+      });
+    }
+    if (formulePeriodeRequis && !demande.finPeriodeContestee) {
+      erreurs.push({
+        code: "FIN_PERIODE_CONTESTEE_REQUIS",
+        message: "La fin de la période contestée est obligatoire à la soumission."
+      });
+    }
+
+    // Sept autres champs DOBB deviennent obligatoires à la soumission
+    // (07/09/2026, demande explicite) — même mécanisme cumulable, DOBB
+    // uniquement. descriptifContestation/pointContact vivent dans
+    // champsCircuit (champsCircuitDobbSchema), jamais des colonnes dédiées —
+    // lus ici comme le reste de ce sac générique (R11 : jamais une structure
+    // figée côté serveur au-delà de ce contrôle de présence).
+    if (demande.circuit === "DOBB") {
+      const cc = (demande.champsCircuit ?? {}) as Record<string, unknown>;
+      const texteChampCircuit = (cle: string): string =>
+        typeof cc[cle] === "string" ? (cc[cle] as string).trim() : "";
+
+      if (texteChampCircuit("descriptifContestation") === "") {
+        erreurs.push({
+          code: "DESCRIPTIF_CONTESTATION_REQUIS",
+          message: "Le descriptif de la contestation est obligatoire à la soumission."
+        });
+      }
+      if (texteChampCircuit("pointContact") === "") {
+        erreurs.push({ code: "POINT_CONTACT_REQUIS", message: "Le point de contact est obligatoire à la soumission." });
+      }
+      if (!demande.dateReceptionBo) {
+        erreurs.push({
+          code: "DATE_RECEPTION_BO_REQUIS",
+          message: "La date de réception BO est obligatoire à la soumission."
+        });
+      }
+      if (!demande.dateReceptionOci) {
+        erreurs.push({
+          code: "DATE_RECEPTION_OCI_REQUIS",
+          message: "La date de réception OCI est obligatoire à la soumission."
+        });
+      }
+      if (!demande.localisation) {
+        erreurs.push({ code: "LOCALISATION_REQUIS", message: "La localisation est obligatoire à la soumission." });
+      }
+    }
+
+    // Fiche « Mémo d'ajustement Wholesale » — quatre champs deviennent
+    // obligatoires pour DF (07/09/2026, demande explicite) : De/À/Objectif
+    // (champsCircuit, champsCircuitDfSchema) et Objet (colonne `libelle`,
+    // partagée avec le champ Motif/Libellé des autres circuits — jamais le
+    // même code d'erreur que LIBELLE_REQUIS, la maquette nomme ce champ
+    // différemment sur ce circuit). Commentaire reste explicitement NON
+    // obligatoire pour DF (R14 assouplie, cf. le bloc R14 en tête de cette
+    // méthode, `demande.circuit !== "DF"`) — aucun changement ici.
+    if (demande.circuit === "DF") {
+      if (!demande.libelle || demande.libelle.trim() === "") {
+        erreurs.push({ code: "OBJET_REQUIS", message: "L'objet est obligatoire à la soumission." });
+      }
+      const cc = (demande.champsCircuit ?? {}) as Record<string, unknown>;
+      const texteChampCircuit = (cle: string): string =>
+        typeof cc[cle] === "string" ? (cc[cle] as string).trim() : "";
+      if (texteChampCircuit("memoDe") === "") {
+        erreurs.push({ code: "MEMO_DE_REQUIS", message: "« De (émetteur) » est obligatoire à la soumission." });
+      }
+      if (texteChampCircuit("memoA") === "") {
+        erreurs.push({ code: "MEMO_A_REQUIS", message: "« À (destinataire) » est obligatoire à la soumission." });
+      }
+      if (texteChampCircuit("memoObjectif") === "") {
+        erreurs.push({ code: "MEMO_OBJECTIF_REQUIS", message: "L'objectif est obligatoire à la soumission." });
+      }
+    }
+
     // R17 (formule requise par ligne retenue) et R15 (ligne résiliée →
     // bloquée/justification renforcée) abandonnées — décision métier
     // confirmée après consultation des directions (Priorité 2, 19/08/2026,
@@ -86,6 +214,22 @@ export class DemandeWorkflowService {
         message: "Pièces obligatoires du motif absentes.",
         details: piecesManquantes
       });
+    }
+
+    // Pièce jointe obligatoire à la soumission — DXC uniquement (07/09/2026,
+    // demande explicite : facultative jusqu'ici sur ce circuit). Distinct de
+    // R13 ci-dessus : R13 n'exige une pièce que si le motif choisi porte une
+    // pièce afférente marquée obligatoire (ex. « Geste commercial », motif
+    // DXC réel, n'en porte aucune) — cette règle-ci exige au moins une pièce
+    // jointe, quel que soit le motif.
+    if (demande.circuit === "DXC") {
+      const nbPieces = await this.prisma.pieceJointe.count({ where: { demandeId } });
+      if (nbPieces === 0) {
+        erreurs.push({
+          code: "PIECE_JOINTE_REQUISE",
+          message: "Au moins une pièce jointe est obligatoire à la soumission (DXC)."
+        });
+      }
     }
 
     // Sélection avant le contrôle cumulable R12 (docs/06 §4 liste R12_CONTROLE_FRA
@@ -166,6 +310,33 @@ export class DemandeWorkflowService {
     }
 
     if (demande.statut === "BROUILLON") {
+      // Point 11 (07/09/2026, demande explicite) — un BROUILLON renvoyé
+      // pour correction (rejet sans clôture, cf. TacheWorkflowService.rejeter,
+      // action "renvoi-correction") ne modifie jamais silencieusement un
+      // champ sensible (montantHt, période contestée) : bascule vers un
+      // NOUVEAU dossier référençant celui-ci, sur confirmation explicite du
+      // client uniquement — jamais devinée. Un BROUILLON jamais soumis
+      // (aucune entrée "renvoi-correction") continue de se modifier
+      // normalement, sans aucun changement de comportement.
+      const renvoiCorrection = await this.prisma.journalAudit.findFirst({
+        where: { demandeId, action: "renvoi-correction" }
+      });
+
+      if (renvoiCorrection) {
+        const champsSensibles = this.detecterChangementSensible(dto, demande);
+        if (champsSensibles.length > 0) {
+          if (!dto.confirmerNouveauDossier) {
+            throw new UnprocessableEntityException({
+              code: "CONFIRMATION_NOUVEAU_DOSSIER_REQUISE",
+              message:
+                "Ce dossier a été renvoyé pour correction — modifier un champ sensible (montant ou période contestée) crée un nouveau dossier référençant celui-ci, jamais une modification silencieuse. Confirmez pour continuer.",
+              details: { champs: champsSensibles }
+            });
+          }
+          return this.demandeService.dupliquerVersNouveauDossier(demandeId, dto, acteur);
+        }
+      }
+
       return this.demandeService.modifier(demandeId, dto, acteur.id);
     }
 
@@ -174,6 +345,28 @@ export class DemandeWorkflowService {
     await this.reRouterSiEngage(demandeId, acteur, "modification");
 
     return this.demandeService.obtenirDetail(demandeId);
+  }
+
+  // Champs sensibles = montantHt + les deux dates de période contestée
+  // (décision explicite, point 11). Un champ n'est "sensible" que s'il est
+  // à la fois FOURNI dans le dto (les autres restent undefined, jamais
+  // réinitialisés — même sémantique de PATCH partiel que demandeService.modifier)
+  // ET différent de la valeur actuellement stockée — resaisir la même valeur
+  // ne déclenche jamais la bascule.
+  private detecterChangementSensible(dto: ModifierDemandeRequete, existante: DemandePrisma): string[] {
+    const champs: string[] = [];
+    if (dto.montantHt !== undefined && Number(dto.montantHt) !== Number(existante.montantHt)) {
+      champs.push("montantHt");
+    }
+    const debutActuel = existante.debutPeriodeContestee ? existante.debutPeriodeContestee.toISOString().slice(0, 10) : undefined;
+    if (dto.debutPeriodeContestee !== undefined && dto.debutPeriodeContestee !== debutActuel) {
+      champs.push("debutPeriodeContestee");
+    }
+    const finActuel = existante.finPeriodeContestee ? existante.finPeriodeContestee.toISOString().slice(0, 10) : undefined;
+    if (dto.finPeriodeContestee !== undefined && dto.finPeriodeContestee !== finActuel) {
+      champs.push("finPeriodeContestee");
+    }
+    return champs;
   }
 
   // Extrait de modifierAvecReRoutage (R6) — réutilisé tel quel par

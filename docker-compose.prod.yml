@@ -187,7 +187,7 @@ services:
       RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/pgd}
       CORS_ORIGIN: ${CORS_ORIGIN:?CORS_ORIGIN doit être défini dans .env.prod (URL publique de apps/web)}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET doit être défini dans .env.prod}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1h}
       REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET:?REFRESH_TOKEN_SECRET doit être défini dans .env.prod}
       REFRESH_TOKEN_EXPIRES_IN: ${REFRESH_TOKEN_EXPIRES_IN:-7d}
       SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-pgd_session}
@@ -246,7 +246,7 @@ services:
       # échoue sans ces variables même si apps/worker ne les utilise pas
       # réellement (session/AD/MFA n'existent pas côté worker).
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET doit être défini dans .env.prod}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1h}
       REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET:?REFRESH_TOKEN_SECRET doit être défini dans .env.prod}
       REFRESH_TOKEN_EXPIRES_IN: ${REFRESH_TOKEN_EXPIRES_IN:-7d}
       KEYCLOAK_BASE_URL: ${KEYCLOAK_BASE_URL:?KEYCLOAK_BASE_URL doit être défini dans .env.prod}

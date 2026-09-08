@@ -65,11 +65,22 @@ export type ApprouverRequete = z.infer<typeof approuverRequeteSchema>;
 // motif de clôture DISTINCT du motif de rejet — jamais réutilisé l'un pour
 // l'autre, ce sont deux faits différents (pourquoi rejeté / pourquoi
 // clôturé plutôt que renvoyé).
+// `champsAnomalies` (07/09/2026, demande explicite) — désignation structurée
+// des champs en cause, capturée depuis la revue champ par champ déjà
+// existante d'ExaminerModal (le rejet « avec motifs » y signale déjà des
+// champs précis, jusqu'ici destructurés en un seul texte libre avant
+// d'atteindre le serveur). Optionnel : le bouton « Rejeter » dédié
+// (TacheActionBanner, sans revue champ par champ) continue d'envoyer un
+// rejet sans cette liste, `motif` seul reste le contrat minimal.
+export const champAnomalieSchema = z.object({ champ: z.string(), motif: z.string() });
+export type ChampAnomalie = z.infer<typeof champAnomalieSchema>;
+
 export const rejeterRequeteSchema = z
   .object({
     motif: z.string().min(1, "Le motif de rejet est obligatoire"),
     clore: z.boolean().default(false),
-    motifCloture: z.string().min(1).optional()
+    motifCloture: z.string().min(1).optional(),
+    champsAnomalies: z.array(champAnomalieSchema).optional()
   })
   .refine((v) => !v.clore || (v.motifCloture && v.motifCloture.trim().length > 0), {
     message: "Le motif de clôture est obligatoire lorsque « clore » est demandé.",

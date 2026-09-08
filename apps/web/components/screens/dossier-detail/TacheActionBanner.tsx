@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button, Icon, Modal, SlaTimer, TypeActeurBadge, useToast } from "@pgd/ui";
-import type { Demande, EtapeDossier, MembreRoleVue, RevueChamp, SessionUtilisateur, TacheVue } from "@pgd/contracts";
+import type { ChampAnomalie, Demande, EtapeDossier, MembreRoleVue, RevueChamp, SessionUtilisateur, TacheVue } from "@pgd/contracts";
 import {
   ApiError,
   approuverTache,
@@ -177,8 +177,8 @@ export function TacheActionBanner({
   // dossier », pas une décision de clore définitivement. Le bouton
   // « Rejeter » dédié (modalRejet, ci-dessous), avec sa case « et
   // clôturer », reste le seul chemin vers une clôture terminale.
-  async function handleRejeterDepuisExamen(motifCompile: string) {
-    const succes = await executer(() => rejeterTache(tache!.id, { motif: motifCompile, clore: false }));
+  async function handleRejeterDepuisExamen(motifCompile: string, champsAnomalies: ChampAnomalie[]) {
+    const succes = await executer(() => rejeterTache(tache!.id, { motif: motifCompile, clore: false, champsAnomalies }));
     setModalExamen(false);
     if (succes) {
       toast({ ton: "info", titre: "Dossier rejeté et renvoyé", message: `Dossier ${demande.reference} — renvoyé à l'initiateur pour correction.` });

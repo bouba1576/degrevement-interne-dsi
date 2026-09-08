@@ -45,13 +45,38 @@ describe("E2E — circuit DXC (B2C), parcours complet en HTTP réel", () => {
     const managerSenior = await creerActeur("manager-senior", ["MANAGER_SENIOR_DXC"]);
     const dxc = await creerActeur("dxc", ["DXC"]);
 
+    // « Geste commercial (placeholder) » — seul motif DXC seedé sans pièce
+    // afférente du tout (motifs.seed.ts) : PIECE_JOINTE_REQUISE (07/09/2026)
+    // exige une pièce jointe quel que soit le motif — attachée explicitement
+    // ci-dessous plutôt que déléguée à une pièce afférente obligatoire.
+    const motif = await prisma.motif.findFirstOrThrow({ where: { circuit: "DXC", libelle: "Geste commercial (placeholder)" } });
+
     const creation = await request(e2e.app.getHttpServer())
       .post("/api/demandes")
       .set("Cookie", initiateur.cookie)
-      .send({ circuit: "DXC", nomClient: "E2E Kouassi Jean-Baptiste", commentaire: `Essai e2e DXC ${suffixe}`, sousFlux: "Réclamation" })
+      .send({
+        circuit: "DXC",
+        nomClient: "E2E Kouassi Jean-Baptiste",
+        commentaire: `Essai e2e DXC ${suffixe}`,
+        sousFlux: "Réclamation",
+        universFmiCode: "FIXE",
+        facteurCode: "INTERNE",
+        motifId: motif.id,
+        libelle: "Contestation facture",
+        compteClient: "B2C-4471902",
+        formuleAbonnement: "Formule Essentielle",
+        debutPeriodeContestee: "2026-01-01",
+        finPeriodeContestee: "2026-01-31"
+      })
       .expect(201);
     const demandeId = creation.body.data.demande.id as string;
     demandeIds.push(demandeId);
+
+    await request(e2e.app.getHttpServer())
+      .post(`/api/demandes/${demandeId}/pieces`)
+      .set("Cookie", initiateur.cookie)
+      .attach("fichier", Buffer.from("contenu de test"), "piece-dxc-test.pdf")
+      .expect(201);
 
     const ligne = await prisma.ligne.findFirstOrThrow({ where: { nd: LIGNE_ND } });
 

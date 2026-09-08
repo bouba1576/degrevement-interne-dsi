@@ -27,7 +27,7 @@ export const envSchema = z.object({
 
   // --- Phase 2 : session ------------------------------------------------
   JWT_SECRET: z.string().min(32, "JWT_SECRET doit faire au moins 32 caractères"),
-  JWT_EXPIRES_IN: z.string().default("15m"),
+  JWT_EXPIRES_IN: z.string().default("1h"),
   REFRESH_TOKEN_SECRET: z.string().min(32, "REFRESH_TOKEN_SECRET doit faire au moins 32 caractères"),
   REFRESH_TOKEN_EXPIRES_IN: z.string().default("7d"),
   SESSION_COOKIE_NAME: z.string().default("pgd_session"),

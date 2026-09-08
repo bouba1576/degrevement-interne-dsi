@@ -71,14 +71,16 @@ export function ReportingScreen() {
     }
   }
 
-  if (!utilisateur.roles.includes("ADMIN_PGD")) {
-    // Confort d'affichage, pas le contrôle réel — GET /api/reporting porte
-    // déjà @Roles("ADMIN_PGD") côté serveur (403 sinon). Ce garde-fou client
-    // évite juste un appel voué à échouer et un message d'erreur brut.
+  // 01/09/2026, demande explicite — élargi aux validateurs, plus seulement
+  // ADMIN_PGD. Confort d'affichage, pas le contrôle réel — GET /api/reporting
+  // porte désormais @ProfilRequis("VALIDATEUR", "ADMINISTRATEUR") côté
+  // serveur (403 sinon). Ce garde-fou client évite juste un appel voué à
+  // échouer et un message d'erreur brut.
+  if (!utilisateur.profils.includes("VALIDATEUR") && !utilisateur.profils.includes("ADMINISTRATEUR")) {
     return (
       <Card className="p-8">
-        <Empty icone="lock" titre="Réservé aux administrateurs">
-          Le reporting consolidé est réservé au rôle ADMIN_PGD.
+        <Empty icone="lock" titre="Réservé aux validateurs et à l'administration">
+          Le reporting consolidé est réservé aux validateurs et à l'administration.
         </Empty>
       </Card>
     );

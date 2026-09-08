@@ -1,4 +1,5 @@
 import { ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { Prisma } from "@pgd/database";
 import type { ApprouverRequete, RejeterRequete, TacheVue } from "@pgd/contracts";
 import {
   publier,
@@ -161,6 +162,20 @@ export class TacheWorkflowService {
         dateDecision: tacheMaj.dateDecision ? tacheMaj.dateDecision.toISOString() : null
       };
 
+      // `champsAnomalies` (07/09/2026, demande explicite) — désignation
+      // structurée des champs en cause, capturée depuis la revue champ par
+      // champ d'ExaminerModal. Fusionnée dans le même `detail` JSON que la
+      // délégation, jamais une colonne dédiée : même pattern déjà en place
+      // pour `approbation.detail.revue`.
+      const detail: Record<string, unknown> = {};
+      if (delegation) {
+        detail.delegationId = delegation.delegationId;
+        detail.delegantIdentifiantAd = delegation.delegantIdentifiantAd;
+      }
+      if (dto.champsAnomalies && dto.champsAnomalies.length > 0) {
+        detail.champsAnomalies = dto.champsAnomalies;
+      }
+
       await tx.journalAudit.create({
         data: {
           demandeId: tache.demandeId,
@@ -168,9 +183,7 @@ export class TacheWorkflowService {
           acteur: acteur.identifiantAd,
           action: "rejet",
           commentaire: dto.motif,
-          detail: delegation
-            ? { delegationId: delegation.delegationId, delegantIdentifiantAd: delegation.delegantIdentifiantAd }
-            : undefined
+          detail: Object.keys(detail).length > 0 ? (detail as Prisma.InputJsonValue) : undefined
         }
       });
 

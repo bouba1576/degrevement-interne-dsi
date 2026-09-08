@@ -36,10 +36,33 @@ describe("E2E — DemandesController, routes restantes en HTTP réel", () => {
   }
 
   async function creerBrouillon(initiateurCookie: string, nomClient: string) {
+    // « Réclamation commerciale (placeholder) » — seul motif DOBB seedé sans
+    // pièce obligatoire (motifs.seed.ts) : ce test n'attache jamais de pièce,
+    // un motif à pièce obligatoire ferait échouer la soumission sur
+    // R13_PIECES_MANQUANTES, non lié à ce que ce test vérifie.
+    const motif = await prisma.motif.findFirstOrThrow({ where: { circuit: "DOBB", libelle: "Réclamation commerciale (placeholder)" } });
     const creation = await request(e2e.app.getHttpServer())
       .post("/api/demandes")
       .set("Cookie", initiateurCookie)
-      .send({ circuit: "DOBB", nomClient, commentaire: `E2E controller ${suffixe}`, sousFlux: "Réclamation B2B" })
+      .send({
+        circuit: "DOBB",
+        nomClient,
+        commentaire: `E2E controller ${suffixe}`,
+        sousFlux: "Réclamation B2B",
+        libelle: "Réclamation facturation E2E",
+        motifId: motif.id,
+        universFmiCode: "FIXE",
+        facteurCode: "INTERNE",
+        // Huit champs DOBB obligatoires à la soumission (07/09/2026, demande
+        // explicite) — ce fixture est utilisé par creerEtSoumettre ci-dessous.
+        formuleAbonnement: "Formule standard",
+        debutPeriodeContestee: "2026-01-01",
+        finPeriodeContestee: "2026-01-10",
+        dateReceptionBo: "2026-01-02",
+        dateReceptionOci: "2026-01-03",
+        localisation: "NATIONAL",
+        champsCircuit: { descriptifContestation: "Détail du cas contesté.", pointContact: "Agence Plateau" }
+      })
       .expect(201);
     const demandeId = creation.body.data.demande.id as string;
     demandeIds.push(demandeId);

@@ -43,26 +43,44 @@ export function Sidebar({ roles, profils, routeActuelle, onNaviguer, compteMesDe
   // (DemandesController), c'est CE guard-là qui protège réellement la
   // création, pas ce `if`.
   const estInitiateur = profils.includes("INITIATEUR");
+  // 01/09/2026, demande explicite — un validateur pur (sans profil
+  // Initiateur/Admin) ne voit que Dashboard/Corbeilles/Contrôle a
+  // posteriori/Reporting. « Contrôle a posteriori » reste visible pour les
+  // validateurs (confirmé explicitement) : c'est la seule voie de
+  // navigation vers les tâches de contrôle FRA (état POST_CLOTURE, distinct
+  // de Corbeilles) — le retirer aurait rendu ce rôle inatteignable depuis le
+  // menu, sans alternative. « Mes demandes » reste réservé à
+  // Initiateur/Admin (un validateur pur n'a jamais initié de dossier).
+  const estValideur = profils.includes("VALIDATEUR");
 
   const espaceTravail: ArticleNav[] = [
     { route: "home", libelle: "Tableau de bord", icone: "chart" },
     ...(estInitiateur || estAdmin ? [{ route: "nouvelle", libelle: "Nouvelle demande", icone: "plus" as NomIcone }] : []),
-    { route: "mes", libelle: "Mes demandes", icone: "doc", compte: compteMesDemandes },
+    ...(estInitiateur || estAdmin ? [{ route: "mes", libelle: "Mes demandes", icone: "doc" as NomIcone, compte: compteMesDemandes }] : []),
     { route: "corbeilles", libelle: "Corbeilles", icone: "inbox", compte: compteCorbeilles },
     { route: "controle", libelle: "Contrôle a posteriori", icone: "shield" }
   ];
   // Pas d'entrée « Modules » séparée : couverte par l'onglet « Paramètres
   // système » d'AdminScreen (Phase 9.2) — une entrée dédiée aurait été
   // redondante avec une route déjà servie ailleurs, pas un gap à combler.
-  const pilotage: ArticleNav[] = estAdmin
-    ? [
-        { route: "consultation", libelle: "Consultation", icone: "search" },
-        { route: "reporting", libelle: "Reporting", icone: "calc" },
-        { route: "audit", libelle: "Journal d'audit", icone: "lock" },
-        { route: "admin", libelle: "Administration", icone: "gear" },
-        { route: "integrations", libelle: "Intégrations", icone: "flow" }
-      ]
-    : [];
+  //
+  // Reporting élargi aux validateurs (01/09/2026, demande explicite) —
+  // ReportingController porte désormais @ProfilRequis("VALIDATEUR",
+  // "ADMINISTRATEUR") côté serveur, ce lien n'est donc plus un confort sans
+  // garde derrière. Consultation/Journal d'audit/Administration/
+  // Intégrations restent ADMIN_PGD uniquement, capacités transversales
+  // d'oversight/administration sans rapport avec le périmètre demandé.
+  const pilotage: ArticleNav[] = [
+    ...(estValideur || estAdmin ? [{ route: "reporting", libelle: "Reporting", icone: "calc" as NomIcone }] : []),
+    ...(estAdmin
+      ? [
+          { route: "consultation", libelle: "Consultation", icone: "search" as NomIcone },
+          { route: "audit", libelle: "Journal d'audit", icone: "lock" as NomIcone },
+          { route: "admin", libelle: "Administration", icone: "gear" as NomIcone },
+          { route: "integrations", libelle: "Intégrations", icone: "flow" as NomIcone }
+        ]
+      : [])
+  ];
 
   // `sticky top-0 h-screen` (audit de complétude structurelle) — la maquette
   // pose `position: sticky; top: 0; height: 100vh` sur `.sidebar`

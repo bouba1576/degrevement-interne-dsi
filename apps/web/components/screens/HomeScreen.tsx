@@ -94,11 +94,15 @@ function ongletParDefaut(
 export function HomeScreen({ utilisateur, onNaviguer, compteMesDemandes, compteCorbeilles }: HomeScreenProps) {
   const prenom = utilisateur.nom.split(" ")[0];
   // ADMIN_PGD reste un code unique et stable (Famille A) — laissé tel quel,
-  // jamais rebranché sur `profils` : la portée Pilotage réelle côté serveur
-  // (KpiPerimetreGuard) reste elle aussi câblée sur ce seul code, pas sur
-  // ADMINISTRATEUR au sens large (SUPERVISEUR/SERVICE_TECHNIQUE n'ont aucune
-  // route Pilotage réelle derrière eux) — élargir ce `estAdmin` ouvrirait un
-  // onglet que le serveur refuserait ensuite en 403.
+  // jamais rebranché sur `profils` : sert encore de gate pour les capacités
+  // strictement administratives (Consultation/Journal d'audit/
+  // Administration/Intégrations, cf. Sidebar) qui n'ont aucune route
+  // ouverte à ADMINISTRATEUR au sens large (SUPERVISEUR/SERVICE_TECHNIQUE
+  // n'ont aucune capacité réelle câblée nulle part dans ce dépôt).
+  // KpiPerimetreGuard, lui, a été élargi le 01/09/2026 (demande explicite) :
+  // la portée Pilotage réelle côté serveur accepte désormais aussi
+  // `profils.includes("VALIDATEUR")`, pas seulement ADMIN_PGD — cf.
+  // `estValideur` ci-dessous, qui gate l'onglet Pilotage en conséquence.
   const estAdmin = utilisateur.roles.includes(ROLE_ADMIN);
   // Chantier 2 (28/08/2026, docs/14) — rebranché sur Role.profilSysteme
   // (session `profils`), remplace les deux proxies fragiles par
@@ -135,10 +139,15 @@ export function HomeScreen({ utilisateur, onNaviguer, compteMesDemandes, compteC
   // ne doit plus voir/pouvoir sélectionner l'onglet Valideur (ni l'inverse) :
   // chaque onglet n'apparaît désormais que si le rôle réel de l'appelant le
   // justifie, ADMIN_PGD voit toujours les trois.
+  // RÉVISION (01/09/2026, demande explicite) — l'onglet Pilotage (KPIs)
+  // devient visible pour tous les validateurs, pas seulement ADMIN_PGD ;
+  // KpiPerimetreGuard porte désormais la même règle côté serveur
+  // (utilisateur.profils.includes("VALIDATEUR")), ce n'est plus un onglet
+  // sans garde derrière.
   const onglets: Array<{ k: Onglet; l: string }> = [
     ...(estInitiateur || estAdmin ? [{ k: "initiateur" as const, l: "Initiateur" }] : []),
     ...(estValideur || estAdmin ? [{ k: "valideur" as const, l: "Valideur" }] : []),
-    ...(estAdmin ? [{ k: "pilotage" as const, l: "Pilotage" }] : [])
+    ...(estValideur || estAdmin ? [{ k: "pilotage" as const, l: "Pilotage" }] : [])
   ];
 
   return (
@@ -224,7 +233,7 @@ export function HomeScreen({ utilisateur, onNaviguer, compteMesDemandes, compteC
           <SectionStatistiquesMotif profil="valideur" circuit={null} periode={periode} />
         </>
       )}
-      {onglet === "pilotage" && estAdmin && <SectionPilotage periode={periode} />}
+      {onglet === "pilotage" && (estValideur || estAdmin) && <SectionPilotage periode={periode} />}
     </div>
   );
 }

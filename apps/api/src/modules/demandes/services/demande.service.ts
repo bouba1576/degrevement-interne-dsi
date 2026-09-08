@@ -17,6 +17,15 @@ import { GedStubAdapter } from "../providers/ged-stub.adapter";
 
 type DemandeAvecRelations = Prisma.DemandeGetPayload<{ include: { lignes: true; pieces: true } }>;
 
+// Snapshot d'acteur pour JournalAudit (acteur = chaîne libre, jamais une FK
+// — cf. schema.prisma) : point 11, dupliquerVersNouveauDossier ci-dessous
+// est la seule méthode de ce service qui écrit JournalAudit, donc la seule
+// qui a besoin de l'identifiantAd en plus de l'id.
+export interface ActeurDemande {
+  id: string;
+  identifiantAd: string;
+}
+
 @Injectable()
 export class DemandeService {
   constructor(
@@ -36,6 +45,7 @@ export class DemandeService {
       dto.serviceRespId,
       dto.responsabiliteServiceAutre
     );
+    const { motifId, motifAutre } = this.normaliserMotif(dto.motifId, dto.motifAutre);
 
     // Montant à ajuster HT saisi directement au niveau du dossier (Priorité 2,
     // 19/08/2026) — remplace l'agrégation de lignes retenues (R18, abandonnée,
@@ -78,7 +88,8 @@ export class DemandeService {
         tvaActive: taux.tvaActive,
         assietteTva: taux.assietteTva,
         libelle: dto.libelle,
-        motifId: dto.motifId,
+        motifId,
+        motifAutre,
         universFmiCode: dto.universFmiCode,
         facteurCode: dto.facteurCode,
         directionRespId: dto.directionRespId,
@@ -122,6 +133,15 @@ export class DemandeService {
   // niveau base ne l'efface jamais, contrairement à PieceService.supprimer
   // qui appelle explicitement `ged.supprimer()`. Sans cette boucle, chaque
   // pièce d'un brouillon supprimé laisserait un fichier orphelin permanent.
+  //
+  // Garde de référence-comptage (07/09/2026, point 11 « référencer un
+  // dossier renvoyé ») — un `gedRef` peut désormais être partagé par PLUSIEURS
+  // `PieceJointe` (duplication par référence lors d'une bascule vers un
+  // nouveau dossier, cf. DemandeService.dupliquerVersNouveauDossier ci-dessous) :
+  // avant toute suppression physique, vérifier qu'aucune AUTRE ligne
+  // PieceJointe (demandeId différent) ne pointe encore vers le même
+  // gedRef — sinon la suppression de CE dossier supprimerait un fichier
+  // encore référencé par un autre dossier bien réel.
   async supprimer(demandeId: string): Promise<void> {
     const demande = await this.prisma.demande.findUnique({ where: { id: demandeId } });
     if (!demande) {
@@ -136,7 +156,11 @@ export class DemandeService {
 
     const pieces = await this.prisma.pieceJointe.findMany({ where: { demandeId } });
     for (const piece of pieces) {
-      if (piece.gedRef) await this.ged.supprimer(piece.gedRef);
+      if (!piece.gedRef) continue;
+      const autreReference = await this.prisma.pieceJointe.findFirst({
+        where: { gedRef: piece.gedRef, demandeId: { not: demandeId } }
+      });
+      if (!autreReference) await this.ged.supprimer(piece.gedRef);
     }
 
     await this.prisma.demande.delete({ where: { id: demandeId } });
@@ -337,6 +361,10 @@ export class DemandeService {
       dto.serviceRespId ?? (existante.serviceRespId ?? undefined),
       dto.responsabiliteServiceAutre ?? (existante.responsabiliteServiceAutre ?? undefined)
     );
+    const { motifId, motifAutre } = this.normaliserMotif(
+      dto.motifId ?? (existante.motifId ?? undefined),
+      dto.motifAutre ?? (existante.motifAutre ?? undefined)
+    );
 
     // Montant à ajuster HT modifiable (Priorité 2, 19/08/2026) — même moteur
     // de taxes que la création/le panneau Taxes (MontantService.calculer),
@@ -378,7 +406,8 @@ export class DemandeService {
           recurrentMensuel: dto.recurrentMensuel,
           champsCircuit: dto.champsCircuit as Prisma.InputJsonValue | undefined,
           libelle: dto.libelle,
-          motifId: dto.motifId,
+          motifId,
+          motifAutre,
           universFmiCode: dto.universFmiCode,
           facteurCode: dto.facteurCode,
           directionRespId: dto.directionRespId,
@@ -416,6 +445,165 @@ export class DemandeService {
     return this.versDetail(demande);
   }
 
+  // Point 11 (07/09/2026, demande explicite) — un BROUILLON renvoyé pour
+  // correction (rejet sans clôture) qui change un champ sensible (montantHt,
+  // période contestée) ne modifie JAMAIS silencieusement le dossier existant :
+  // un NOUVEAU dossier est créé, référençant l'ancien (demandeOrigineId).
+  // L'ancien dossier n'est jamais touché ici — ni statut, ni suppression,
+  // ni aucune écriture sur ses propres colonnes (seule une entrée
+  // JournalAudit informative y est ajoutée, append-only, sans effet sur son
+  // état). Décision explicite : suppression manuelle de l'ancien possible,
+  // rien d'automatique. Appelée uniquement depuis
+  // DemandeWorkflowService.modifierAvecReRoutage, après confirmation
+  // explicite du client (dto.confirmerNouveauDossier) — cette méthode ne
+  // revérifie pas cette confirmation, l'appelant a déjà tranché.
+  //
+  // Champs non fournis dans `dto` : repris tels quels de l'origine (mêmes
+  // règles de fusion que `modifier()` — `dto.x ?? origine.x`), jamais
+  // réinitialisés. `tauxDepuisDemande(origine)` reprend la configuration
+  // fiscale RÉELLE de l'ancien dossier (assiette, saisies manuelles TSC/TVA)
+  // plutôt que les défauts du circuit — c'est le même dossier qui continue,
+  // pas un nouveau brouillon vierge.
+  //
+  // Pièces jointes dupliquées PAR RÉFÉRENCE (même gedRef, nouvelle ligne
+  // PieceJointe) — vérifié avant de construire (cf. CLAUDE.md) : sûr
+  // uniquement depuis la garde de référence-comptage ajoutée dans
+  // `supprimer()`/`PieceService.supprimer()` ci-dessus/ci-après, qui empêche
+  // désormais la suppression physique d'un fichier encore référencé par une
+  // autre ligne PieceJointe.
+  async dupliquerVersNouveauDossier(
+    origineId: string,
+    dto: ModifierDemandeRequete,
+    acteur: ActeurDemande
+  ): Promise<DemandeDetail> {
+    const origine = await this.prisma.demande.findUnique({ where: { id: origineId }, include: { pieces: true } });
+    if (!origine) {
+      throw new NotFoundException({ code: "DEMANDE_INTROUVABLE", message: "Demande introuvable." });
+    }
+
+    const { serviceRespId, responsabiliteServiceAutre } = this.normaliserServiceResponsable(
+      dto.serviceRespId ?? (origine.serviceRespId ?? undefined),
+      dto.responsabiliteServiceAutre ?? (origine.responsabiliteServiceAutre ?? undefined)
+    );
+    const { motifId, motifAutre } = this.normaliserMotif(
+      dto.motifId ?? (origine.motifId ?? undefined),
+      dto.motifAutre ?? (origine.motifAutre ?? undefined)
+    );
+
+    const montantHtSaisi = dto.montantHt !== undefined ? dto.montantHt : Number(origine.montantHt);
+    const taux = this.montant.tauxDepuisDemande(origine);
+    const montants = this.montant.calculer(montantHtSaisi, taux);
+
+    const debutPeriodeContestee =
+      dto.debutPeriodeContestee !== undefined
+        ? dto.debutPeriodeContestee
+        : origine.debutPeriodeContestee
+          ? origine.debutPeriodeContestee.toISOString().slice(0, 10)
+          : undefined;
+    const finPeriodeContestee =
+      dto.finPeriodeContestee !== undefined
+        ? dto.finPeriodeContestee
+        : origine.finPeriodeContestee
+          ? origine.finPeriodeContestee.toISOString().slice(0, 10)
+          : undefined;
+
+    const cree = await this.prisma.$transaction(async (tx) => {
+      const nouvelle = await this.creerAvecReferenceUnique(tx, {
+        circuit: origine.circuit,
+        segment: origine.segment,
+        sousFlux: dto.sousFlux ?? origine.sousFlux,
+        nomClient: dto.nomClient ?? origine.nomClient,
+        compteClient: dto.compteClient ?? origine.compteClient,
+        numeroCase: dto.numeroCase ?? origine.numeroCase,
+        agentInitiateur: dto.agentInitiateur ?? origine.agentInitiateur,
+        matriculeInitiateur: dto.matriculeInitiateur ?? origine.matriculeInitiateur,
+        agentSaisie: dto.agentSaisie ?? origine.agentSaisie,
+        localisation: dto.localisation ?? origine.localisation ?? undefined,
+        canalRemontee: dto.canalRemontee ?? origine.canalRemontee,
+        dateReceptionBo: dto.dateReceptionBo ? new Date(dto.dateReceptionBo) : (origine.dateReceptionBo ?? undefined),
+        dateReceptionOci: dto.dateReceptionOci ? new Date(dto.dateReceptionOci) : (origine.dateReceptionOci ?? undefined),
+        formuleAbonnement: dto.formuleAbonnement ?? origine.formuleAbonnement,
+        numeroAppel: dto.numeroAppel ?? origine.numeroAppel,
+        debutPeriodeContestee: debutPeriodeContestee ? new Date(debutPeriodeContestee) : undefined,
+        finPeriodeContestee: finPeriodeContestee ? new Date(finPeriodeContestee) : undefined,
+        periodeContesteeJours: this.calculerJoursContestes(debutPeriodeContestee, finPeriodeContestee),
+        recurrentMensuel: dto.recurrentMensuel ?? Number(origine.recurrentMensuel),
+        champsCircuit: (dto.champsCircuit ?? origine.champsCircuit) as Prisma.InputJsonValue,
+        montantHt: montants.montantHt,
+        montantTsc: montants.montantTsc,
+        montantTva: montants.montantTva,
+        montantTtc: montants.montantTtc,
+        tauxTsc: taux.tauxTsc,
+        tauxTva: taux.tauxTva,
+        tscActive: taux.tscActive,
+        tvaActive: taux.tvaActive,
+        assietteTva: taux.assietteTva,
+        tscManuelle: taux.tscManuelle,
+        montantTscManuel: taux.montantTscManuel,
+        tvaManuelle: taux.tvaManuelle,
+        montantTvaManuel: taux.montantTvaManuel,
+        libelle: dto.libelle ?? origine.libelle,
+        motifId,
+        motifAutre,
+        universFmiCode: dto.universFmiCode ?? origine.universFmiCode,
+        facteurCode: dto.facteurCode ?? origine.facteurCode,
+        directionRespId: dto.directionRespId ?? origine.directionRespId,
+        serviceRespId,
+        agentResponsable: dto.agentResponsable ?? origine.agentResponsable,
+        commentaire: dto.commentaire ?? origine.commentaire,
+        responsabiliteServiceAutre,
+        initiateurId: origine.initiateurId,
+        demandeOrigineId: origine.id
+      });
+
+      for (const piece of origine.pieces) {
+        await tx.pieceJointe.create({
+          data: {
+            demandeId: nouvelle.id,
+            pieceAfferenteId: piece.pieceAfferenteId,
+            nomFichier: piece.nomFichier,
+            typeMime: piece.typeMime,
+            tailleOctets: piece.tailleOctets,
+            gedRef: piece.gedRef
+          }
+        });
+      }
+
+      await this.historique.enregistrer(
+        {
+          demandeId: nouvelle.id,
+          montants,
+          tauxTsc: taux.tauxTsc,
+          tauxTva: taux.tauxTva,
+          origine: "CREATION",
+          acteurId: acteur.id
+        },
+        tx
+      );
+
+      await tx.journalAudit.create({
+        data: {
+          demandeId: nouvelle.id,
+          acteur: acteur.identifiantAd,
+          action: "creation-correction",
+          detail: { demandeOrigineId: origine.id, referenceOrigine: origine.reference }
+        }
+      });
+      await tx.journalAudit.create({
+        data: {
+          demandeId: origine.id,
+          acteur: acteur.identifiantAd,
+          action: "bascule-nouveau-dossier",
+          detail: { nouvelleDemandeId: nouvelle.id, nouvelleReference: nouvelle.reference }
+        }
+      });
+
+      return nouvelle;
+    });
+
+    return this.obtenirDetail(cree.id);
+  }
+
   // AUTRE (SF-PGD-330) : un serviceRespId réel efface toujours le texte libre
   // ("champ masqué et vidé") ; son absence conserve le texte libre saisi.
   private normaliserServiceResponsable(
@@ -426,6 +614,19 @@ export class DemandeService {
       return { serviceRespId, responsabiliteServiceAutre: undefined };
     }
     return { serviceRespId: undefined, responsabiliteServiceAutre };
+  }
+
+  // "Autre (non référencé)" sur Motif (07/09/2026, demande explicite) — même
+  // principe que normaliserServiceResponsable ci-dessus : un motifId réel
+  // efface toujours le texte libre, son absence conserve le texte saisi.
+  private normaliserMotif(
+    motifId: string | undefined,
+    motifAutre: string | undefined
+  ): { motifId: string | undefined; motifAutre: string | undefined } {
+    if (motifId) {
+      return { motifId, motifAutre: undefined };
+    }
+    return { motifId: undefined, motifAutre };
   }
 
   private calculerJoursContestes(debut?: string, fin?: string): number | undefined {
@@ -519,6 +720,7 @@ export class DemandeService {
       montantTvaManuel: d.montantTvaManuel == null ? null : Number(d.montantTvaManuel),
       libelle: d.libelle,
       motifId: d.motifId,
+      motifAutre: d.motifAutre,
       universFmiCode: d.universFmiCode,
       facteurCode: d.facteurCode,
       directionRespId: d.directionRespId,
@@ -538,7 +740,8 @@ export class DemandeService {
       siHorodatage: d.siHorodatage ? d.siHorodatage.toISOString() : null,
       siMessage: d.siMessage,
       siTentatives: d.siTentatives,
-      siAdaptateur: d.siAdaptateur
+      siAdaptateur: d.siAdaptateur,
+      demandeOrigineId: d.demandeOrigineId
     };
   }
 }

@@ -73,7 +73,7 @@ services:
       RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/pgd}
       CORS_ORIGIN: http://localhost:3001
       JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1h}
       REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET}
       REFRESH_TOKEN_EXPIRES_IN: ${REFRESH_TOKEN_EXPIRES_IN:-7d}
       SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-pgd_session}
@@ -128,7 +128,7 @@ services:
       # le schéma par app si ça devient gênant ; pas fait maintenant pour ne
       # pas rouvrir packages/config sous pression de fin de phase.
       JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1h}
       REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET}
       REFRESH_TOKEN_EXPIRES_IN: ${REFRESH_TOKEN_EXPIRES_IN:-7d}
       KEYCLOAK_BASE_URL: ${KEYCLOAK_BASE_URL}

@@ -53,10 +53,31 @@ describe("E2E — circuit DOBB (B2B), parcours complet en HTTP réel", () => {
     const managerSenior = await creerActeur("manager-senior", ["MANAGER_SENIOR_DOBB"]);
     const dobb = await creerActeur("dobb", ["DOBB"]);
 
+    // « Réclamation commerciale (placeholder) » — seul motif DOBB seedé sans
+    // pièce obligatoire (motifs.seed.ts) : ce test n'attache jamais de pièce.
+    const motif = await prisma.motif.findFirstOrThrow({ where: { circuit: "DOBB", libelle: "Réclamation commerciale (placeholder)" } });
     const creation = await request(e2e.app.getHttpServer())
       .post("/api/demandes")
       .set("Cookie", initiateur.cookie)
-      .send({ circuit: "DOBB", nomClient: "E2E Société ABC", commentaire: `Essai e2e DOBB ${suffixe}`, sousFlux: "Réclamation B2B" })
+      .send({
+        circuit: "DOBB",
+        nomClient: "E2E Société ABC",
+        commentaire: `Essai e2e DOBB ${suffixe}`,
+        sousFlux: "Réclamation B2B",
+        libelle: "Réclamation facturation E2E",
+        motifId: motif.id,
+        universFmiCode: "FIXE",
+        facteurCode: "INTERNE",
+        // Huit champs DOBB obligatoires à la soumission (07/09/2026, demande
+        // explicite).
+        formuleAbonnement: "Formule standard",
+        debutPeriodeContestee: "2026-01-01",
+        finPeriodeContestee: "2026-01-10",
+        dateReceptionBo: "2026-01-02",
+        dateReceptionOci: "2026-01-03",
+        localisation: "NATIONAL",
+        champsCircuit: { descriptifContestation: "Détail du cas contesté.", pointContact: "Agence Plateau" }
+      })
       .expect(201);
     const demandeId = creation.body.data.demande.id as string;
     demandeIds.push(demandeId);

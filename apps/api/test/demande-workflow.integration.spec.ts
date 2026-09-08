@@ -100,8 +100,32 @@ describe("DemandeWorkflowService.soumettre — R13/R14 + instanciation", () => {
   });
 
   async function creerDemandeBrouillon(): Promise<string> {
+    // libelle/universFmiCode/facteurCode : obligatoires à la soumission
+    // depuis le 01/09/2026 (libelle DOBB uniquement ; univers/facteur sur
+    // les trois circuits) — fournis ici par défaut pour ne pas faire porter
+    // cette exigence par chaque test individuellement. formuleAbonnement/
+    // debutPeriodeContestee/finPeriodeContestee/dateReceptionBo/
+    // dateReceptionOci/localisation/descriptifContestation/pointContact :
+    // huit champs DOBB obligatoires depuis le 07/09/2026 (demande explicite),
+    // même principe.
     const detail = await demandeService.creer(
-      { circuit: "DOBB", nomClient: "Client Test", compteClient: compteId, motifId, sousFlux: "Réclamation B2B" },
+      {
+        circuit: "DOBB",
+        nomClient: "Client Test",
+        compteClient: compteId,
+        motifId,
+        sousFlux: "Réclamation B2B",
+        libelle: "Réclamation facturation",
+        universFmiCode: "FIXE",
+        facteurCode: "INTERNE",
+        formuleAbonnement: "Formule standard",
+        debutPeriodeContestee: "2026-01-01",
+        finPeriodeContestee: "2026-01-10",
+        dateReceptionBo: "2026-01-02",
+        dateReceptionOci: "2026-01-03",
+        localisation: "NATIONAL",
+        champsCircuit: { descriptifContestation: "Détail du cas contesté.", pointContact: "Agence Plateau" }
+      },
       acteur.id
     );
     return detail.demande.id;
@@ -124,7 +148,24 @@ describe("DemandeWorkflowService.soumettre — R13/R14 + instanciation", () => {
   // sur R14/SOUS_FLUX_REQUIS/R13, non liés aux lignes — testés séparément).
   it("R17/R15 — une soumission sans aucune ligne n'est plus rejetée pour ce motif (montant direct)", async () => {
     const detail = await demandeService.creer(
-      { circuit: "DOBB", nomClient: "Client Test", compteClient: compteId, motifId, sousFlux: "Réclamation B2B", montantHt: 25000 },
+      {
+        circuit: "DOBB",
+        nomClient: "Client Test",
+        compteClient: compteId,
+        motifId,
+        sousFlux: "Réclamation B2B",
+        montantHt: 25000,
+        libelle: "Montant direct sans ligne",
+        universFmiCode: "FIXE",
+        facteurCode: "INTERNE",
+        formuleAbonnement: "Formule standard",
+        debutPeriodeContestee: "2026-01-01",
+        finPeriodeContestee: "2026-01-10",
+        dateReceptionBo: "2026-01-02",
+        dateReceptionOci: "2026-01-03",
+        localisation: "NATIONAL",
+        champsCircuit: { descriptifContestation: "Détail du cas contesté.", pointContact: "Agence Plateau" }
+      },
       acteur.id
     );
     const demandeId = detail.demande.id;

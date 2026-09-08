@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, CardHeader, CircuitPill, WorkflowStepper } from "@pgd/ui";
+import { Card, CardHeader, CircuitPill, formatDuree, WorkflowStepper } from "@pgd/ui";
 import type { Demande, EtapeDossier, SessionUtilisateur } from "@pgd/contracts";
 import { ApiError, listerMembresRole, listerTachesDemande, trouverTache } from "@/lib/api";
 
@@ -13,9 +13,18 @@ export interface CircuitTabProps {
   // dupliqué par onglet.
   labelPalier: string | null;
   utilisateur: SessionUtilisateur;
+  // Temps de traitement dans le circuit de validation (07/09/2026, demande
+  // explicite, étendue aux trois circuits — pas seulement DOBB). Dérivé de
+  // deux dates déjà exposées par Demande, aucun calcul serveur nouveau :
+  // dateCloture - dateSoumission une fois clos (VALIDE/REJETE clôturé/
+  // ABANDONNE, les trois posent dateCloture), now - dateSoumission tant que
+  // le dossier reste en circuit (SOUMIS). Absent (row masquée) tant que le
+  // dossier n'a jamais été soumis (BROUILLON, dateSoumission encore null).
+  dateSoumission: string | null;
+  dateCloture: string | null;
 }
 
-export function CircuitTab({ demandeId, circuit, labelPalier, utilisateur }: CircuitTabProps) {
+export function CircuitTab({ demandeId, circuit, labelPalier, utilisateur, dateSoumission, dateCloture }: CircuitTabProps) {
   const [etapes, setEtapes] = useState<EtapeDossier[] | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   // Nom de l'agent qui détient l'étape RECLAMEE en cours (25/08/2026,
@@ -68,6 +77,12 @@ export function CircuitTab({ demandeId, circuit, labelPalier, utilisateur }: Cir
   if (erreur) return <p className="text-13 font-semibold text-rouge700">{erreur}</p>;
   if (!etapes) return <p className="text-13 text-gris600">Chargement…</p>;
 
+  const tempsCircuit = dateSoumission
+    ? dateCloture
+      ? `Traité en ${formatDuree(new Date(dateCloture).getTime() - new Date(dateSoumission).getTime())}`
+      : `En circuit depuis ${formatDuree(Date.now() - new Date(dateSoumission).getTime())}`
+    : null;
+
   const etapesBloquantes = etapes.filter((e) => e.bloquant).length;
   // Écarts DossierDetailScreen (Phase 10.6quinquies, point 5) — typeActeur
   // "C" (contrôle a posteriori, cf. Convention R12) est déjà porté par
@@ -115,6 +130,12 @@ export function CircuitTab({ demandeId, circuit, labelPalier, utilisateur }: Cir
             <span className="text-gris600">Contrôle a posteriori</span>
             <span className="font-bold">{etapesControle}</span>
           </div>
+          {tempsCircuit && (
+            <div className="flex justify-between">
+              <span className="text-gris600">Temps de traitement</span>
+              <span className="font-bold">{tempsCircuit}</span>
+            </div>
+          )}
           {/* Écarts DossierDetailScreen (Phase 10.6quinquies, point 5) —
               rappel direct du principe de configurabilité complète (CLAUDE.md
               « Mécanismes structurants »), pas une fantaisie de maquette. */}

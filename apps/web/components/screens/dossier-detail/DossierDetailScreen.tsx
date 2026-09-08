@@ -65,7 +65,10 @@ export function DossierDetailScreen({ dossierId, utilisateur, onRetour }: Dossie
   // forme tolérante à `undefined` de useMotifLibelle (ApercuTab.tsx).
   // Partagé entre la ligne d'en-tête (docs/design/screens2.jsx:387,
   // "{client} · {motif} · {libellé}") et ApercuTab, un seul fetch.
-  const motifLibelle = useMotifLibelle(detail?.demande.circuit, detail?.demande.motifId);
+  // "Autre (non référencé)" (07/09/2026) — un motif signalé hors catalogue
+  // (motifId nul, motifAutre renseigné) doit rester visible ici, pas
+  // silencieusement omis par useMotifLibelle (qui ne résout que motifId).
+  const motifLibelle = useMotifLibelle(detail?.demande.circuit, detail?.demande.motifId) ?? detail?.demande.motifAutre ?? null;
   // Levé ici (25/08/2026, modal d'examen) — même principe que motifLibelle :
   // ApercuTab ET TacheActionBanner en ont désormais besoin, un seul fetch
   // partagé plutôt que deux instances indépendantes de useCircuitLibelle.
@@ -280,7 +283,14 @@ export function DossierDetailScreen({ dossierId, utilisateur, onRetour }: Dossie
         <ApercuTab demande={demande} lignes={lignes} labelPalier={labelPalier} motifLibelle={motifLibelle} circuitLibelle={circuitLibelle} />
       )}
       {onglet === "circuit" && (
-        <CircuitTab demandeId={dossierId} circuit={demande.circuit} labelPalier={labelPalier} utilisateur={utilisateur} />
+        <CircuitTab
+          demandeId={dossierId}
+          circuit={demande.circuit}
+          labelPalier={labelPalier}
+          utilisateur={utilisateur}
+          dateSoumission={demande.dateSoumission}
+          dateCloture={demande.dateCloture}
+        />
       )}
       {onglet === "pieces" && (
         <PiecesTab

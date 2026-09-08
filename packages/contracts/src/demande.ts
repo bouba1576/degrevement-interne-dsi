@@ -46,6 +46,11 @@ export const creerDemandeRequeteSchema = z.object({
   recurrentMensuel: z.number().nonnegative().optional(),
   libelle: z.string().optional(),
   motifId: z.string().uuid().optional(),
+  // "Autre (non référencé)" (07/09/2026) — même convention que
+  // responsabiliteServiceAutre : mutuellement exclusif avec motifId, un
+  // motifId réel efface toujours motifAutre côté serveur (vérifié en
+  // service, pas seulement documenté ici).
+  motifAutre: z.string().optional(),
   universFmiCode: z.string().optional(),
   facteurCode: z.string().optional(),
   directionRespId: z.string().uuid().optional(),
@@ -67,7 +72,16 @@ export type CreerDemandeRequete = z.infer<typeof creerDemandeRequeteSchema>;
 
 // PATCH — circuit non modifiable après création (segment et routage en
 // dépendent structurellement) ; le reste reprend les mêmes champs.
-export const modifierDemandeRequeteSchema = creerDemandeRequeteSchema.omit({ circuit: true }).partial();
+// `confirmerNouveauDossier` (point 11, 07/09/2026) — confirmation explicite
+// requise côté frontend avant toute bascule vers un nouveau dossier
+// référençant l'ancien : n'a d'effet que si le serveur détecte un champ
+// sensible (montantHt, période contestée) modifié sur un BROUILLON renvoyé
+// pour correction (cf. DemandeWorkflowService.modifierAvecReRoutage) — sans
+// objet, ignoré silencieusement, dans tous les autres cas.
+export const modifierDemandeRequeteSchema = creerDemandeRequeteSchema
+  .omit({ circuit: true })
+  .partial()
+  .extend({ confirmerNouveauDossier: z.boolean().optional() });
 export type ModifierDemandeRequete = z.infer<typeof modifierDemandeRequeteSchema>;
 
 // PATCH /api/demandes/{id}/taxes (Phase 10.6septies, confirmation métier
@@ -153,6 +167,7 @@ export const demandeSchema = z.object({
   montantTvaManuel: z.number().nullable(),
   libelle: z.string().nullable(),
   motifId: z.string().uuid().nullable(),
+  motifAutre: z.string().nullable(),
   universFmiCode: z.string().nullable(),
   facteurCode: z.string().nullable(),
   directionRespId: z.string().uuid().nullable(),
@@ -172,7 +187,12 @@ export const demandeSchema = z.object({
   siHorodatage: z.string().nullable(),
   siMessage: z.string().nullable(),
   siTentatives: z.number(),
-  siAdaptateur: z.string().nullable()
+  siAdaptateur: z.string().nullable(),
+  // Point 11 (07/09/2026) — dossier créé par bascule de référence depuis un
+  // dossier renvoyé pour correction dont un champ sensible (montantHt,
+  // période contestée) a changé (cf. DemandeService.dupliquerVersNouveauDossier).
+  // Nullable : la quasi-totalité des dossiers n'en ont pas.
+  demandeOrigineId: z.string().uuid().nullable()
 });
 export type Demande = z.infer<typeof demandeSchema>;
 

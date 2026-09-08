@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Badge, Button, Icon, Modal, formaterMontant } from "@pgd/ui";
-import type { Demande, EnumTypeActeur, RevueChamp } from "@pgd/contracts";
+import type { ChampAnomalie, Demande, EnumTypeActeur, RevueChamp } from "@pgd/contracts";
 import { construireChampsCircuit, construireLignesCommunes } from "./ApercuTab";
 
 export interface ExaminerModalProps {
@@ -18,7 +18,7 @@ export interface ExaminerModalProps {
   isFinal: boolean;
   onFermer: () => void;
   onApprouver: (revue: RevueChamp[]) => void | Promise<void>;
-  onRejeter: (motifCompile: string) => void | Promise<void>;
+  onRejeter: (motifCompile: string, champsAnomalies: ChampAnomalie[]) => void | Promise<void>;
   chargement: boolean;
 }
 
@@ -90,6 +90,13 @@ export function ExaminerModal({
     .map((i) => `• ${lignes[i]![0]} : ${commentaires[i] && commentaires[i]!.trim() ? commentaires[i]!.trim() : "(motif manquant)"}`)
     .join("\n");
   const commentaireGlobal = [recap, commentaireLibre.trim()].filter(Boolean).join("\n");
+  // Désignation structurée des champs en cause (07/09/2026, demande
+  // explicite) — capturée ICI, avant que `commentaireGlobal` ci-dessus ne
+  // détruise cette information en un seul texte libre. Même libellé exact
+  // que `lignes[i][0]` (construireLignesCommunes/construireChampsCircuit,
+  // ApercuTab.tsx) — c'est ce même libellé que la fiche de correction
+  // (NouvelleDemandeScreen, mode reprise) comparera pour la surbrillance.
+  const champsAnomalies = indicesSignales.map((i) => ({ champ: lignes[i]![0], motif: (commentaires[i] ?? "").trim() }));
 
   function confirmer() {
     if (hasAnomalie && anomalieSansMotif) {
@@ -97,7 +104,7 @@ export function ExaminerModal({
       return;
     }
     if (hasAnomalie) {
-      void onRejeter(commentaireGlobal);
+      void onRejeter(commentaireGlobal, champsAnomalies);
     } else {
       const revue: RevueChamp[] = lignes.map(([champ]) => ({ champ, vu: true }));
       void onApprouver(revue);

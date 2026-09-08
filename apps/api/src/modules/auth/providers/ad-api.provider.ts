@@ -147,6 +147,7 @@ export class AdApiProvider implements KeycloakPort {
     // cohérent avec la décision déjà actée (Temps 2, pré-enregistrement) :
     // la résolution des rôles reste exclusivement MembreRole, jamais un
     // groupe AD.
+    this.logger.log(`Nom resolu : ${nom}`)
     const utilisateur: UtilisateurAd = { identifiantAd, nom, groupes: [] };
     return { statut: "AUTHENTIFIE", utilisateur };
   }
@@ -189,6 +190,7 @@ export class AdApiProvider implements KeycloakPort {
   }
 
   private resoudreNom(donnees: ReponseAdApi, identifiantAd: string): string {
+    this.logger.log(`reponse AD : ${donnees} et identifiant: ${identifiantAd}`)
     if (typeof donnees.commonName === "string" && donnees.commonName.length > 0) {
       return donnees.commonName;
     }

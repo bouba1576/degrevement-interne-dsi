@@ -64,6 +64,13 @@ export class PieceService {
   }
 
   // DELETE /api/demandes/{id}/pieces/{pieceId}
+  //
+  // Garde de référence-comptage (07/09/2026, point 11) — même raison que
+  // DemandeService.supprimer : un gedRef peut être partagé par plusieurs
+  // PieceJointe (duplication par référence vers un dossier de correction).
+  // Vérifiée APRÈS la suppression de cette ligne (la ligne courante ne doit
+  // jamais se compter elle-même) : s'il reste une autre PieceJointe sur ce
+  // même gedRef, le fichier physique reste référencé, ne jamais le supprimer.
   async supprimer(demandeId: string, pieceId: string): Promise<void> {
     const piece = await this.prisma.pieceJointe.findUnique({ where: { id: pieceId } });
     if (!piece || piece.demandeId !== demandeId) {
@@ -71,7 +78,11 @@ export class PieceService {
     }
 
     await this.prisma.pieceJointe.delete({ where: { id: pieceId } });
-    if (piece.gedRef) await this.ged.supprimer(piece.gedRef);
+
+    if (piece.gedRef) {
+      const autreReference = await this.prisma.pieceJointe.findFirst({ where: { gedRef: piece.gedRef } });
+      if (!autreReference) await this.ged.supprimer(piece.gedRef);
+    }
   }
 
   // R13 — pièces obligatoires du motif présentes à la soumission.

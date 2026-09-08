@@ -774,6 +774,12 @@ model Demande {
   montantTvaManuel       Decimal?          @map("montant_tva_manuel") @db.Decimal(15, 2)
   libelle                String?
   motifId                String?           @map("motif_id") @db.Uuid
+  // "Autre (non référencé)" (07/09/2026, demande explicite) — même mécanique
+  // que responsabiliteServiceAutre (PGD-032/SF-PGD-330) : mutuellement
+  // exclusif avec motifId, imposé côté serveur (DemandeService.normaliserMotif)
+  // et repris côté UI. motifId réel efface toujours motifAutre ; son absence
+  // conserve le texte libre saisi.
+  motifAutre             String?           @map("motif_autre")
   universFmiCode         String?           @map("univers_fmi_code")
   facteurCode            String?           @map("facteur_code")
   directionRespId        String?           @map("direction_resp_id") @db.Uuid
@@ -808,6 +814,16 @@ model Demande {
   siAdaptateur                 String?  @map("si_adaptateur")
   siIdempotencyKey              String? @unique @map("si_idempotency_key")
 
+  // Référence vers un dossier d'origine, renvoyé pour correction (point 11,
+  // 07/09/2026) — bascule vers un NOUVEAU dossier quand un champ sensible
+  // (montantHt, période contestée) change en mode reprise, plutôt qu'un
+  // PATCH sur le brouillon existant. L'ancien dossier reste BROUILLON,
+  // jamais touché automatiquement (décision explicite : suppression
+  // manuelle possible, rien d'automatique). SetNull — un futur nettoyage de
+  // l'ancien dossier (DemandeService.supprimer, BROUILLON) ne doit jamais
+  // échouer sur cette FK ni supprimer en cascade le nouveau dossier réel.
+  demandeOrigineId              String?  @map("demande_origine_id") @db.Uuid
+
   circuitRef              Circuit                  @relation(fields: [circuit], references: [code])
   initiateur               Utilisateur              @relation("DemandeInitiateur", fields: [initiateurId], references: [id])
   motif                    Motif?                   @relation(fields: [motifId], references: [id])
@@ -815,6 +831,8 @@ model Demande {
   facteur                  FacteurDegrevement?      @relation(fields: [facteurCode], references: [code])
   directionResponsabilite  DirectionResponsabilite? @relation(fields: [directionRespId], references: [id])
   serviceResponsabilite    ServiceResponsabilite?   @relation(fields: [serviceRespId], references: [id])
+  demandeOrigine           Demande?                 @relation("DemandeCorrection", fields: [demandeOrigineId], references: [id], onDelete: SetNull)
+  demandesCorrigees        Demande[]                @relation("DemandeCorrection")
 
   lignes             DemandeLigne[]
   pieces             PieceJointe[]
@@ -833,6 +851,7 @@ model Demande {
   @@index([motifId])
   @@index([directionRespId, serviceRespId])
   @@index([siEtat, siHorodatage])
+  @@index([demandeOrigineId])
   @@map("demande")
 }
 

@@ -70,7 +70,18 @@ describe("E2E — circuit DF (Wholesale), palier 3 (>50M), parcours complet en H
     const creation = await request(e2e.app.getHttpServer())
       .post("/api/demandes")
       .set("Cookie", initiateur.cookie)
-      .send({ circuit: "DF", nomClient: "E2E Opérateur Wholesale Partenaire P3", commentaire: `Essai e2e DF palier3 ${suffixe}`, sousFlux: "Réclamation opérateur" })
+      .send({
+        circuit: "DF",
+        nomClient: "E2E Opérateur Wholesale Partenaire P3",
+        commentaire: `Essai e2e DF palier3 ${suffixe}`,
+        sousFlux: "Réclamation opérateur",
+        universFmiCode: "FIXE",
+        facteurCode: "INTERNE",
+        // Objet (libelle) + De/À/Objectif obligatoires à la soumission DF
+        // (07/09/2026, demande explicite).
+        libelle: "Réclamation opérateur E2E palier 3",
+        champsCircuit: { memoDe: "E2E DF", memoA: "Service Fraude & Revenue Assurance", memoObjectif: "Soumettre l'ajustement" }
+      })
       .expect(201);
     const demandeId = creation.body.data.demande.id as string;
     demandeIds.push(demandeId);

@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
-import { Badge, Button, Card, Icon, Money, useToast } from "@pgd/ui";
+import { Badge, Button, Card, Icon, Modal, Money, useToast } from "@pgd/ui";
 import type {
   CircuitVue,
   CompteClient,
@@ -14,7 +14,9 @@ import type {
   EnumCircuit,
   EnumLocalisation,
   FacteurDegrevementVue,
+  JournalAuditVue,
   LibelleAjustementVue,
+  ModifierDemandeRequete,
   MotifVue,
   OperateurVue,
   ParametresCalculPublicVue,
@@ -27,6 +29,7 @@ import {
   creerDemande,
   erreurRegleMetierSchema,
   listerCircuitsReferentiel,
+  journalAuditDemande,
   listerDirectionsReferentiel,
   listerFacteursReferentiel,
   listerLibellesAjustementActifs,
@@ -61,6 +64,51 @@ const BADGE_FICHE_PAR_CIRCUIT: Record<EnumCircuit, { texte: string; ton: "accent
   DXC: { texte: "Pôle B2C", ton: "info" },
   DF: { texte: "Soumis au contrôle FRA", ton: "special" }
 };
+
+// Surbrillance des champs concernés par un rejet (07/09/2026, demande
+// explicite) — `nom` doit correspondre EXACTEMENT au libellé déjà utilisé
+// par ExaminerModal (construireLignesCommunes/construireChampsCircuit,
+// ApercuTab.tsx), la seule source de la désignation structurée
+// (JournalAudit.detail.champsAnomalies sur l'entrée "rejet"). Couplage par
+// chaîne de libellé, fragile par construction — documenté explicitement
+// dans CLAUDE.md plutôt que durci (identifiant de champ stable), décision
+// actée telle quelle. Un champ dont le libellé à l'écran diffère de celui
+// d'ApercuTab (ex. "Nom du client" ici vs "Client" côté ApercuTab) ne
+// s'illumine jamais — silencieusement, par construction de ce couplage.
+// Dernière entrée JournalAudit "rejet" du dossier (triée par horodatage
+// décroissant) → { libellé -> motif }. `detail` est un JSON non typé côté
+// contrat (JournalAuditVue.detail: z.unknown()) — vérifié ici à l'exécution,
+// jamais supposé conforme.
+function extraireChampsRejetes(entrees: JournalAuditVue[]): Map<string, string> {
+  const rejets = entrees
+    .filter((e) => e.action === "rejet")
+    .sort((a, b) => new Date(b.horodatage).getTime() - new Date(a.horodatage).getTime());
+  const dernier = rejets[0];
+  const detail = dernier?.detail as { champsAnomalies?: Array<{ champ?: unknown; motif?: unknown }> } | null | undefined;
+  const champs = new Map<string, string>();
+  for (const c of detail?.champsAnomalies ?? []) {
+    if (typeof c.champ === "string" && typeof c.motif === "string") champs.set(c.champ, c.motif);
+  }
+  return champs;
+}
+
+function ChampCorrige({
+  nom,
+  champsRejetes,
+  children
+}: {
+  nom: string;
+  champsRejetes: Map<string, string> | null;
+  children: ReactNode;
+}) {
+  const motif = champsRejetes?.get(nom);
+  return (
+    <div className={motif ? "rounded-6 border-2 border-rouge700 bg-rouge50 p-2" : undefined}>
+      {children}
+      {motif && <p className="mt-1 text-12 font-semibold text-rouge700">Motif du rejet : {motif}</p>}
+    </div>
+  );
+}
 
 // Points de contact (DOBB) — promu en référentiel admin-configurable
 // (25/08/2026, demande explicite) ; la liste réelle vit désormais en base
@@ -181,6 +229,31 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
   // circuit réel du dossier). Vrai immédiatement en création neuve.
   const [circuitPret, setCircuitPret] = useState(!demandeId);
   const [erreurReprise, setErreurReprise] = useState<string | null>(null);
+  // Champs concernés par le dernier rejet — { libellé -> motif } (07/09/2026,
+  // demande explicite). Peuplé une seule fois, à la fin du chargement de
+  // reprise ci-dessous, depuis la dernière entrée JournalAudit "rejet" du
+  // dossier — jamais recalculé ensuite (un dossier corrigé puis resoumis
+  // change de statut, cet écran ne le revoit plus dans cet état).
+  const [champsRejetes, setChampsRejetes] = useState<Map<string, string> | null>(null);
+  // Point 11 (07/09/2026) — un dossier renvoyé pour correction porte une
+  // entrée JournalAudit "renvoi-correction" (TacheWorkflowService.rejeter,
+  // branche par défaut). Détecté ici, dans le même fetch que champsRejetes
+  // — même best-effort, jamais bloquant. Sert uniquement à savoir si une
+  // modification de champ sensible doit passer par la confirmation
+  // ci-dessous ; le serveur revérifie de toute façon cette même condition
+  // (source de vérité), ce drapeau client ne fait qu'éviter un aller-retour
+  // systématiquement raté pour un dossier jamais soumis.
+  const [estRenvoiPourCorrection, setEstRenvoiPourCorrection] = useState(false);
+  // Confirmation explicite avant bascule de référence (point 11) — posée
+  // par le serveur (422 CONFIRMATION_NOUVEAU_DOSSIER_REQUISE), jamais
+  // devinée côté client : `payload` porte exactement la requête qui a
+  // déclenché le refus, réenvoyée telle quelle avec confirmerNouveauDossier
+  // une fois confirmée.
+  const [confirmationNouveauDossier, setConfirmationNouveauDossier] = useState<{
+    champs: string[];
+    payload: ModifierDemandeRequete;
+  } | null>(null);
+  const [confirmationEnCours, setConfirmationEnCours] = useState(false);
   // motifId/libelle/sousFlux sont réinitialisés à "" par les effets scopés
   // au circuit (ci-dessous) avant de fetcher leur référentiel respectif —
   // en reprise, cette ref porte la valeur du dossier existant à appliquer
@@ -203,6 +276,19 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
   const [sousFlux, setSousFlux] = useState("");
   const [libelle, setLibelle] = useState("");
   const [motifId, setMotifId] = useState("");
+  // "Autre (non référencé)" (07/09/2026, demande explicite) — même mécanique
+  // que serviceAutreActif/responsabiliteServiceAutre ci-dessus, répliquée
+  // pour Motif (motifId réel/FK + motifAutre texte libre, mutuellement
+  // exclusifs, imposé côté serveur — normaliserMotif). Libellé/Opérateur
+  // n'ont PAS besoin d'un second champ de stockage : `libelle`/`nomClient`
+  // sont déjà des colonnes texte libre (jamais une FK), le texte manuel
+  // s'écrit directement dedans — seul un booléen UI est nécessaire pour
+  // savoir si le <select> doit afficher l'option « Autre » ou une valeur
+  // réelle du référentiel.
+  const [motifAutreActif, setMotifAutreActif] = useState(false);
+  const [motifAutre, setMotifAutre] = useState("");
+  const [libelleAutreActif, setLibelleAutreActif] = useState(false);
+  const [operateurAutreActif, setOperateurAutreActif] = useState(false);
   const [universFmiCode, setUniversFmiCode] = useState("");
   const [facteurCode, setFacteurCode] = useState("");
 
@@ -396,6 +482,43 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
     else setServiceRespId("");
   }
 
+  // "Autre (non référencé)" sur Motif (07/09/2026) — même mécanique exacte
+  // que Responsabilité/service ci-dessus, répliquée pour ce champ.
+  function choisirMotifReel(id: string) {
+    setMotifId(id);
+    if (id) toggleMotifAutre(false);
+  }
+
+  function toggleMotifAutre(actif: boolean) {
+    setMotifAutreActif(actif);
+    if (!actif) setMotifAutre("");
+    else setMotifId("");
+  }
+
+  // Libellé/Opérateur (07/09/2026) — même bascule visuelle que Motif/Service,
+  // mais sans second champ de stockage : `libelle`/`nomClient` sont déjà des
+  // colonnes texte libre, le texte manuel s'y écrit directement (cf.
+  // commentaire sur libelleAutreActif/operateurAutreActif ci-dessus).
+  function toggleLibelleAutre(actif: boolean) {
+    setLibelleAutreActif(actif);
+    setLibelle("");
+  }
+
+  function choisirLibelleReel(valeur: string) {
+    setLibelleAutreActif(false);
+    setLibelle(valeur);
+  }
+
+  function toggleOperateurAutre(actif: boolean) {
+    setOperateurAutreActif(actif);
+    setNomClient("");
+  }
+
+  function choisirOperateurReel(valeur: string) {
+    setOperateurAutreActif(false);
+    setNomClient(valeur);
+  }
+
   const [demande, setDemande] = useState<DemandeDetail | null>(null);
   const demandeRef = useRef<DemandeDetail | null>(null);
   useEffect(() => {
@@ -446,6 +569,14 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
         setServiceRespId(d.serviceRespId ?? "");
         setResponsabiliteServiceAutre(d.responsabiliteServiceAutre ?? "");
         setServiceAutreActif(!!d.responsabiliteServiceAutre);
+        // Motif "Autre (non référencé)" (07/09/2026) — motifAutre est une
+        // colonne dédiée (pas un texte libre dérivé d'un référentiel), donc
+        // aucune course possible avec le fetch des motifs : posé directement
+        // ici, comme responsabiliteServiceAutre ci-dessus. Défensif : jamais
+        // actif si motifId réel est posé (mutuellement exclusifs côté
+        // serveur, normaliserMotif).
+        setMotifAutre(d.motifAutre ?? "");
+        setMotifAutreActif(!d.motifId && !!d.motifAutre);
         setLocalisation(d.localisation ?? "");
         setDateReceptionBo(d.dateReceptionBo ?? "");
         setDateReceptionOci(d.dateReceptionOci ?? "");
@@ -462,6 +593,44 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
         setMemoContexte(texte(cc.memoContexte));
         setMemoObservation(texte(cc.memoObservation));
         setMemoReference(texte(cc.memoReference));
+
+        // Surbrillance des champs rejetés (07/09/2026, demande explicite) —
+        // meilleur effort, jamais bloquant : un échec de cette requête ne
+        // doit jamais empêcher la reprise du dossier elle-même (contrairement
+        // à obtenirDetailDemande ci-dessus), c'est un confort d'affichage,
+        // pas une donnée structurante du formulaire.
+        try {
+          const audit = await journalAuditDemande(demandeId);
+          setChampsRejetes(extraireChampsRejetes(audit));
+          setEstRenvoiPourCorrection(audit.some((e) => e.action === "renvoi-correction"));
+        } catch {
+          setChampsRejetes(null);
+          setEstRenvoiPourCorrection(false);
+        }
+
+        // Libellé/Opérateur "Autre (non référencé)" (07/09/2026) — best-effort,
+        // jamais bloquant, même discipline que champsRejetes ci-dessus. Un
+        // fetch dédié plutôt qu'une dépendance à libellesAjustement/operateurs
+        // (état du composant, potentiellement pas encore chargé à ce stade —
+        // race avec l'effet scopé au circuit ci-dessous) : `d` est déjà en
+        // main ici, comparer directement contre une liste fraîchement
+        // récupérée évite toute course d'ordre de résolution des promesses.
+        if (d.circuit !== "DF" && d.libelle) {
+          try {
+            const liste = await listerLibellesAjustementActifs(d.circuit);
+            setLibelleAutreActif(!liste.some((l) => l.libelle === d.libelle));
+          } catch {
+            setLibelleAutreActif(false);
+          }
+        }
+        if (d.circuit === "DF" && d.nomClient) {
+          try {
+            const liste = await listerOperateursReferentiel();
+            setOperateurAutreActif(!liste.some((o) => o.libelle === d.nomClient));
+          } catch {
+            setOperateurAutreActif(false);
+          }
+        }
 
         // motifId/libelle/sousFlux : consommés par les effets scopés au
         // circuit une fois circuitPret vrai (ils réinitialisent sinon ces
@@ -643,11 +812,16 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
       dateReceptionOci: circuit === "DOBB" ? dateReceptionOci || undefined : undefined,
       formuleAbonnement: circuit === "DOBB" || circuit === "DXC" ? formuleAbonnement.trim() || undefined : undefined,
       numeroAppel: circuit === "DOBB" ? numeroAppel.trim() || undefined : undefined,
-      debutPeriodeContestee: circuit === "DOBB" ? debutPeriodeContestee || undefined : undefined,
-      finPeriodeContestee: circuit === "DOBB" ? finPeriodeContestee || undefined : undefined,
+      // Période contestée étendue à DXC (07/09/2026, demande explicite) —
+      // même mécanisme que DOBB (calcul serveur périodeContesteeJours),
+      // jamais reconstruit.
+      debutPeriodeContestee:
+        circuit === "DOBB" || circuit === "DXC" ? debutPeriodeContestee || undefined : undefined,
+      finPeriodeContestee: circuit === "DOBB" || circuit === "DXC" ? finPeriodeContestee || undefined : undefined,
       recurrentMensuel: (circuit === "DOBB" || circuit === "DXC") && recurrentMensuel ? Number(recurrentMensuel) : undefined,
       libelle: libelle.trim() || undefined,
       motifId: motifId || undefined,
+      motifAutre: motifAutreActif ? motifAutre.trim() || undefined : undefined,
       universFmiCode: universFmiCode || undefined,
       facteurCode: facteurCode || undefined,
       directionRespId: directionRespId || undefined,
@@ -670,6 +844,12 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
   // fois le dossier créé (modifierDemandeRequeteSchema omet `circuit`, le
   // routage/segment en dépendent structurellement).
   async function sauvegarderFormulaire() {
+    // Point 11 — une confirmation de bascule de référence est déjà en
+    // attente : ne pas relancer un PATCH silencieux entre-temps (rejoué à
+    // l'identique, il échouerait à nouveau pour la même raison). L'utilisateur
+    // doit d'abord confirmer ou annuler.
+    if (confirmationNouveauDossier) return;
+
     const demandeActuelle = demandeRef.current;
     // Garde des champs minimaux vérifiée sur l'état BRUT, avant toute
     // validation de champsCircuit (construirePayload) — bug trouvé en
@@ -696,9 +876,58 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
       setDemande(resultat);
       setApercuDeclencheur((n) => n + 1);
     } catch (e) {
-      setErreurSauvegarde(e instanceof ApiError ? e.message : "Erreur inattendue.");
+      // Point 11 (07/09/2026) — un champ sensible (montant, période
+      // contestée) a changé sur un dossier renvoyé pour correction : le
+      // serveur refuse la modification silencieuse et exige une confirmation
+      // explicite avant toute bascule vers un nouveau dossier. Jamais un
+      // simple message d'erreur — une décision à présenter à l'utilisateur.
+      if (e instanceof ApiError && e.code === "CONFIRMATION_NOUVEAU_DOSSIER_REQUISE" && demandeActuelle) {
+        const champs = ((e.details as { champs?: string[] } | undefined)?.champs ?? []).filter(
+          (c): c is string => typeof c === "string"
+        );
+        setConfirmationNouveauDossier({ champs, payload: payload as ModifierDemandeRequete });
+      } else {
+        setErreurSauvegarde(e instanceof ApiError ? e.message : "Erreur inattendue.");
+      }
     } finally {
       setSauvegardeEnCours(false);
+    }
+  }
+
+  const LIBELLE_CHAMP_SENSIBLE: Record<string, string> = {
+    montantHt: "Montant à ajuster HT",
+    debutPeriodeContestee: "Début de la période contestée",
+    finPeriodeContestee: "Fin de la période contestée"
+  };
+
+  // Confirmation reçue (point 11) — réenvoie EXACTEMENT le payload qui a
+  // déclenché le refus, avec confirmerNouveauDossier: true. Navigue vers le
+  // nouveau dossier une fois créé (key={demandeId} sur la page force un
+  // remontage propre de cet écran, cf. app/(app)/nouvelle-demande/page.tsx)
+  // — jamais une mise à jour d'état locale qui laisserait cet écran croire
+  // qu'il édite toujours l'ancien dossier.
+  async function confirmerBasculeNouveauDossier() {
+    const demandeActuelle = demandeRef.current;
+    if (!confirmationNouveauDossier || !demandeActuelle) return;
+
+    setConfirmationEnCours(true);
+    try {
+      const resultat = await modifierDemande(demandeActuelle.demande.id, {
+        ...confirmationNouveauDossier.payload,
+        confirmerNouveauDossier: true
+      });
+      toast({
+        ton: "succes",
+        titre: "Nouveau dossier créé",
+        message: `Réf. ${resultat.demande.reference} — référence le dossier renvoyé pour correction.`
+      });
+      setConfirmationNouveauDossier(null);
+      router.replace(`/nouvelle-demande?id=${resultat.demande.id}`);
+    } catch (e) {
+      setConfirmationNouveauDossier(null);
+      setErreurSauvegarde(e instanceof ApiError ? e.message : "Erreur inattendue.");
+    } finally {
+      setConfirmationEnCours(false);
     }
   }
 
@@ -733,6 +962,7 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
     sousFlux,
     libelle,
     motifId,
+    motifAutre,
     universFmiCode,
     facteurCode,
     compteClient,
@@ -804,10 +1034,15 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
   }
 
   // Options de motif — référentiel réel scopé au circuit, jamais un tableau
-  // codé en dur.
+  // codé en dur. Suffixe « (pièces obligatoires) » (01/09/2026, demande
+  // explicite) — mentionne explicitement, DANS la liste elle-même, quels
+  // motifs portent des pièces afférentes obligatoires, avant même la
+  // sélection : la note détaillée sous le champ (R13, ci-dessous) ne
+  // s'affichait jusqu'ici qu'APRÈS coup, une fois le motif déjà choisi.
   const motifOptions = motifs?.map((m) => (
     <option key={m.id} value={m.id}>
       {m.libelle}
+      {m.piecesAfferentes.some((p) => p.obligatoire) ? " (pièces obligatoires)" : ""}
     </option>
   ));
 
@@ -843,7 +1078,58 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
               </span>
             )}
           </div>
+          {estRenvoiPourCorrection && !confirmationNouveauDossier && (
+            <div className="mb-3 flex items-start gap-2.5 rounded border border-[#c5e6f5] bg-bleuFond p-3 text-13 text-bleu700">
+              <Icon nom="info" taille={15} className="mt-0.5 shrink-0" />
+              Dossier renvoyé pour correction. Modifier le montant ou la période contestée créera un nouveau dossier
+              référençant celui-ci — une confirmation vous sera demandée.
+            </div>
+          )}
           {erreurSauvegarde && <p className="mb-3 text-13 font-semibold text-rouge700">{erreurSauvegarde}</p>}
+          {confirmationNouveauDossier && (
+            <Modal
+              titre="Confirmer un nouveau dossier"
+              icone="alert"
+              onFermer={() => setConfirmationNouveauDossier(null)}
+              pied={
+                <div className="flex w-full items-center gap-3">
+                  <Button
+                    onClick={() => setConfirmationNouveauDossier(null)}
+                    variante="fantome"
+                    taille="petite"
+                    disabled={confirmationEnCours}
+                  >
+                    Annuler
+                  </Button>
+                  <Button
+                    onClick={() => void confirmerBasculeNouveauDossier()}
+                    variante="danger"
+                    taille="petite"
+                    disabled={confirmationEnCours}
+                    className="ml-auto"
+                  >
+                    <Icon nom="check" taille={15} /> Créer un nouveau dossier référençant celui-ci
+                  </Button>
+                </div>
+              }
+            >
+              <p className="text-13">
+                Ce dossier a été <span className="font-semibold">renvoyé pour correction</span> après un rejet. Modifier un champ
+                sensible ne peut pas se faire par une simple correction silencieuse — un{" "}
+                <span className="font-semibold">nouveau dossier</span> sera créé, référençant celui-ci (
+                <span className="font-mono">{demande?.demande.reference}</span>), qui restera lui-même en brouillon, inchangé.
+              </p>
+              <ul className="mt-3 list-disc pl-5 text-13">
+                {confirmationNouveauDossier.champs.map((c) => (
+                  <li key={c}>{LIBELLE_CHAMP_SENSIBLE[c] ?? c}</li>
+                ))}
+              </ul>
+              <p className="mt-3 text-12 text-gris600">
+                Les pièces jointes déjà déposées sont reprises sur le nouveau dossier. Vous pourrez supprimer l'ancien
+                manuellement une fois la correction soumise — rien n'est automatique.
+              </p>
+            </Modal>
+          )}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-13 font-bold text-gris800">
@@ -867,14 +1153,14 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
                 </p>
               </div>
             )}
-            <div>
+            <ChampCorrige nom="Agent initiateur" champsRejetes={champsRejetes}>
               <label className="mb-1 block text-13 font-bold text-gris800">Agent initiateur</label>
               <input
                 className="w-full rounded border border-gris300 px-3 py-2 text-13"
                 value={agentInitiateur}
                 onChange={(e) => setAgentInitiateur(e.target.value)}
               />
-            </div>
+            </ChampCorrige>
             <div>
               <label className="mb-1 block text-13 font-bold text-gris800">Matricule / réf. agent initiateur</label>
               <input
@@ -884,29 +1170,52 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
                 placeholder="ex. M-2041"
               />
             </div>
-            <div>
+            <ChampCorrige nom="Agent de saisie" champsRejetes={champsRejetes}>
               <label className="mb-1 block text-13 font-bold text-gris800">Agent de saisie</label>
               <input
                 className="w-full rounded border border-gris300 px-3 py-2 text-13"
                 value={agentSaisie}
                 onChange={(e) => setAgentSaisie(e.target.value)}
               />
-            </div>
-            <div>
-              <label className="mb-1 block text-13 font-bold text-gris800">Motif</label>
+            </ChampCorrige>
+            <ChampCorrige nom="Motif" champsRejetes={champsRejetes}>
+              <label className="mb-1 block text-13 font-bold text-gris800">
+                Motif {(circuit === "DOBB" || circuit === "DXC") && <span className="text-rouge">*</span>}
+              </label>
               <select
                 className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-                value={motifId}
-                onChange={(e) => setMotifId(e.target.value)}
+                value={motifAutreActif ? "__autre" : motifId}
+                onChange={(e) => (e.target.value === "__autre" ? toggleMotifAutre(true) : choisirMotifReel(e.target.value))}
                 disabled={!motifs}
               >
                 <option value="">— Choisir —</option>
                 {motifOptions}
+                <option value="__autre">Autre (non référencé)</option>
               </select>
+              {/* "Autre (non référencé)" (07/09/2026) — motif hors catalogue,
+                  saisi en texte libre (motifAutre), mutuellement exclusif
+                  avec motifId réel (normaliserMotif côté serveur). Satisfait
+                  MOTIF_REQUIS au même titre qu'un motif réel — cf.
+                  demande-workflow.service.ts. */}
+              {motifAutreActif && (
+                <input
+                  className="mt-2 w-full rounded border border-gris300 px-3 py-2 text-13"
+                  value={motifAutre}
+                  onChange={(e) => setMotifAutre(e.target.value)}
+                  placeholder="Précisez le motif…"
+                />
+              )}
+              {/* 01/09/2026, étendu à DXC le 07/09/2026 (demande explicite,
+                  « tous les champs deviennent obligatoires ») — obligatoire à
+                  la soumission pour DOBB/DXC, cf. demande-workflow.service.ts
+                  (MOTIF_REQUIS). */}
+              {(circuit === "DOBB" || circuit === "DXC") && (
+                <p className="mt-1 text-12 text-gris600">Obligatoire à la soumission.</p>
+              )}
               {/* R13 — pièces obligatoires du motif, affichées avant l'échec de
                   soumission plutôt que découvertes au 422. */}
               {motifSelectionne && motifSelectionne.piecesAfferentes.some((p) => p.obligatoire) && (
-                <p className="mt-1 text-12 text-gris600">
+                <p className="mt-1 text-12 font-semibold text-orangeTexteSurClair">
                   Pièces obligatoires :{" "}
                   {motifSelectionne.piecesAfferentes
                     .filter((p) => p.obligatoire)
@@ -914,31 +1223,52 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
                     .join(", ")}
                 </p>
               )}
-            </div>
-            <div>
-              <label className="mb-1 block text-13 font-bold text-gris800">{circuit === "DF" ? "Objet" : "Libellé"}</label>
+            </ChampCorrige>
+            <ChampCorrige nom="Libellé" champsRejetes={champsRejetes}>
+              <label className="mb-1 block text-13 font-bold text-gris800">
+                {circuit === "DF" ? "Objet" : "Libellé"} <span className="text-rouge">*</span>
+              </label>
               {circuit === "DF" ? (
+                // DF — texte libre, jamais un référentiel (aucun LibelleAjustement
+                // seedé pour ce circuit) : pas de mécanisme "Autre" à construire
+                // ici, le champ EST déjà en saisie libre.
                 <input
                   className="w-full rounded border border-gris300 px-3 py-2 text-13"
                   value={libelle}
                   onChange={(e) => setLibelle(e.target.value)}
                 />
               ) : (
-                <select
-                  className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
-                  value={libelle}
-                  onChange={(e) => setLibelle(e.target.value)}
-                  disabled={!libellesAjustement}
-                >
-                  <option value="">— Choisir —</option>
-                  {libellesAjustement?.map((l) => (
-                    <option key={l.id} value={l.libelle}>
-                      {l.libelle}
-                    </option>
-                  ))}
-                </select>
+                <>
+                  <select
+                    className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
+                    value={libelleAutreActif ? "__autre" : libelle}
+                    onChange={(e) => (e.target.value === "__autre" ? toggleLibelleAutre(true) : choisirLibelleReel(e.target.value))}
+                    disabled={!libellesAjustement}
+                  >
+                    <option value="">— Choisir —</option>
+                    {libellesAjustement?.map((l) => (
+                      <option key={l.id} value={l.libelle}>
+                        {l.libelle}
+                      </option>
+                    ))}
+                    <option value="__autre">Autre (non référencé)</option>
+                  </select>
+                  {/* "Autre (non référencé)" (07/09/2026) — même mécanique que
+                      Motif ci-dessus, sans second champ de stockage : `libelle`
+                      est déjà une colonne texte libre, la saisie manuelle s'y
+                      écrit directement. */}
+                  {libelleAutreActif && (
+                    <input
+                      className="mt-2 w-full rounded border border-gris300 px-3 py-2 text-13"
+                      value={libelle}
+                      onChange={(e) => setLibelle(e.target.value)}
+                      placeholder="Précisez le libellé…"
+                    />
+                  )}
+                </>
               )}
-            </div>
+              <p className="mt-1 text-12 text-gris600">Obligatoire à la soumission.</p>
+            </ChampCorrige>
           </div>
         </Card>
 
@@ -982,7 +1312,9 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
                 />
               </div>
               <div>
-                <label className="mb-1 block text-13 font-bold text-gris800">Compte client</label>
+                <label className="mb-1 block text-13 font-bold text-gris800">
+                  Compte client {circuit === "DXC" && <span className="text-rouge">*</span>}
+                </label>
                 <input
                   className="w-full rounded border border-gris300 px-3 py-2 text-13 font-mono"
                   value={compteClient}
@@ -990,50 +1322,31 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
                   placeholder={circuit === "DOBB" ? "ex. B2B-880142" : "ex. B2C-4471902"}
                 />
               </div>
-              <div>
-                <label className="mb-1 block text-13 font-bold text-gris800">Formule d'abonnement</label>
+              <ChampCorrige nom="Formule d'abonnement" champsRejetes={champsRejetes}>
+                <label className="mb-1 block text-13 font-bold text-gris800">
+                  Formule d'abonnement <span className="text-rouge">*</span>
+                </label>
                 <input
                   className="w-full rounded border border-gris300 px-3 py-2 text-13"
                   value={formuleAbonnement}
                   onChange={(e) => setFormuleAbonnement(e.target.value)}
                 />
-              </div>
+                <p className="mt-1 text-12 text-gris600">Obligatoire à la soumission.</p>
+              </ChampCorrige>
 
-              {circuit === "DOBB" && (
+              {/* Période contestée — étendue à DXC (07/09/2026, demande
+                  explicite), même mécanisme que DOBB (calcul serveur
+                  DemandeService.calculerJoursContestes, jamais reconstruit),
+                  extrait du fragment DOBB uniquement ci-dessous pour être
+                  partagé par les deux circuits. Obligatoire pour DXC depuis
+                  le 07/09/2026, étendue à DOBB le même jour (demande
+                  explicite, huit champs DOBB deviennent obligatoires). */}
+              {(circuit === "DOBB" || circuit === "DXC") && (
                 <>
                   <div>
-                    <label className="mb-1 block text-13 font-bold text-gris800">Numéro d'appel</label>
-                    <input
-                      className="w-full rounded border border-gris300 px-3 py-2 text-13"
-                      value={numeroAppel}
-                      onChange={(e) => setNumeroAppel(e.target.value)}
-                      placeholder="ex. 27 22 00 00 00"
-                    />
-                  </div>
-                  <div style={{ gridColumn: "1 / -1" }}>
-                    <label className="mb-1 block text-13 font-bold text-gris800">Descriptif de la contestation</label>
-                    <textarea
-                      className="w-full rounded border border-gris300 px-3 py-2 text-13"
-                      style={{ minHeight: 60 }}
-                      value={descriptifContestation}
-                      onChange={(e) => setDescriptifContestation(e.target.value)}
-                      placeholder="Détail du cas contesté…"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-13 font-bold text-gris800">Localisation</label>
-                    <select
-                      className="w-full rounded border border-gris300 px-3 py-2 text-13"
-                      value={localisation}
-                      onChange={(e) => setLocalisation(e.target.value as EnumLocalisation | "")}
-                    >
-                      <option value="">— Choisir —</option>
-                      <option value="NATIONAL">National</option>
-                      <option value="INTERNATIONAL">International</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-13 font-bold text-gris800">Début période contestée</label>
+                    <label className="mb-1 block text-13 font-bold text-gris800">
+                      Début période contestée <span className="text-rouge">*</span>
+                    </label>
                     <input
                       className="w-full rounded border border-gris300 px-3 py-2 text-13"
                       type="date"
@@ -1042,7 +1355,9 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-13 font-bold text-gris800">Fin période contestée</label>
+                    <label className="mb-1 block text-13 font-bold text-gris800">
+                      Fin période contestée <span className="text-rouge">*</span>
+                    </label>
                     <input
                       className="w-full rounded border border-gris300 px-3 py-2 text-13"
                       type="date"
@@ -1062,22 +1377,71 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
                       correspond pas à l'écart réel des dates). Affichage en
                       lecture seule de la valeur serveur, jamais recalculée
                       côté client (R11) — visible seulement une fois le
-                      dossier créé (avant, aucune valeur n'existe encore). */}
+                      dossier créé (avant, aucune valeur n'existe encore).
+                      Libellé DXC distinct (07/09/2026, demande explicite,
+                      « Nombre de jours à ajuster ») — même valeur, même
+                      mécanisme, jamais reconstruit, seul le texte change. */}
                   {demande && demande.demande.periodeContesteeJours !== null && (
                     <div>
-                      <label className="mb-1 block text-13 font-bold text-gris800">Période contestée (jours)</label>
+                      <label className="mb-1 block text-13 font-bold text-gris800">
+                        {circuit === "DXC" ? "Nombre de jours à ajuster" : "Période contestée (jours)"}
+                      </label>
                       <p className="rounded border border-gris200 bg-gris50 px-3 py-2 text-13 text-gris700">
                         {demande.demande.periodeContesteeJours}
                       </p>
                     </div>
                   )}
+                </>
+              )}
+
+              {circuit === "DOBB" && (
+                <>
+                  <div>
+                    <label className="mb-1 block text-13 font-bold text-gris800">Numéro d'appel</label>
+                    <input
+                      className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                      value={numeroAppel}
+                      onChange={(e) => setNumeroAppel(e.target.value)}
+                      placeholder="ex. 27 22 00 00 00"
+                    />
+                  </div>
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <label className="mb-1 block text-13 font-bold text-gris800">
+                      Descriptif de la contestation <span className="text-rouge">*</span>
+                    </label>
+                    <textarea
+                      className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                      style={{ minHeight: 60 }}
+                      value={descriptifContestation}
+                      onChange={(e) => setDescriptifContestation(e.target.value)}
+                      placeholder="Détail du cas contesté…"
+                    />
+                    <p className="mt-1 text-12 text-gris600">Obligatoire à la soumission.</p>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-13 font-bold text-gris800">
+                      Localisation <span className="text-rouge">*</span>
+                    </label>
+                    <select
+                      className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                      value={localisation}
+                      onChange={(e) => setLocalisation(e.target.value as EnumLocalisation | "")}
+                    >
+                      <option value="">— Choisir —</option>
+                      <option value="NATIONAL">National</option>
+                      <option value="INTERNATIONAL">International</option>
+                    </select>
+                    <p className="mt-1 text-12 text-gris600">Obligatoire à la soumission.</p>
+                  </div>
                   {/* Point de contact — <select> admin-configurable (25/08/2026,
                       demande explicite ; promu depuis Priorité 1.3,
                       20/08/2026, où la liste n'était encore qu'une constante
                       locale). Valeur toujours stockée dans champsCircuit,
                       inchangé — seule la source des options change. */}
                   <div>
-                    <label className="mb-1 block text-13 font-bold text-gris800">Point de contact</label>
+                    <label className="mb-1 block text-13 font-bold text-gris800">
+                      Point de contact <span className="text-rouge">*</span>
+                    </label>
                     <select
                       className="w-full rounded border border-gris300 px-3 py-2 text-13"
                       value={pointContact}
@@ -1091,24 +1455,31 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
                         </option>
                       ))}
                     </select>
+                    <p className="mt-1 text-12 text-gris600">Obligatoire à la soumission.</p>
                   </div>
                   <div>
-                    <label className="mb-1 block text-13 font-bold text-gris800">Date réception BO</label>
+                    <label className="mb-1 block text-13 font-bold text-gris800">
+                      Date réception BO <span className="text-rouge">*</span>
+                    </label>
                     <input
                       className="w-full rounded border border-gris300 px-3 py-2 text-13"
                       type="date"
                       value={dateReceptionBo}
                       onChange={(e) => setDateReceptionBo(e.target.value)}
                     />
+                    <p className="mt-1 text-12 text-gris600">Obligatoire à la soumission.</p>
                   </div>
                   <div>
-                    <label className="mb-1 block text-13 font-bold text-gris800">Date réception OCI</label>
+                    <label className="mb-1 block text-13 font-bold text-gris800">
+                      Date réception OCI <span className="text-rouge">*</span>
+                    </label>
                     <input
                       className="w-full rounded border border-gris300 px-3 py-2 text-13"
                       type="date"
                       value={dateReceptionOci}
                       onChange={(e) => setDateReceptionOci(e.target.value)}
                     />
+                    <p className="mt-1 text-12 text-gris600">Obligatoire à la soumission.</p>
                   </div>
                   <div>
                     <label className="mb-1 block text-13 font-bold text-gris800">Agent responsable</label>
@@ -1137,18 +1508,23 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
                 <p className="mt-1 text-12 text-gris600">Laisser à 0 si non récurrent.</p>
               </div>
 
-              <ResponsabiliteFields
-                directions={directions}
-                directionRespId={directionRespId}
-                choisirDirection={choisirDirection}
-                directionSelectionnee={directionSelectionnee}
-                serviceRespId={serviceRespId}
-                choisirServiceReel={choisirServiceReel}
-                serviceAutreActif={serviceAutreActif}
-                toggleServiceAutre={toggleServiceAutre}
-                responsabiliteServiceAutre={responsabiliteServiceAutre}
-                setResponsabiliteServiceAutre={setResponsabiliteServiceAutre}
-              />
+              {/* Responsabilité — direction/service : retirée du formulaire
+                  DXC (07/09/2026, demande explicite) — DOBB seul continue de
+                  les porter. */}
+              {circuit === "DOBB" && (
+                <ResponsabiliteFields
+                  directions={directions}
+                  directionRespId={directionRespId}
+                  choisirDirection={choisirDirection}
+                  directionSelectionnee={directionSelectionnee}
+                  serviceRespId={serviceRespId}
+                  choisirServiceReel={choisirServiceReel}
+                  serviceAutreActif={serviceAutreActif}
+                  toggleServiceAutre={toggleServiceAutre}
+                  responsabiliteServiceAutre={responsabiliteServiceAutre}
+                  setResponsabiliteServiceAutre={setResponsabiliteServiceAutre}
+                />
+              )}
             </div>
           </Card>
         )}
@@ -1169,20 +1545,26 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-13 font-bold text-gris800">De (émetteur)</label>
+                <label className="mb-1 block text-13 font-bold text-gris800">
+                  De (émetteur) <span className="text-rouge">*</span>
+                </label>
                 <input
                   className="w-full rounded border border-gris300 px-3 py-2 text-13"
                   value={memoDe}
                   onChange={(e) => setMemoDe(e.target.value)}
                 />
+                <p className="mt-1 text-12 text-gris600">Obligatoire à la soumission.</p>
               </div>
               <div>
-                <label className="mb-1 block text-13 font-bold text-gris800">À (destinataire)</label>
+                <label className="mb-1 block text-13 font-bold text-gris800">
+                  À (destinataire) <span className="text-rouge">*</span>
+                </label>
                 <input
                   className="w-full rounded border border-gris300 px-3 py-2 text-13"
                   value={memoA}
                   onChange={(e) => setMemoA(e.target.value)}
                 />
+                <p className="mt-1 text-12 text-gris600">Obligatoire à la soumission.</p>
               </div>
               {/* Ordre exact de la maquette (Priorité 1.1, 20/08/2026) :
                   Opérateur en 3ᵉ position, juste après « À ». <select>
@@ -1196,8 +1578,8 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
                 </label>
                 <select
                   className="w-full rounded border border-gris300 px-3 py-2 text-13"
-                  value={nomClient}
-                  onChange={(e) => setNomClient(e.target.value)}
+                  value={operateurAutreActif ? "__autre" : nomClient}
+                  onChange={(e) => (e.target.value === "__autre" ? toggleOperateurAutre(true) : choisirOperateurReel(e.target.value))}
                   disabled={!operateurs}
                 >
                   <option value="">— Choisir —</option>
@@ -1206,7 +1588,20 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
                       {o.libelle}
                     </option>
                   ))}
+                  <option value="__autre">Autre (non référencé)</option>
                 </select>
+                {/* "Autre (non référencé)" (07/09/2026) — même mécanique que
+                    Motif/Libellé ci-dessus, sans second champ de stockage :
+                    `nomClient` (partagé avec DOBB/DXC « Nom du client ») est
+                    déjà une colonne texte libre. */}
+                {operateurAutreActif && (
+                  <input
+                    className="mt-2 w-full rounded border border-gris300 px-3 py-2 text-13"
+                    value={nomClient}
+                    onChange={(e) => setNomClient(e.target.value)}
+                    placeholder="Précisez l'opérateur…"
+                  />
+                )}
               </div>
               <div>
                 <label className="mb-1 block text-13 font-bold text-gris800">Compte client</label>
@@ -1226,12 +1621,15 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
                 />
               </div>
               <div style={{ gridColumn: "1 / -1" }}>
-                <label className="mb-1 block text-13 font-bold text-gris800">Objectif</label>
+                <label className="mb-1 block text-13 font-bold text-gris800">
+                  Objectif <span className="text-rouge">*</span>
+                </label>
                 <input
                   className="w-full rounded border border-gris300 px-3 py-2 text-13"
                   value={memoObjectif}
                   onChange={(e) => setMemoObjectif(e.target.value)}
                 />
+                <p className="mt-1 text-12 text-gris600">Obligatoire à la soumission.</p>
               </div>
               <div style={{ gridColumn: "1 / -1" }}>
                 <label className="mb-1 block text-13 font-bold text-gris800">
@@ -1279,7 +1677,9 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-13 font-bold text-gris800">Univers FMI</label>
+              <label className="mb-1 block text-13 font-bold text-gris800">
+                Univers FMI <span className="text-rouge">*</span>
+              </label>
               <select
                 className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
                 value={universFmiCode}
@@ -1293,9 +1693,15 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
                   </option>
                 ))}
               </select>
+              {/* 01/09/2026, demande explicite — obligatoire à la soumission
+                  pour les trois circuits, cf. demande-workflow.service.ts
+                  (UNIVERS_FMI_REQUIS). */}
+              <p className="mt-1 text-12 text-gris600">Obligatoire à la soumission.</p>
             </div>
             <div>
-              <label className="mb-1 block text-13 font-bold text-gris800">Facteur de dégrèvement</label>
+              <label className="mb-1 block text-13 font-bold text-gris800">
+                Facteur de dégrèvement <span className="text-rouge">*</span>
+              </label>
               <select
                 className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
                 value={facteurCode}
@@ -1309,6 +1715,10 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
                   </option>
                 ))}
               </select>
+              {/* 01/09/2026, demande explicite — obligatoire à la soumission
+                  pour les trois circuits, cf. demande-workflow.service.ts
+                  (FACTEUR_REQUIS). */}
+              <p className="mt-1 text-12 text-gris600">Obligatoire à la soumission.</p>
             </div>
           </div>
         </Card>
@@ -1341,20 +1751,22 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
               </div>
             </div>
             <div style={{ gridColumn: "1 / -1" }}>
-              <label className="mb-1 block text-13 font-bold text-gris800">
-                Commentaire {circuit !== "DF" && <span className="text-rouge">*</span>}
-              </label>
-              <textarea
-                className="w-full rounded border border-gris300 px-3 py-2 text-13"
-                style={{ minHeight: 56 }}
-                value={commentaire}
-                onChange={(e) => setCommentaire(e.target.value)}
-              />
-              {/* R14 assouplie pour DF (24/08/2026) — reste obligatoire pour
-                  DOBB/DXC, cf. demande-workflow.service.ts. */}
-              <p className="mt-1 text-12 text-gris600">
-                {circuit === "DF" ? "Facultatif pour DF." : "Obligatoire à la soumission (R14)."}
-              </p>
+              <ChampCorrige nom="Commentaire" champsRejetes={champsRejetes}>
+                <label className="mb-1 block text-13 font-bold text-gris800">
+                  Commentaire {circuit !== "DF" && <span className="text-rouge">*</span>}
+                </label>
+                <textarea
+                  className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                  style={{ minHeight: 56 }}
+                  value={commentaire}
+                  onChange={(e) => setCommentaire(e.target.value)}
+                />
+                {/* R14 assouplie pour DF (24/08/2026) — reste obligatoire pour
+                    DOBB/DXC, cf. demande-workflow.service.ts. */}
+                <p className="mt-1 text-12 text-gris600">
+                  {circuit === "DF" ? "Facultatif pour DF." : "Obligatoire à la soumission (R14)."}
+                </p>
+              </ChampCorrige>
             </div>
           </div>
         </Card>
@@ -1365,16 +1777,26 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
             qui n'existe qu'une fois la sauvegarde silencieuse déclenchée —
             même gate que le panneau Taxes et ApercuRoutage. */}
         {demande && (
-          <PiecesTab
-            demandeId={demande.demande.id}
-            pieces={demande.pieces}
-            onChange={(nouvelles) => setDemande((d) => (d ? { ...d, pieces: nouvelles } : d))}
-            // Cet écran n'est jamais atteint que par l'initiateur du dossier
-            // (création ou mode reprise, cf. CLAUDE.md) — toujours vrai ici,
-            // contrairement à DossierDetailScreen où n'importe quel viewer
-            // authentifié peut ouvrir un dossier tiers.
-            peutModifier
-          />
+          <>
+            <PiecesTab
+              demandeId={demande.demande.id}
+              pieces={demande.pieces}
+              onChange={(nouvelles) => setDemande((d) => (d ? { ...d, pieces: nouvelles } : d))}
+              // Cet écran n'est jamais atteint que par l'initiateur du dossier
+              // (création ou mode reprise, cf. CLAUDE.md) — toujours vrai ici,
+              // contrairement à DossierDetailScreen où n'importe quel viewer
+              // authentifié peut ouvrir un dossier tiers.
+              peutModifier
+            />
+            {/* 07/09/2026, demande explicite — au moins une pièce jointe
+                devient obligatoire à la soumission pour DXC (jusqu'ici
+                facultative sur ce circuit, R13 ne s'appliquant que si le
+                motif choisi porte une pièce afférente obligatoire — cf.
+                demande-workflow.service.ts, PIECE_JOINTE_REQUISE). */}
+            {circuit === "DXC" && (
+              <p className="mt-2 text-12 text-gris600">Au moins une pièce jointe est obligatoire à la soumission (DXC).</p>
+            )}
+          </>
         )}
       </div>
 
@@ -1551,7 +1973,11 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
                     <Money valeur={preview.tva} />
                   </div>
                   <div className="flex justify-between font-bold">
-                    <span>Total TTC (aperçu)</span>
+                    <span>
+                      {!taxesEdition.tscActive && !taxesEdition.tvaActive
+                        ? "Total HT (aperçu)"
+                        : "Total TTC (aperçu)"}
+                    </span>
                     <Money valeur={preview.ttc} fort className="text-orange600" />
                   </div>
                 </div>

@@ -18,10 +18,14 @@ describe("KpiPerimetreGuard — profil pilotage réservé à ADMIN_PGD", () => {
   const suffixe = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   let agentId: string;
 
-  function contexteFactice(query: Record<string, unknown>, roles: string[]): ExecutionContext {
+  // `profils` (Chantier 2, Role.profilSysteme) — lu inconditionnellement par
+  // le guard (autorisePilotage), pas seulement sur la branche `pilotage` :
+  // toujours fourni ici, jamais omis, même sur les cas qui n'exercent pas
+  // le profil VALIDATEUR.
+  function contexteFactice(query: Record<string, unknown>, roles: string[], profils: string[] = []): ExecutionContext {
     const requete = {
       query,
-      utilisateur: { id: agentId, identifiantAd: "test.kpi-perimetre", roles, jti: "x" }
+      utilisateur: { id: agentId, identifiantAd: "test.kpi-perimetre", roles, profils, jti: "x" }
     } as unknown as RequeteAuthentifiee;
     return {
       switchToHttp: () => ({ getRequest: () => requete, getResponse: () => ({}), getNext: () => ({}) })
@@ -38,8 +42,8 @@ describe("KpiPerimetreGuard — profil pilotage réservé à ADMIN_PGD", () => {
     await prisma.$disconnect();
   });
 
-  it("rejette (403 PERIMETRE_KPI_REFUSE) profil=pilotage sans ADMIN_PGD, journalise RBAC_REFUS", async () => {
-    const contexte = contexteFactice({ profil: "pilotage" }, ["INITIATEUR_DOBB"]);
+  it("rejette (403 PERIMETRE_KPI_REFUSE) profil=pilotage sans ADMIN_PGD ni profil VALIDATEUR, journalise RBAC_REFUS", async () => {
+    const contexte = contexteFactice({ profil: "pilotage" }, ["INITIATEUR_DOBB"], ["INITIATEUR"]);
 
     await expect(guard.canActivate(contexte)).rejects.toBeInstanceOf(ForbiddenException);
     await expect(guard.canActivate(contexte)).rejects.toMatchObject({ response: { code: "PERIMETRE_KPI_REFUSE" } });
@@ -49,19 +53,28 @@ describe("KpiPerimetreGuard — profil pilotage réservé à ADMIN_PGD", () => {
     expect(evenements[0]?.succes).toBe(false);
   });
 
-  it("rejette (403) un profil ABSENT sans ADMIN_PGD — le cas par défaut le plus large, pas un profil neutre", async () => {
-    const contexte = contexteFactice({}, ["INITIATEUR_DOBB"]);
+  it("rejette (403) un profil ABSENT sans ADMIN_PGD ni profil VALIDATEUR — le cas par défaut le plus large, pas un profil neutre", async () => {
+    const contexte = contexteFactice({}, ["INITIATEUR_DOBB"], ["INITIATEUR"]);
     await expect(guard.canActivate(contexte)).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it("autorise profil=pilotage pour ADMIN_PGD", async () => {
-    const contexte = contexteFactice({ profil: "pilotage" }, ["ADMIN_PGD"]);
+    const contexte = contexteFactice({ profil: "pilotage" }, ["ADMIN_PGD"], ["ADMINISTRATEUR"]);
+    await expect(guard.canActivate(contexte)).resolves.toBe(true);
+  });
+
+  // 01/09/2026, demande explicite — la vue Pilotage doit être visible chez
+  // TOUS les validateurs, pas seulement ADMIN_PGD. Rôle porteur volontairement
+  // AUTRE qu'ADMIN_PGD (RESPONSABLE_DXC) : preuve que c'est bien le profil
+  // VALIDATEUR, pas un rôle particulier, qui autorise.
+  it("autorise profil=pilotage pour un profil VALIDATEUR, même sans ADMIN_PGD", async () => {
+    const contexte = contexteFactice({ profil: "pilotage" }, ["RESPONSABLE_DXC"], ["VALIDATEUR"]);
     await expect(guard.canActivate(contexte)).resolves.toBe(true);
   });
 
   it("n'intervient jamais sur profil=initiateur/valideur — ce n'est pas son périmètre (scopé en aval par le service)", async () => {
-    const contexteInitiateur = contexteFactice({ profil: "initiateur" }, []);
-    const contexteValideur = contexteFactice({ profil: "valideur" }, []);
+    const contexteInitiateur = contexteFactice({ profil: "initiateur" }, [], ["INITIATEUR"]);
+    const contexteValideur = contexteFactice({ profil: "valideur" }, [], ["VALIDATEUR"]);
     await expect(guard.canActivate(contexteInitiateur)).resolves.toBe(true);
     await expect(guard.canActivate(contexteValideur)).resolves.toBe(true);
   });

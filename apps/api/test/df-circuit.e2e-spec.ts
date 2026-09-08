@@ -78,7 +78,18 @@ describe("E2E — circuit DF (Wholesale), parcours complet en HTTP réel", () =>
     const creation = await request(e2e.app.getHttpServer())
       .post("/api/demandes")
       .set("Cookie", initiateur.cookie)
-      .send({ circuit: "DF", nomClient: "E2E Opérateur Wholesale Partenaire", commentaire: `Essai e2e DF ${suffixe}`, sousFlux: "Réclamation opérateur" })
+      .send({
+        circuit: "DF",
+        nomClient: "E2E Opérateur Wholesale Partenaire",
+        commentaire: `Essai e2e DF ${suffixe}`,
+        sousFlux: "Réclamation opérateur",
+        universFmiCode: "FIXE",
+        facteurCode: "INTERNE",
+        // Objet (libelle) + De/À/Objectif obligatoires à la soumission DF
+        // (07/09/2026, demande explicite).
+        libelle: "Réclamation opérateur E2E",
+        champsCircuit: { memoDe: "E2E DF", memoA: "Service Fraude & Revenue Assurance", memoObjectif: "Soumettre l'ajustement" }
+      })
       .expect(201);
     const demandeId = creation.body.data.demande.id as string;
     demandeIds.push(demandeId);

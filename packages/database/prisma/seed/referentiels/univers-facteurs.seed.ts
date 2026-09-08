@@ -5,7 +5,11 @@ export async function seedUniversEtFacteurs(prisma: PrismaClient): Promise<void>
   const universFmi = [
     { code: "FIXE", libelle: "Fixe" },
     { code: "MOBILE", libelle: "Mobile" },
-    { code: "INTERNET", libelle: "Internet" }
+    { code: "INTERNET", libelle: "Internet" },
+    // ICT ajouté le 07/09/2026, demande explicite — même mécanisme upsert
+    // idempotent que les trois autres, disponible sur les trois circuits
+    // (UniversFmi n'a jamais été scopé par circuit).
+    { code: "ICT", libelle: "ICT" }
   ];
   for (const u of universFmi) {
     await prisma.universFmi.upsert({ where: { code: u.code }, update: {}, create: u });
