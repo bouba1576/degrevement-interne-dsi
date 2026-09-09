@@ -25,6 +25,14 @@ export const sessionUtilisateurSchema = z.object({
   id: z.string().uuid(),
   identifiantAd: z.string(),
   nom: z.string(),
+  // Matricule (08/09/2026) — relu frais à chaque GET /api/auth/session,
+  // même principe que `nom` juste au-dessus : propriété de profil éditable
+  // depuis l'écran admin, jamais figée en JWT contrairement à roles/
+  // sousFluxId/profils (qui, eux, obéissent à « cohérence plutôt que
+  // fraîcheur »). Consommé par NouvelleDemandeScreen pour pré-remplir
+  // silencieusement Demande.matriculeInitiateur — plus aucun champ éditable
+  // sur le formulaire, cf. CLAUDE.md.
+  matricule: z.string().nullable(),
   roles: z.array(z.string()),
   sousFluxId: z.string().uuid().nullable(),
   // Chantier 2 (28/08/2026, docs/14) — cumul des Role.profilSysteme des rôles

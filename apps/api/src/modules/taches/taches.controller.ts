@@ -17,6 +17,7 @@ import {
 } from "@pgd/contracts";
 import { ApiZodBody, ApiZodQuery, ApiZodResponse } from "../../common/swagger/zod-schema";
 import { Authenticated } from "../../common/decorators/authenticated.decorator";
+import { SansJournalActivite } from "../../common/decorators/sans-journal-activite.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { ContexteDelegationActuelle } from "../../common/decorators/contexte-delegation.decorator";
 import type { UtilisateurRequete } from "../../common/guards/auth.guard";
@@ -67,8 +68,13 @@ export class TachesController {
     return this.taches.trouver(id);
   }
 
+  // @SansJournalActivite() — cette route écrit déjà dans JournalAudit
+  // (TacheService.claim, action "claim") — cf. le reste de ce fichier pour
+  // le même principe. Vérifié structurellement par
+  // journal-activite-coverage.spec.ts.
   @Authenticated()
   @UseGuards(CorbeilleRoleGuard)
+  @SansJournalActivite()
   @Post(":id/claim")
   @HttpCode(200)
   @ApiZodResponse(200, tacheVueSchema)
@@ -76,8 +82,11 @@ export class TachesController {
     return this.taches.claim(id, utilisateur.id);
   }
 
+  // @SansJournalActivite() — écrit déjà JournalAudit (action "unclaim",
+  // TacheService.unclaim).
   @Authenticated()
   @UseGuards(CorbeilleRoleGuard)
+  @SansJournalActivite()
   @Post(":id/unclaim")
   @HttpCode(200)
   @ApiZodResponse(200, tacheVueSchema)
@@ -90,8 +99,11 @@ export class TachesController {
   // claim (apps/web, TacheActionBanner). Même garde que claim/unclaim (R4,
   // CorbeilleRoleGuard) — restreint en service à l'agent qui détient
   // effectivement le claim.
+  // @SansJournalActivite() — écrit déjà JournalAudit (action
+  // "verrou_prolonge", TacheService.prolongerVerrou).
   @Authenticated()
   @UseGuards(CorbeilleRoleGuard)
+  @SansJournalActivite()
   @Post(":id/prolonger-verrou")
   @HttpCode(200)
   @ApiZodResponse(200, tacheVueSchema)
@@ -103,8 +115,11 @@ export class TachesController {
   // les guards dans l'ordre donné, et SodGuard lit le contexte que
   // DelegationContextGuard pose sur la requête (il ne le devine jamais
   // lui-même).
+  // @SansJournalActivite() — écrit déjà JournalAudit (action "approbation",
+  // TacheWorkflowService.approuver).
   @Authenticated()
   @UseGuards(DelegationContextGuard, CorbeilleRoleGuard, SodGuard)
+  @SansJournalActivite()
   @Post(":id/approuver")
   @HttpCode(200)
   @ApiZodBody(approuverRequeteSchema)
@@ -119,8 +134,11 @@ export class TachesController {
     return this.workflow.approuver(id, utilisateur, dto, delegation);
   }
 
+  // @SansJournalActivite() — écrit déjà JournalAudit (actions "rejet" +
+  // "cloture"/"renvoi-correction", TacheWorkflowService.rejeter).
   @Authenticated()
   @UseGuards(DelegationContextGuard, CorbeilleRoleGuard, SodGuard)
+  @SansJournalActivite()
   @Post(":id/rejeter")
   @HttpCode(200)
   @ApiZodBody(rejeterRequeteSchema)
@@ -139,8 +157,11 @@ export class TachesController {
   // POST_CLOTURE, hors chaîne bloquante) : CorbeilleRoleGuard suffit pour
   // R4, SodGuard couvre l'indépendance du contrôle vis-à-vis de l'étape
   // bloquante précédente du même dossier.
+  // @SansJournalActivite() — écrit déjà JournalAudit (action "controle",
+  // ControleService.soumettre).
   @Authenticated()
   @UseGuards(DelegationContextGuard, CorbeilleRoleGuard, SodGuard)
+  @SansJournalActivite()
   @Post(":id/controle")
   @HttpCode(200)
   @ApiZodBody(soumettreControleRequeteSchema)

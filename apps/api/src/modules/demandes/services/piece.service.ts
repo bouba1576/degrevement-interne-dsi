@@ -85,6 +85,29 @@ export class PieceService {
     }
   }
 
+  // GET /api/demandes/{id}/pieces/{pieceId}/telecharger (08/09/2026, demande
+  // explicite) — comble le trou déjà documenté (CLAUDE.md « Aucune route ne
+  // sert le fichier réel d'une pièce jointe »). Ouvert à tout utilisateur qui
+  // peut déjà lire le dossier (DemandesController, @Authenticated() seul,
+  // même principe que obtenirDetail — ce n'est pas une divulgation nouvelle),
+  // pas restreint à l'initiateur.
+  async lireFichier(
+    demandeId: string,
+    pieceId: string
+  ): Promise<{ contenu: Buffer; nomFichier: string; typeMime: string }> {
+    const piece = await this.prisma.pieceJointe.findUnique({ where: { id: pieceId } });
+    if (!piece || piece.demandeId !== demandeId || !piece.gedRef) {
+      throw new NotFoundException({ code: "PIECE_INTROUVABLE", message: "Pièce introuvable." });
+    }
+
+    const contenu = await this.ged.lire(piece.gedRef);
+    if (!contenu) {
+      throw new NotFoundException({ code: "FICHIER_INTROUVABLE", message: "Fichier introuvable." });
+    }
+
+    return { contenu, nomFichier: piece.nomFichier, typeMime: piece.typeMime };
+  }
+
   // R13 — pièces obligatoires du motif présentes à la soumission.
   async piecesManquantes(demandeId: string): Promise<PieceManquante[]> {
     const demande = await this.prisma.demande.findUniqueOrThrow({ where: { id: demandeId } });

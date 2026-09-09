@@ -24,6 +24,7 @@ import {
 import { ApiZodBody, ApiZodResponse } from "../../common/swagger/zod-schema";
 import { Public } from "../../common/decorators/public.decorator";
 import { Authenticated } from "../../common/decorators/authenticated.decorator";
+import { SansJournalActivite } from "../../common/decorators/sans-journal-activite.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import type { UtilisateurRequete } from "../../common/guards/auth.guard";
 import { PrismaService } from "../../infra/prisma/prisma.service";
@@ -151,7 +152,11 @@ export class AuthController {
     return { rafraichi: true };
   }
 
+  // @SansJournalActivite() — écrit déjà JournalSecurite (evenement "LOGOUT")
+  // juste au-dessous, même raisonnement que les exclusions JournalAudit :
+  // jamais dupliquer un événement déjà couvert par un journal existant.
   @Authenticated()
+  @SansJournalActivite()
   @Post("logout")
   @HttpCode(200)
   async logout(
@@ -174,6 +179,7 @@ export class AuthController {
       id: enBase.id,
       identifiantAd: enBase.identifiantAd,
       nom: enBase.nom,
+      matricule: enBase.matricule,
       roles: utilisateur.roles,
       sousFluxId: utilisateur.sousFluxId,
       profils: utilisateur.profils

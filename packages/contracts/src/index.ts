@@ -21,3 +21,4 @@ export * from "./audit";
 export * from "./kpi";
 export * from "./notification";
 export * from "./reporting";
+export * from "./activite";

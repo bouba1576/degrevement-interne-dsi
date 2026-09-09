@@ -3,6 +3,7 @@ import { ApiTags } from "@nestjs/swagger";
 import { importCrmReponseSchema, tacheVueSchema, type ImportCrmReponse, type TacheVue } from "@pgd/contracts";
 import { ApiZodResponse } from "../../common/swagger/zod-schema";
 import { Roles } from "../../common/decorators/roles.decorator";
+import { SansJournalActivite } from "../../common/decorators/sans-journal-activite.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import type { UtilisateurRequete } from "../../common/guards/auth.guard";
 import { CrmImportService } from "../lignes/services/crm-import.service";
@@ -30,7 +31,12 @@ export class AdminController {
   // docs/06 §9 (6.7) — volet manuel, distinct du cron sla-escalation
   // (apps/worker) : un administrateur peut escalader une tâche avant que son
   // SLA ne soit dépassé.
+  // @SansJournalActivite() — écrit déjà JournalAudit (action
+  // "escalade_manuelle", EscaladeManuelleService.escalader). importerCrm
+  // ci-dessus n'a PAS ce décorateur — jamais audité aujourd'hui, capturé
+  // par le nouveau mécanisme par défaut (lacune comblée, pas un oubli).
   @Roles("ADMIN_PGD")
+  @SansJournalActivite()
   @Post("escalade-manuelle/:tacheId")
   @HttpCode(200)
   @ApiZodResponse(200, tacheVueSchema)

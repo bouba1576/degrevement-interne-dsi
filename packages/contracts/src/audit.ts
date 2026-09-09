@@ -7,8 +7,21 @@ export const journalAuditVueSchema = z.object({
   id: z.string().uuid(),
   demandeId: z.string().uuid().nullable(),
   tacheId: z.string().uuid().nullable(),
+  // `acteur` reste la chaîne snapshot brute telle qu'écrite à l'action
+  // (identifiantAd réel, ou un acteur système comme "system:locks-sweeper",
+  // cf. schema.prisma) — jamais réécrite, l'audit doit rester lisible même
+  // si la résolution ci-dessous échoue. `acteurNom` est résolu côté serveur
+  // (jointure sur Utilisateur par identifiantAd, même principe que
+  // JournalSecuriteVue.identifiantAd/EtapeDossier.acteurNom) — `null` si
+  // `acteur` ne correspond à aucun compte actuel (compte supprimé, ou acteur
+  // système qui n'a jamais été un compte).
   acteur: z.string(),
+  acteurNom: z.string().nullable(),
   action: z.string(),
+  // Objet enrichi côté serveur quand applicable (ex. `delegantNom` ajouté à
+  // côté de `delegantIdentifiantAd` déjà écrit à l'action) — jamais une
+  // réécriture du detail original, une jointure supplémentaire dans le même
+  // esprit que `acteurNom` ci-dessus.
   detail: z.unknown().nullable(),
   commentaire: z.string().nullable(),
   horodatage: z.string()

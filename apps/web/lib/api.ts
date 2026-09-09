@@ -13,6 +13,7 @@ import {
   directionResponsabiliteVueSchema,
   echeanceCorrectionReponseSchema,
   facteurDegrevementVueSchema,
+  journalActiviteVueSchema,
   journalSecuriteVueSchema,
   erreurSchema,
   etapeDossierSchema,
@@ -76,6 +77,8 @@ import {
   type ListerDemandesQuery,
   type ListerNotificationsQuery,
   type FormulesDeLigne,
+  type JournalActiviteQuery,
+  type JournalActiviteVue,
   type JournalAuditVue,
   type JournalSecuriteQuery,
   type JournalSecuriteVue,
@@ -477,6 +480,35 @@ export function supprimerPiece(demandeId: string, pieceId: string): Promise<{ su
   });
 }
 
+// Réponse binaire brute (Content-Disposition: attachment), même patron que
+// exporterReporting() ci-dessous — requete() ne convient pas (pas de JSON).
+export async function telechargerPiece(demandeId: string, pieceId: string, nomFichierDefaut: string): Promise<void> {
+  const reponse = await fetch(`${API_URL}/api/demandes/${demandeId}/pieces/${pieceId}/telecharger`, {
+    credentials: "include"
+  });
+
+  if (!reponse.ok) {
+    const corps: unknown = await reponse.json().catch(() => null);
+    const enveloppe = corps as { error?: unknown } | null;
+    const erreur = enveloppe?.error
+      ? erreurSchema.parse(enveloppe.error)
+      : { code: "ERREUR", message: "Téléchargement impossible.", details: undefined };
+    throw new ApiError(erreur.code, erreur.message, reponse.status, erreur.details);
+  }
+
+  const blob = await reponse.blob();
+  const nomFichier =
+    reponse.headers.get("Content-Disposition")?.match(/filename="([^"]+)"/)?.[1] ?? nomFichierDefaut;
+  const url = URL.createObjectURL(blob);
+  const lien = document.createElement("a");
+  lien.href = url;
+  lien.download = nomFichier;
+  document.body.appendChild(lien);
+  lien.click();
+  lien.remove();
+  URL.revokeObjectURL(url);
+}
+
 export interface ListerTachesCorbeilleParams {
   role?: string;
   etat?: string;
@@ -857,6 +889,20 @@ export function journalSecurite(query: JournalSecuriteQuery): Promise<{ data: Jo
   return requeteAvecTotal(`/api/audit/securite?${params.toString()}`, z.array(journalSecuriteVueSchema));
 }
 
+// --- AuditSecuriteScreen, onglet « Activité » (étape 4, CLAUDE.md « Journal
+// d'activité administrateur ») — GET /api/audit/activite, même patron exact
+// que journalSecurite() ci-dessus. ---------------------------------------
+export function journalActivite(query: JournalActiviteQuery): Promise<{ data: JournalActiviteVue[]; total: number }> {
+  const params = new URLSearchParams();
+  if (query.utilisateur) params.set("utilisateur", query.utilisateur);
+  if (query.type) params.set("type", query.type);
+  if (query.depuis) params.set("depuis", query.depuis);
+  if (query.jusqua) params.set("jusqua", query.jusqua);
+  params.set("page", String(query.page));
+  params.set("limit", String(query.limit));
+  return requeteAvecTotal(`/api/audit/activite?${params.toString()}`, z.array(journalActiviteVueSchema));
+}
+
 // --- NotificationBell (coquille, 9.3) — GET/PATCH /api/notifications ----
 // Portée déjà forcée côté serveur sur le destinataire authentifié
 // (NotificationsController.lister, @CurrentUser()) : aucun paramètre
@@ -916,4 +962,17 @@ export async function exporterReporting(query: ReportingQuery, format: "csv" | "
   lien.click();
   lien.remove();
   URL.revokeObjectURL(url);
+}
+
+// --- Journal d'activité administrateur (08/09/2026) — volet NAVIGATION ----
+// Appelée en fire-and-forget depuis app/(app)/layout.tsx : jamais attendue
+// bloquant l'UI, l'appelant fait toujours `.catch(() => {})`. `libelle`
+// n'est volontairement pas envoyé — dérivé côté serveur depuis `route`
+// (cf. CLAUDE.md « Journal d'activité administrateur »).
+export async function journaliserNavigation(route: string, detail?: Record<string, unknown>): Promise<void> {
+  await requete(`/api/activite/navigation`, z.object({ enregistre: z.literal(true) }), {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ route, detail })
+  });
 }

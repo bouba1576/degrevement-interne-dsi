@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { AppShellProvider } from "@/lib/app-shell-context";
 import { ToastProvider } from "@pgd/ui";
 import { cheminDeCle, cleDePathname, titreDeChemin } from "@/lib/routes";
-import { deconnecter, fetchSession, listerDemandes, listerTachesCorbeille } from "@/lib/api";
+import { deconnecter, fetchSession, journaliserNavigation, listerDemandes, listerTachesCorbeille } from "@/lib/api";
 import type { SessionUtilisateur } from "@pgd/contracts";
 
 // Groupe de routes (app) — un vrai segment d'URL par écran authentifié
@@ -81,6 +81,28 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     void rafraichirCompteMesDemandes();
     void rafraichirCompteCorbeilles();
   }, [pathname, rafraichirCompteMesDemandes, rafraichirCompteCorbeilles]);
+
+  // Journal d'activité — volet NAVIGATION (08/09/2026, CLAUDE.md « Journal
+  // d'activité administrateur »). Garde par « dernière valeur vue » (pas un
+  // booléen) : cet effet ne doit se déclencher qu'au changement RÉEL de
+  // pathname, jamais à chaque fois que `rafraichirCompteMesDemandes`/
+  // `rafraichirCompteCorbeilles` changent d'identité (ce qui arrive une fois,
+  // juste après la résolution de `utilisateur`, sur le MÊME pathname que le
+  // rendu précédent) — même pattern déjà posé dans ce dépôt pour
+  // ApercuRoutage (StrictMode/double-invocation, CLAUDE.md) : une comparaison
+  // à la dernière valeur vue, jamais un simple booléen « premier rendu ».
+  const dernierPathnameJournalise = useRef<string | null>(null);
+  useEffect(() => {
+    if (dernierPathnameJournalise.current === pathname) return;
+    dernierPathnameJournalise.current = pathname;
+
+    const route = cleDePathname(pathname);
+    const detail = pathname.startsWith("/dossiers/") ? { demandeId: pathname.slice("/dossiers/".length) } : undefined;
+    void journaliserNavigation(route, detail).catch(() => {
+      // Confort d'oversight, jamais bloquant — un échec ne doit jamais
+      // empêcher la navigation elle-même ni afficher quoi que ce soit.
+    });
+  }, [pathname]);
 
   const onNaviguer = useCallback((cle: string) => router.push(cheminDeCle(cle)), [router]);
   const onOuvrirDossier = useCallback((id: string) => router.push(`/dossiers/${id}`), [router]);

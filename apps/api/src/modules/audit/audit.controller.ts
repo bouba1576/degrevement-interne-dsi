@@ -1,7 +1,14 @@
 import { Controller, Get, Param, Query, Res } from "@nestjs/common";
 import type { Response } from "express";
 import { ApiTags } from "@nestjs/swagger";
-import { exportAuditQuerySchema, journalSecuriteQuerySchema, type JournalAuditVue, type JournalSecuriteVue } from "@pgd/contracts";
+import {
+  exportAuditQuerySchema,
+  journalActiviteQuerySchema,
+  journalSecuriteQuerySchema,
+  type JournalActiviteVue,
+  type JournalAuditVue,
+  type JournalSecuriteVue
+} from "@pgd/contracts";
 import { ApiZodQuery } from "../../common/swagger/zod-schema";
 import { Authenticated } from "../../common/decorators/authenticated.decorator";
 import { Roles } from "../../common/decorators/roles.decorator";
@@ -44,6 +51,17 @@ export class AuditController {
   async journalSecurite(@Query() query: unknown): Promise<{ data: JournalSecuriteVue[]; meta: { total: number } }> {
     const dto = journalSecuriteQuerySchema.parse(query);
     const { entrees, total } = await this.audit.journalSecurite(dto);
+    return { data: entrees, meta: { total } };
+  }
+
+  // Même route littérale AVANT ":demandeId" que "securite" ci-dessus — même
+  // discipline exacte (cf. commentaire dédié), même profondeur.
+  @Roles("ADMIN_PGD")
+  @Get("activite")
+  @ApiZodQuery(journalActiviteQuerySchema)
+  async journalActivite(@Query() query: unknown): Promise<{ data: JournalActiviteVue[]; meta: { total: number } }> {
+    const dto = journalActiviteQuerySchema.parse(query);
+    const { entrees, total } = await this.audit.journalActivite(dto);
     return { data: entrees, meta: { total } };
   }
 

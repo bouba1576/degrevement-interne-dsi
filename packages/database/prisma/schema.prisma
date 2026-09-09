@@ -180,6 +180,21 @@ enum EnumFacteurAuth {
   @@map("enum_facteur_auth")
 }
 
+// Journal d'activité administrateur (08/09/2026) — deux niveaux capturés,
+// jamais confondus : une consultation d'écran (NAVIGATION, capturée côté
+// client au changement de route) et une action qui modifie réellement
+// quelque chose côté serveur (ACTION, capturée par un intercepteur global).
+// Distinct de JournalAudit (dossiers, rétention 10 ans SOX, append-only) et
+// de JournalSecurite (connexions/MFA/refus, même rétention) — celui-ci a un
+// volume et une politique de rétention différents (6 mois, cf.
+// JournalActivite ci-dessous), raison de la table séparée.
+enum EnumTypeActivite {
+  NAVIGATION
+  ACTION
+
+  @@map("enum_type_activite")
+}
+
 enum EnumStatutLigne {
   ACTIF
   SUSPENDU
@@ -248,6 +263,8 @@ model Utilisateur {
   delegationsEnTantQueDelegant    Delegation[]        @relation("DelegationDelegant")
   delegationsEnTantQueDelegataire Delegation[]        @relation("DelegationDelegataire")
   journalSecurite                 JournalSecurite[]
+  journalActivite                 JournalActivite[]
+  journalActiviteAgregats         JournalActiviteAgregat[]
   historiqueMontants              HistoriqueMontant[]
   controles                       Controle[]
   notifications                   Notification[]
@@ -365,6 +382,69 @@ model JournalSecurite {
 
   @@index([utilisateurId, horodatage])
   @@map("journal_securite")
+}
+
+// Conception validée 08/09/2026 (CLAUDE.md « Journal d'activité
+// administrateur »). Nullable + ON DELETE SET NULL sur utilisateurId — même
+// convention que JournalSecurite : supprimer un utilisateur ne doit jamais
+// être bloqué par son propre historique d'activité.
+model JournalActivite {
+  id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  utilisateurId String?          @map("utilisateur_id") @db.Uuid
+  type          EnumTypeActivite
+  // NAVIGATION : la clé d'écran stable (cleDePathname côté client —
+  // "corbeilles", "detail", jamais le pathname brut avec un id dedans).
+  // ACTION : le GABARIT de route ("/api/admin/paliers/:id"), jamais l'URL
+  // réelle — l'id va dans `detail`.
+  route         String
+  // null pour NAVIGATION (pas de verbe HTTP pour une consultation d'écran).
+  methodeHttp   String?          @map("methode_http")
+  // Dérivé côté serveur dans les deux cas, jamais transmis tel quel par le
+  // client (même discipline que le reste de ce journal : un texte affiché à
+  // un admin dans un but de contrôle n'est jamais une valeur que l'acteur
+  // observé pourrait influencer).
+  libelle       String
+  // Jamais le corps de la requête — seulement de quoi identifier l'objet
+  // concerné (ex. {"id": "<uuid du palier>"} pour une action, {"demandeId":
+  // "..."} pour la navigation /dossiers/:id). Params de route uniquement.
+  detail        Json?
+  horodatage    DateTime         @default(now()) @db.Timestamptz
+
+  utilisateur Utilisateur? @relation(fields: [utilisateurId], references: [id])
+
+  // [utilisateurId, horodatage] en premier — « mon historique récent »,
+  // probablement le plus consulté (confirmé, cf. écran). [type, horodatage]
+  // en second — une requête transversale « toutes les actions d'aujourd'hui,
+  // tous utilisateurs » sans scanner la table entière.
+  @@index([utilisateurId, horodatage])
+  @@index([type, horodatage])
+  @@map("journal_activite")
+}
+
+// Étape 5 — service de rétention (CLAUDE.md « Journal d'activité
+// administrateur »). Une ligne = un jour × type × utilisateur, écrite au
+// moment où les lignes JournalActivite sous-jacentes sortent de la fenêtre
+// de rétention (compte AVANT purge, jamais après — sinon il n'y aurait plus
+// rien à compter). Pas de contrainte unique sur (utilisateurId, jour, type) :
+// Postgres traite chaque NULL comme distinct dans un index unique, ce qui
+// aurait rendu la contrainte inefficace pour les entrées sans utilisateur
+// résolu (compte supprimé) — l'atomicité vient de la transaction du job
+// (agrégation + purge ensemble, jamais l'une sans l'autre), pas d'une
+// contrainte de schéma. ON DELETE SET NULL, même convention que
+// JournalActivite/JournalSecurite : cet agrégat SURVIT à la suppression de
+// l'utilisateur qu'il compte, par construction (c'est un historique, jamais
+// une donnée courante).
+model JournalActiviteAgregat {
+  id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  utilisateurId String?          @map("utilisateur_id") @db.Uuid
+  jour          DateTime         @db.Date
+  type          EnumTypeActivite
+  compte        Int
+
+  utilisateur Utilisateur? @relation(fields: [utilisateurId], references: [id])
+
+  @@index([jour])
+  @@map("journal_activite_agregat")
 }
 
 // ============================================================

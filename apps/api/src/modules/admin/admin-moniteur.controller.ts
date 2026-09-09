@@ -3,6 +3,7 @@ import { ApiTags } from "@nestjs/swagger";
 import { listerMoniteurQuerySchema, moniteurListeReponseSchema, type MoniteurListeReponse } from "@pgd/contracts";
 import { ApiZodQuery, ApiZodResponse } from "../../common/swagger/zod-schema";
 import { Roles } from "../../common/decorators/roles.decorator";
+import { SansJournalActivite } from "../../common/decorators/sans-journal-activite.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import type { UtilisateurRequete } from "../../common/guards/auth.guard";
 import { MoniteurService } from "./services/moniteur.service";
@@ -27,7 +28,10 @@ export class AdminMoniteurController {
     return this.moniteur.lister(dto);
   }
 
+  // @SansJournalActivite() — écrit déjà JournalAudit (action
+  // "relance_corbeille", MoniteurService.relancer).
   @Roles("ADMIN_PGD")
+  @SansJournalActivite()
   @Post(":tacheId/relancer")
   async relancer(@Param("tacheId") tacheId: string, @CurrentUser() utilisateur: UtilisateurRequete): Promise<{ relance: true }> {
     await this.moniteur.relancer(tacheId, utilisateur.identifiantAd);

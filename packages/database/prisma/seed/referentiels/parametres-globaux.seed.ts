@@ -53,6 +53,17 @@ export async function seedParametresGlobaux(prisma: PrismaClient): Promise<void>
       cle: "destinataire_notification_erreur_si",
       valeur: { roleCode: null },
       libelle: "Rôle notifié en cas d'erreur de restitution SI (exploitation — non déterminé par les sources)"
+    },
+    // 09/09/2026, étape 5 du chantier « Journal d'activité administrateur »
+    // (CLAUDE.md) — durée de rétention explicitement provisoire, ajustable
+    // sans redéploiement (même mécanisme que tache_verrou_ttl_secondes
+    // ci-dessus) : six mois sous réserve d'une politique de conservation
+    // applicative côté Orange, en cours de vérification au moment de ce
+    // chantier — un paramètre, pas une reconstruction si la valeur change.
+    {
+      cle: "retention_journal_activite_jours",
+      valeur: { jours: 180 },
+      libelle: "Durée de rétention du journal d'activité avant agrégation et purge, en jours"
     }
   ];
 

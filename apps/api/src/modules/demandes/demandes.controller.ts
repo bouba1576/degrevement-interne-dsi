@@ -10,11 +10,13 @@ import {
   Post,
   Put,
   Query,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
+import type { Response } from "express";
 import { ApiTags } from "@nestjs/swagger";
 import {
   apercuRoutageReponseSchema,
@@ -39,6 +41,7 @@ import {
 } from "@pgd/contracts";
 import { ApiZodBody, ApiZodQuery, ApiZodResponse } from "../../common/swagger/zod-schema";
 import { Authenticated } from "../../common/decorators/authenticated.decorator";
+import { SansJournalActivite } from "../../common/decorators/sans-journal-activite.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { ProfilRequis } from "../../common/decorators/profil-requis.decorator";
@@ -166,8 +169,13 @@ export class DemandesController {
   // dans modifierAvecReRoutage (BROUILLON -> modification libre ; sinon ->
   // re-routage tant qu'aucune décision n'est prise, R6) : propriété et état
   // sont deux gardes distincts, pas un substitut l'un de l'autre.
+  // @SansJournalActivite() — écrit déjà JournalAudit quand applicable
+  // (action "re-routage" via reRouterSiEngage, ou "creation-correction"/
+  // "bascule-nouveau-dossier" via dupliquerVersNouveauDossier — les deux
+  // conditionnels, jamais systématiques, mais toujours cette même route).
   @Authenticated()
   @UseGuards(InitiateurDemandeGuard)
+  @SansJournalActivite()
   @Patch(":id")
   @ApiZodBody(modifierDemandeRequeteSchema)
   @ApiZodResponse(200, demandeDetailSchema)
@@ -184,8 +192,11 @@ export class DemandesController {
   // docs/10 DOBB #1/#2/#6) — route dédiée, jamais mélangée à modifier() :
   // DemandeWorkflowService.modifierTaxes trace R25 (HISTORIQUE_MONTANT) et
   // redéclenche le re-routage R6 si le dossier est déjà engagé.
+  // @SansJournalActivite() — écrit déjà JournalAudit quand le dossier est
+  // engagé (action "re-routage" via reRouterSiEngage, conditionnel).
   @Authenticated()
   @UseGuards(InitiateurDemandeGuard)
+  @SansJournalActivite()
   @Patch(":id/taxes")
   @ApiZodBody(modifierTaxesRequeteSchema)
   @ApiZodResponse(200, demandeDetailSchema)
@@ -310,8 +321,11 @@ export class DemandesController {
     return { echeance: echeance.toISOString() };
   }
 
+  // @SansJournalActivite() — écrit déjà JournalAudit (action "soumission",
+  // DemandeWorkflowService.soumettre).
   @Authenticated()
   @UseGuards(InitiateurDemandeGuard)
+  @SansJournalActivite()
   @Post(":id/soumettre")
   @HttpCode(200)
   @ApiZodResponse(200, soumissionReponseSchema)
@@ -319,8 +333,12 @@ export class DemandesController {
     return this.workflow.soumettre(id, { id: utilisateur.id, identifiantAd: utilisateur.identifiantAd });
   }
 
+  // @SansJournalActivite() — écrit déjà JournalAudit via
+  // terminerSiAucuneDecision (action variable selon l'appelant, cf.
+  // DemandeWorkflowService — même méthode privée que rappeler ci-dessous).
   @Authenticated()
   @UseGuards(InitiateurDemandeGuard)
+  @SansJournalActivite()
   @Post(":id/abandonner")
   @HttpCode(200)
   async abandonner(
@@ -331,8 +349,11 @@ export class DemandesController {
     return { abandonne: true };
   }
 
+  // @SansJournalActivite() — écrit déjà JournalAudit via
+  // terminerSiAucuneDecision, même mécanisme qu'abandonner ci-dessus.
   @Authenticated()
   @UseGuards(InitiateurDemandeGuard)
+  @SansJournalActivite()
   @Post(":id/rappeler")
   @HttpCode(200)
   async rappeler(@Param("id") id: string, @CurrentUser() utilisateur: UtilisateurRequete): Promise<{ rappele: true }> {
@@ -361,6 +382,27 @@ export class DemandesController {
   async supprimerPiece(@Param("id") id: string, @Param("pieceId") pieceId: string): Promise<{ supprime: true }> {
     await this.pieceService.supprimer(id, pieceId);
     return { supprime: true };
+  }
+
+  // GET .../pieces/{pieceId}/telecharger (08/09/2026, demande explicite) —
+  // ferme le trou déjà documenté (CLAUDE.md « Aucune route ne sert le
+  // fichier réel d'une pièce jointe »). @Authenticated() seul, jamais
+  // InitiateurDemandeGuard : le téléchargement doit être possible pour tout
+  // viewer du dossier (docs/06 §4, même ouverture que obtenirDetail), pas
+  // seulement l'initiateur — contrairement à ajouterPiece/supprimerPiece
+  // ci-dessus. Réponse binaire brute, contourne délibérément
+  // ResponseEnvelopeInterceptor (même patron que AuditController.exporter()).
+  @Authenticated()
+  @Get(":id/pieces/:pieceId/telecharger")
+  async telechargerPiece(
+    @Param("id") id: string,
+    @Param("pieceId") pieceId: string,
+    @Res() res: Response
+  ): Promise<void> {
+    const fichier = await this.pieceService.lireFichier(id, pieceId);
+    res.setHeader("Content-Type", fichier.typeMime);
+    res.setHeader("Content-Disposition", `attachment; filename="${fichier.nomFichier}"`);
+    res.send(fichier.contenu);
   }
 
   // PGD-060/061 — état de restitution SI, lecture ouverte à tout utilisateur

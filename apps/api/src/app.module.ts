@@ -1,5 +1,5 @@
 import { Module } from "@nestjs/common";
-import { APP_GUARD } from "@nestjs/core";
+import { APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 import { PrismaModule } from "./infra/prisma/prisma.module";
 import { RedisModule } from "./infra/redis/redis.module";
 import { RabbitMQModule } from "./infra/rabbitmq/rabbitmq.module";
@@ -14,9 +14,11 @@ import { KpiModule } from "./modules/kpi/kpi.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
 import { ReferentielsModule } from "./modules/referentiels/referentiels.module";
 import { ReportingModule } from "./modules/reporting/reporting.module";
+import { ActiviteModule } from "./modules/activite/activite.module";
 import { AuthGuard } from "./common/guards/auth.guard";
 import { RbacGuard } from "./common/guards/rbac.guard";
 import { ProfilGuard } from "./common/guards/profil.guard";
+import { JournalActiviteInterceptor } from "./common/interceptors/journal-activite.interceptor";
 
 @Module({
   imports: [
@@ -33,7 +35,8 @@ import { ProfilGuard } from "./common/guards/profil.guard";
     KpiModule,
     NotificationsModule,
     ReferentielsModule,
-    ReportingModule
+    ReportingModule,
+    ActiviteModule
   ],
   providers: [
     // Ordre d'exécution Nest = ordre de déclaration : authentification avant
@@ -43,7 +46,13 @@ import { ProfilGuard } from "./common/guards/profil.guard";
     // logique : rôle (portée) avant profil (capacité).
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: RbacGuard },
-    { provide: APP_GUARD, useClass: ProfilGuard }
+    { provide: APP_GUARD, useClass: ProfilGuard },
+    // Global via APP_INTERCEPTOR (pas main.ts, à la différence de
+    // LoggingInterceptor/ResponseEnvelopeInterceptor) — celui-ci a besoin de
+    // l'injection de dépendances (ActiviteService), que useGlobalInterceptors()
+    // ne fournit pas. Ordre sans incidence : chaque intercepteur observe
+    // indépendamment, aucun ne dépend du résultat d'un autre.
+    { provide: APP_INTERCEPTOR, useClass: JournalActiviteInterceptor }
   ]
 })
 export class AppModule {}

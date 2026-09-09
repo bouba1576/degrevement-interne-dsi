@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
-import { mkdir, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { loadEnv } from "@pgd/config";
 import type { FichierAStocker, FichierStocke, GedPort } from "../ports/ged.port";
@@ -27,6 +27,16 @@ export class GedStubAdapter implements GedPort {
       await unlink(join(env.GED_STORAGE_PATH, gedRef));
     } catch (erreur) {
       if ((erreur as NodeJS.ErrnoException).code !== "ENOENT") throw erreur;
+    }
+  }
+
+  async lire(gedRef: string): Promise<Buffer | null> {
+    const env = loadEnv();
+    try {
+      return await readFile(join(env.GED_STORAGE_PATH, gedRef));
+    } catch (erreur) {
+      if ((erreur as NodeJS.ErrnoException).code === "ENOENT") return null;
+      throw erreur;
     }
   }
 

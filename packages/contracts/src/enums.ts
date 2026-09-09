@@ -78,6 +78,7 @@ export const enumFacteurAuth = z.enum(["AD", "DUO", "TOTP", "SESSION", "KEYCLOAK
 export const enumStatutLigne = z.enum(["ACTIF", "SUSPENDU", "RESILIE"]);
 export const enumEtatSi = z.enum(["EN_ATTENTE", "ENVOYE", "CONFIRME", "ERREUR"]);
 export const enumAssietteTva = z.enum(["HT", "HT_TSC"]);
+export const enumTypeActivite = z.enum(["NAVIGATION", "ACTION"]);
 
 export type EnumCircuit = z.infer<typeof enumCircuit>;
 export type EnumStatutDemande = z.infer<typeof enumStatutDemande>;
@@ -97,3 +98,4 @@ export type EnumFacteurAuth = z.infer<typeof enumFacteurAuth>;
 export type EnumStatutLigne = z.infer<typeof enumStatutLigne>;
 export type EnumEtatSi = z.infer<typeof enumEtatSi>;
 export type EnumAssietteTva = z.infer<typeof enumAssietteTva>;
+export type EnumTypeActivite = z.infer<typeof enumTypeActivite>;

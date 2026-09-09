@@ -6,6 +6,7 @@ import { RabbitMQModule } from "./rabbitmq/rabbitmq.module";
 import { RedisModule } from "./infra/redis/redis.module";
 import { PrismaService } from "./infra/prisma/prisma.service";
 import { LocksSweeperService } from "./jobs/locks-sweeper.service";
+import { JournalActiviteRetentionService } from "./jobs/journal-activite-retention.service";
 import { SlaEscalationService } from "./jobs/sla-escalation.service";
 import { ConsumersService } from "./jobs/consumers.service";
 import { SchedulerService } from "./jobs/scheduler.service";
@@ -26,6 +27,7 @@ import { SMS_PORT } from "./notifications/sms.port";
   providers: [
     PrismaService,
     LocksSweeperService,
+    JournalActiviteRetentionService,
     SlaEscalationService,
     ConsumersService,
     SchedulerService,
