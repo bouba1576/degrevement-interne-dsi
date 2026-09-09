@@ -64,6 +64,8 @@ describe("E2E — circuit DXC (B2C), parcours complet en HTTP réel", () => {
         motifId: motif.id,
         libelle: "Contestation facture",
         compteClient: "B2C-4471902",
+        // Obligatoire à la soumission pour DXC (08/09/2026, demande explicite).
+        matriculeInitiateur: "M-2041",
         formuleAbonnement: "Formule Essentielle",
         debutPeriodeContestee: "2026-01-01",
         finPeriodeContestee: "2026-01-31"

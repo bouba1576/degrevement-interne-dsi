@@ -271,7 +271,13 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
 
   // Carte « Identification » — champs communs aux trois circuits.
   const [agentInitiateur, setAgentInitiateur] = useState(utilisateur.nom);
-  const [matriculeInitiateur, setMatriculeInitiateur] = useState("");
+  // Champ retiré des trois formulaires (08/09/2026, demande explicite) — plus
+  // aucun input, auto-rempli silencieusement depuis le matricule du profil de
+  // l'initiateur connecté (même mécanisme que agentInitiateur/utilisateur.nom
+  // juste au-dessus). setMatriculeInitiateur reste utilisée par le mode
+  // reprise (ci-dessous) et la bascule point 11, jamais par une saisie
+  // utilisateur directe.
+  const [matriculeInitiateur, setMatriculeInitiateur] = useState(utilisateur.matricule ?? "");
   const [agentSaisie, setAgentSaisie] = useState(utilisateur.nom);
   const [sousFlux, setSousFlux] = useState("");
   const [libelle, setLibelle] = useState("");
@@ -557,7 +563,11 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
         setCommentaire(d.commentaire ?? "");
         setDateDemande(d.dateDemande ? d.dateDemande.slice(0, 10) : dateDuJourLocale());
         setAgentInitiateur(d.agentInitiateur ?? utilisateur.nom);
-        setMatriculeInitiateur(d.matriculeInitiateur ?? "");
+        // Champ retiré de l'écran (08/09/2026) — reprend la valeur déjà
+        // enregistrée sur le dossier si elle existe (dossier créé avant ce
+        // retrait), sinon retombe sur le matricule du profil courant, jamais
+        // une chaîne vide tant que le profil en porte un.
+        setMatriculeInitiateur(d.matriculeInitiateur ?? utilisateur.matricule ?? "");
         setAgentSaisie(d.agentSaisie ?? utilisateur.nom);
         setUniversFmiCode(d.universFmiCode ?? "");
         setFacteurCode(d.facteurCode ?? "");
@@ -857,7 +867,20 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
     // l'utilisateur ait commencé à saisir affichait « Contexte de la
     // réclamation requis » dès le premier rendu utile (dès que sousFlux se
     // préremplit depuis le profil), avant que quiconque n'ait rien tapé.
-    if (!demandeActuelle && (!nomClient.trim() || !commentaire.trim() || !montantHt)) {
+    //
+    // `commentaire` exclu de cette garde pour DF (08/09/2026, bug trouvé en
+    // vérifiant le code, pas supposé) — R14 est explicitement assouplie pour
+    // ce circuit côté serveur (demande-workflow.service.ts, Commentaire
+    // facultatif), mais cette garde l'exigeait sans distinction de circuit :
+    // un dossier DF rempli (Opérateur + Montant) sans commentaire — légitime
+    // sur ce circuit — ne déclenchait jamais la création silencieuse, donc
+    // jamais l'affichage des panneaux Calcul automatique/Routage prévu, qui
+    // dépendent tous deux de l'existence d'un dossier créé.
+    const commentaireRequisPourCreation = circuit !== "DF";
+    if (
+      !demandeActuelle &&
+      (!nomClient.trim() || (commentaireRequisPourCreation && !commentaire.trim()) || !montantHt)
+    ) {
       return;
     }
 
@@ -1161,26 +1184,37 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
                 onChange={(e) => setAgentInitiateur(e.target.value)}
               />
             </ChampCorrige>
-            <div>
-              <label className="mb-1 block text-13 font-bold text-gris800">Matricule / réf. agent initiateur</label>
-              <input
-                className="w-full rounded border border-gris300 px-3 py-2 text-13 font-mono"
-                value={matriculeInitiateur}
-                onChange={(e) => setMatriculeInitiateur(e.target.value)}
-                placeholder="ex. M-2041"
-              />
-            </div>
-            <ChampCorrige nom="Agent de saisie" champsRejetes={champsRejetes}>
-              <label className="mb-1 block text-13 font-bold text-gris800">Agent de saisie</label>
-              <input
-                className="w-full rounded border border-gris300 px-3 py-2 text-13"
-                value={agentSaisie}
-                onChange={(e) => setAgentSaisie(e.target.value)}
-              />
-            </ChampCorrige>
+            {/* Champ retiré des trois formulaires (08/09/2026, demande
+                explicite — remplace le retrait DF-only puis l'obligation
+                DXC de la même journée) : plus aucune saisie, la valeur est
+                désormais auto-remplie depuis le matricule du profil de
+                l'initiateur connecté (utilisateur.matricule, cf.
+                l'initialisation de matriculeInitiateur plus haut) et envoyée
+                telle quelle dans le payload, sans intervention possible
+                depuis cet écran, sur aucun circuit. */}
+            {/* Agent de saisie retiré de la fiche DF uniquement (09/09/2026,
+                demande explicite) — DOBB/DXC gardent le champ inchangé, même
+                précédent que « Numéro Case » (retiré de la fiche DF, resté
+                réel côté DOBB/DXC). État (agentSaisie) et payload
+                (construirePayload(), dépendance du debounce) inchangés — un
+                dossier DF déjà porteur d'une valeur la conserve telle quelle
+                en base, simplement plus affichée ni modifiable depuis cet
+                écran pour ce circuit. Aucune contrainte backend sur ce champ
+                (jamais lu par demande-workflow.service.ts), rien à changer
+                côté serveur/contrats. */}
+            {circuit !== "DF" && (
+              <ChampCorrige nom="Agent de saisie" champsRejetes={champsRejetes}>
+                <label className="mb-1 block text-13 font-bold text-gris800">Agent de saisie</label>
+                <input
+                  className="w-full rounded border border-gris300 px-3 py-2 text-13"
+                  value={agentSaisie}
+                  onChange={(e) => setAgentSaisie(e.target.value)}
+                />
+              </ChampCorrige>
+            )}
             <ChampCorrige nom="Motif" champsRejetes={champsRejetes}>
               <label className="mb-1 block text-13 font-bold text-gris800">
-                Motif {(circuit === "DOBB" || circuit === "DXC") && <span className="text-rouge">*</span>}
+                Motif <span className="text-rouge">*</span>
               </label>
               <select
                 className="w-full rounded border border-gris300 px-3 py-2 text-13 disabled:opacity-60"
@@ -1205,13 +1239,13 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
                   placeholder="Précisez le motif…"
                 />
               )}
-              {/* 01/09/2026, étendu à DXC le 07/09/2026 (demande explicite,
-                  « tous les champs deviennent obligatoires ») — obligatoire à
-                  la soumission pour DOBB/DXC, cf. demande-workflow.service.ts
-                  (MOTIF_REQUIS). */}
-              {(circuit === "DOBB" || circuit === "DXC") && (
-                <p className="mt-1 text-12 text-gris600">Obligatoire à la soumission.</p>
-              )}
+              {/* 01/09/2026, étendu à DXC le 07/09/2026 puis à DF le
+                  08/09/2026 (demande explicite à chaque fois) — obligatoire à
+                  la soumission sur les trois circuits désormais, cf.
+                  demande-workflow.service.ts (MOTIF_REQUIS, booléen
+                  `motifRequis` dédié, distinct de `libelleRequis` resté
+                  DOBB/DXC). */}
+              <p className="mt-1 text-12 text-gris600">Obligatoire à la soumission.</p>
               {/* R13 — pièces obligatoires du motif, affichées avant l'échec de
                   soumission plutôt que découvertes au 422. */}
               {motifSelectionne && motifSelectionne.piecesAfferentes.some((p) => p.obligatoire) && (
@@ -1499,6 +1533,7 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
                     className="w-full rounded border border-gris300 px-3 py-2 text-13 font-mono"
                     type="number"
                     min="0"
+                    step="0.01"
                     value={recurrentMensuel}
                     onChange={(e) => setRecurrentMensuel(e.target.value)}
                     placeholder="0"
@@ -1743,6 +1778,7 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
                   className="w-full rounded border border-gris300 px-3 py-2 text-13 font-mono"
                   type="number"
                   min="0"
+                  step="0.01"
                   value={montantHt}
                   onChange={(e) => setMontantHt(e.target.value)}
                   placeholder="0"
@@ -1773,30 +1809,30 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
 
         {/* Pièces justificatives — la maquette (screens1.jsx:479) les affiche
             dès l'écran de création, pour les trois circuits identiquement.
-            Le serveur exige un demandeId (POST /api/demandes/{id}/pieces)
-            qui n'existe qu'une fois la sauvegarde silencieuse déclenchée —
-            même gate que le panneau Taxes et ApercuRoutage. */}
-        {demande && (
-          <>
-            <PiecesTab
-              demandeId={demande.demande.id}
-              pieces={demande.pieces}
-              onChange={(nouvelles) => setDemande((d) => (d ? { ...d, pieces: nouvelles } : d))}
-              // Cet écran n'est jamais atteint que par l'initiateur du dossier
-              // (création ou mode reprise, cf. CLAUDE.md) — toujours vrai ici,
-              // contrairement à DossierDetailScreen où n'importe quel viewer
-              // authentifié peut ouvrir un dossier tiers.
-              peutModifier
-            />
-            {/* 07/09/2026, demande explicite — au moins une pièce jointe
-                devient obligatoire à la soumission pour DXC (jusqu'ici
-                facultative sur ce circuit, R13 ne s'appliquant que si le
-                motif choisi porte une pièce afférente obligatoire — cf.
-                demande-workflow.service.ts, PIECE_JOINTE_REQUISE). */}
-            {circuit === "DXC" && (
-              <p className="mt-2 text-12 text-gris600">Au moins une pièce jointe est obligatoire à la soumission (DXC).</p>
-            )}
-          </>
+            08/09/2026, demande explicite : la zone doit rester TOUJOURS
+            visible, sans dépendre d'un dossier déjà créé — contrairement au
+            panneau Taxes/ApercuRoutage (qui a besoin d'un calcul serveur
+            réel). PiecesTab gère elle-même la mise en attente locale des
+            fichiers déposés avant que demandeId n'existe (cf. son propre
+            commentaire), puis les envoie automatiquement une fois le dossier
+            créé par la sauvegarde silencieuse. */}
+        <PiecesTab
+          demandeId={demande?.demande.id}
+          pieces={demande?.pieces ?? []}
+          onChange={(nouvelles) => setDemande((d) => (d ? { ...d, pieces: nouvelles } : d))}
+          // Cet écran n'est jamais atteint que par l'initiateur du dossier
+          // (création ou mode reprise, cf. CLAUDE.md) — toujours vrai ici,
+          // contrairement à DossierDetailScreen où n'importe quel viewer
+          // authentifié peut ouvrir un dossier tiers.
+          peutModifier
+        />
+        {/* 07/09/2026, demande explicite — au moins une pièce jointe
+            devient obligatoire à la soumission pour DXC (jusqu'ici
+            facultative sur ce circuit, R13 ne s'appliquant que si le
+            motif choisi porte une pièce afférente obligatoire — cf.
+            demande-workflow.service.ts, PIECE_JOINTE_REQUISE). */}
+        {circuit === "DXC" && (
+          <p className="mt-2 text-12 text-gris600">Au moins une pièce jointe est obligatoire à la soumission (DXC).</p>
         )}
       </div>
 
@@ -1911,6 +1947,7 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
                     className="mt-1 w-full rounded border border-gris300 px-3 py-2 text-13"
                     type="number"
                     min="0"
+                    step="0.01"
                     value={taxesEdition.montantTscManuel}
                     onChange={(e) => mettreAJourTaxes((s) => ({ ...s, montantTscManuel: e.target.value }))}
                   />
@@ -1937,6 +1974,7 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
                     className="mt-1 w-full rounded border border-gris300 px-3 py-2 text-13"
                     type="number"
                     min="0"
+                    step="0.01"
                     value={taxesEdition.montantTvaManuel}
                     onChange={(e) => mettreAJourTaxes((s) => ({ ...s, montantTvaManuel: e.target.value }))}
                   />

@@ -37,7 +37,7 @@ export function CardHeader({ icone, titre, action }: CardHeaderProps) {
   return (
     <div className="flex items-center gap-3 border-b border-gris100 px-5 py-4">
       {icone && <Icon nom={icone} taille={17} className="shrink-0 text-gris700" />}
-      <h3 className="flex-1 text-14 font-bold">{titre}</h3>
+      <h3 className="flex-1 text-14 font-bold">{titre} <span className="text-rouge">*</span></h3>
       {action}
     </div>
   );

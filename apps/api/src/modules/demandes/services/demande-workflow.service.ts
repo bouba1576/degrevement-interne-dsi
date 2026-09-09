@@ -73,18 +73,26 @@ export class DemandeWorkflowService {
 
     // Motif/Libellé obligatoires à la soumission — DOBB (01/09/2026, demande
     // explicite), étendu à DXC le 07/09/2026 (demande explicite, « tous les
-    // champs deviennent obligatoires »). Toujours pas DF — Objet (le même
-    // champ `libelle`, cf. OBJET_REQUIS plus bas) a sa propre règle distincte
-    // pour ce circuit. Même mécanisme cumulable que R13/R14/sous-flux : un
-    // BROUILLON peut exister sans motif/libellé, tant qu'il n'est pas soumis.
-    // "Autre (non référencé)" (07/09/2026) — motifAutre satisfait la même
-    // obligation qu'un motifId réel : un motif signalé "hors catalogue" reste
-    // un motif fourni, jamais un motif manquant.
-    const motifLibelleRequis = demande.circuit === "DOBB" || demande.circuit === "DXC";
-    if (motifLibelleRequis && !demande.motifId && (!demande.motifAutre || demande.motifAutre.trim() === "")) {
+    // champs deviennent obligatoires »). Même mécanisme cumulable que
+    // R13/R14/sous-flux : un BROUILLON peut exister sans motif/libellé, tant
+    // qu'il n'est pas soumis. "Autre (non référencé)" (07/09/2026) —
+    // motifAutre satisfait la même obligation qu'un motifId réel : un motif
+    // signalé "hors catalogue" reste un motif fourni, jamais un motif
+    // manquant.
+    //
+    // Motif étendu à DF (08/09/2026, demande explicite) — booléen DÉDIÉ,
+    // distinct de `libelleRequis` : DF a déjà sa propre règle sur `libelle`
+    // (OBJET_REQUIS plus bas, même colonne que Motif/Libellé mais un code
+    // d'erreur distinct puisque la maquette nomme ce champ différemment sur
+    // ce circuit) — étendre le même booléen aux deux aurait fait lever
+    // LIBELLE_REQUIS en plus d'OBJET_REQUIS pour DF, un doublon sur le même
+    // champ manquant, jamais demandé.
+    const motifRequis = demande.circuit === "DOBB" || demande.circuit === "DXC" || demande.circuit === "DF";
+    const libelleRequis = demande.circuit === "DOBB" || demande.circuit === "DXC";
+    if (motifRequis && !demande.motifId && (!demande.motifAutre || demande.motifAutre.trim() === "")) {
       erreurs.push({ code: "MOTIF_REQUIS", message: "Le motif est obligatoire à la soumission." });
     }
-    if (motifLibelleRequis && (!demande.libelle || demande.libelle.trim() === "")) {
+    if (libelleRequis && (!demande.libelle || demande.libelle.trim() === "")) {
       erreurs.push({ code: "LIBELLE_REQUIS", message: "Le libellé est obligatoire à la soumission." });
     }
 
@@ -107,6 +115,18 @@ export class DemandeWorkflowService {
     // ferait que forcer une valeur déjà par défaut.
     if (demande.circuit === "DXC" && (!demande.compteClient || demande.compteClient.trim() === "")) {
       erreurs.push({ code: "COMPTE_CLIENT_REQUIS", message: "Le compte client est obligatoire à la soumission (DXC)." });
+    }
+
+    // Matricule / réf. agent initiateur — obligatoire à la soumission pour
+    // DXC uniquement (08/09/2026, demande explicite), jamais DOBB. Champ
+    // absent du formulaire DF depuis le même jour (cf. NouvelleDemandeScreen.
+    // tsx, retiré de la fiche DF) — sans objet pour ce circuit, aucune
+    // condition à y ajouter.
+    if (demande.circuit === "DXC" && (!demande.matriculeInitiateur || demande.matriculeInitiateur.trim() === "")) {
+      erreurs.push({
+        code: "MATRICULE_INITIATEUR_REQUIS",
+        message: "Le matricule / réf. agent initiateur est obligatoire à la soumission (DXC)."
+      });
     }
 
     // Formule d'abonnement / Période contestée — obligatoires à la

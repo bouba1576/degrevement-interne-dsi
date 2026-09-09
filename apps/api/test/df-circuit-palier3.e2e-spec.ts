@@ -78,8 +78,12 @@ describe("E2E — circuit DF (Wholesale), palier 3 (>50M), parcours complet en H
         universFmiCode: "FIXE",
         facteurCode: "INTERNE",
         // Objet (libelle) + De/À/Objectif obligatoires à la soumission DF
-        // (07/09/2026, demande explicite).
+        // (07/09/2026, demande explicite) ; Motif étendu à DF le 08/09/2026
+        // — motifAutre plutôt qu'un motifId réel (les deux motifs DF seedés
+        // portent une pièce afférente obligatoire, R13, hors périmètre de ce
+        // test).
         libelle: "Réclamation opérateur E2E palier 3",
+        motifAutre: "Motif E2E DF palier 3",
         champsCircuit: { memoDe: "E2E DF", memoA: "Service Fraude & Revenue Assurance", memoObjectif: "Soumettre l'ajustement" }
       })
       .expect(201);
