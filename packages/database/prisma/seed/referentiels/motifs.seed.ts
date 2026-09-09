@@ -1,16 +1,50 @@
 import type { EnumCircuit, PrismaClient } from "@prisma/client";
 
-// PLACEHOLDER — aucune source lue ne fournit la liste réelle des motifs
-// (docs/03 §8 annonce « ≈ 30 DOBB, liste DXC, 9 DF » sans les énumérer). Seul un
-// petit jeu générique est seedé ici, par circuit, pour que la structure
-// MOTIF/PIECE_AFFERENTE soit démontrable. À remplacer intégralement par la
-// liste réelle (probablement les fiches FORMULAIRE_DOBB.xlsx / FORMULAIRE_DXC.xlsx
-// / FORMULAIRE_DF.doc citées en tête de 04_MCD_MLD_PGD_PROD.md) avant recette.
+// Les 7 entrées « (placeholder) » d'origine (docs/03 §8 annonçait « ≈ 30
+// DOBB, liste DXC, 9 DF » sans les énumérer) restent en l'état, PAS
+// remplacées ni supprimées malgré leur nom : des dossiers de démo réels du
+// socle de dev les référencent déjà par FK (Demande.motifId), vérifié avant
+// d'agir — un `DELETE` aurait échoué sur la contrainte, et de toute façon
+// hors de ce qui a été demandé (« ajoute au seed »). La liste réelle des
+// motifs, transmise directement le 09/09/2026, est ajoutée à la suite de
+// chaque circuit, jamais en remplacement.
+//
+// Motifs DXC/DOBB — même liste transmise pour les deux circuits (22 motifs),
+// dupliquée une fois par circuit (Motif.circuit + libelle, unique par paire —
+// pas de motif partagé entre circuits dans ce schéma).
 
 interface DefinitionMotif {
   libelle: string;
   pieces: Array<{ libelle: string; obligatoire: boolean }>;
 }
+
+// Aucune pièce obligatoire précisée pour ces motifs réels — jamais devinée
+// (R11) : `pieces: []` pour chacun, comme déjà fait pour « Geste commercial
+// (placeholder) ».
+const MOTIFS_DXC_DOBB: DefinitionMotif[] = [
+  { libelle: "Erreur de saisie", pieces: [] },
+  { libelle: "Problème Technique", pieces: [] },
+  { libelle: "Anomalie SI (BSCS, GAIA, ZTE…)", pieces: [] },
+  { libelle: "Suspension non effective", pieces: [] },
+  { libelle: "Transfert non effectif", pieces: [] },
+  { libelle: "Résiliation non effective", pieces: [] },
+  { libelle: "Migration non effective", pieces: [] },
+  { libelle: "Modification non effective", pieces: [] },
+  { libelle: "Fraude Sim swap", pieces: [] },
+  { libelle: "Data roaming", pieces: [] },
+  { libelle: "Surconsommation fixe", pieces: [] },
+  { libelle: "Intra facturé", pieces: [] },
+  { libelle: "Service non livré facturé", pieces: [] },
+  { libelle: "Abattement", pieces: [] },
+  { libelle: "Geste commercial", pieces: [] },
+  { libelle: "Migration de formule", pieces: [] },
+  { libelle: "Annulation d'ajustement", pieces: [] },
+  { libelle: "Facturation manuelle de frais", pieces: [] },
+  { libelle: "Surconsommation", pieces: [] },
+  { libelle: "Paiement", pieces: [] },
+  { libelle: "Annulation de paiement", pieces: [] },
+  { libelle: "Test sur ajustement", pieces: [] }
+];
 
 const MOTIFS_PAR_CIRCUIT: Record<EnumCircuit, DefinitionMotif[]> = {
   DOBB: [
@@ -25,7 +59,8 @@ const MOTIFS_PAR_CIRCUIT: Record<EnumCircuit, DefinitionMotif[]> = {
     {
       libelle: "Réclamation commerciale (placeholder)",
       pieces: [{ libelle: "Courrier de réclamation", obligatoire: false }]
-    }
+    },
+    ...MOTIFS_DXC_DOBB
   ],
   DXC: [
     {
@@ -35,7 +70,8 @@ const MOTIFS_PAR_CIRCUIT: Record<EnumCircuit, DefinitionMotif[]> = {
     {
       libelle: "Geste commercial (placeholder)",
       pieces: []
-    }
+    },
+    ...MOTIFS_DXC_DOBB
   ],
   DF: [
     {
@@ -45,7 +81,15 @@ const MOTIFS_PAR_CIRCUIT: Record<EnumCircuit, DefinitionMotif[]> = {
     {
       libelle: "Différend contractuel (placeholder)",
       pieces: [{ libelle: "Contrat / bon de commande", obligatoire: true }]
-    }
+    },
+    { libelle: "Tarif incorrect", pieces: [] },
+    { libelle: "Divergence de volume", pieces: [] },
+    { libelle: "Double facturation", pieces: [] },
+    { libelle: "Facturation continue après demande de résiliation", pieces: [] },
+    { libelle: "Demande de résiliation intervenant après facture émise", pieces: [] },
+    { libelle: "Indisponibilité de service", pieces: [] },
+    { libelle: "Modifications de commande", pieces: [] },
+    { libelle: "Erreur de saisie", pieces: [] }
   ]
 };
 

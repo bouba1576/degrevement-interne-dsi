@@ -5,6 +5,7 @@ import { seedPaliers } from "./referentiels/paliers.seed";
 import { seedMotifs } from "./referentiels/motifs.seed";
 import { seedLibellesAjustement } from "./referentiels/libelles-ajustement.seed";
 import { seedPointsContact } from "./referentiels/point-contact.seed";
+import { seedOperateurs } from "./referentiels/operateurs.seed";
 import { seedSousFlux } from "./referentiels/sous-flux.seed";
 import { seedUniversEtFacteurs } from "./referentiels/univers-facteurs.seed";
 import { seedResponsabilites } from "./referentiels/responsabilites.seed";
@@ -25,6 +26,7 @@ async function main() {
   await seedMotifs(prisma);
   await seedLibellesAjustement(prisma);
   await seedPointsContact(prisma);
+  await seedOperateurs(prisma);
   await seedSousFlux(prisma);
   await seedUniversEtFacteurs(prisma);
   await seedResponsabilites(prisma);
