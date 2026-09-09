@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Badge, Card, Chip, Empty, Icon, Money, TypeActeurBadge } from "@pgd/ui";
 import type { SessionUtilisateur, TacheVue } from "@pgd/contracts";
-import { ApiError, claimTache, listerTachesCorbeille, unclaimTache } from "@/lib/api";
+import { ApiError, claimTache, listerTachesCorbeille, listerTachesDemande, unclaimTache } from "@/lib/api";
 import { TaskCard } from "./TaskCard";
 
 export interface CorbeillesScreenProps {
@@ -45,6 +45,24 @@ export function CorbeillesScreen({ utilisateur, onOuvrirDossier }: CorbeillesScr
   const [onglet, setOnglet] = useState<"corbeille" | "decidees">("corbeille");
   const [decidees, setDecidees] = useState<TacheVue[] | null>(null);
   const [erreurDecidees, setErreurDecidees] = useState<string | null>(null);
+  // Rejet postérieur (08/09/2026, demande explicite) — une décision passée
+  // (APPROUVEE, voire REJETEE-clôturée sur une étape antérieure à une autre)
+  // peut être suivie d'un rejet à une étape ULTÉRIEURE de la même chaîne,
+  // par un acteur qui n'a jamais été vu depuis cet onglet. La donnée existe
+  // déjà dans EtapeDossier (GET /api/demandes/{id}/taches, déjà construit
+  // pour l'onglet « Circuit de validation », CircuitTab) — jamais une
+  // nouvelle route ni un nouvel écran : un rejet-renvoi (clore=false, cas par
+  // défaut) purge TOUTE la chaîne du dossier, y compris les tâches déjà
+  // décidées par d'autres acteurs (TacheWorkflowService.rejeter) — une tâche
+  // qui a disparu de ce fait n'apparaît de toute façon plus dans "Décidées"
+  // (la requête source, listerTachesCorbeille, ne lit que des lignes Tache
+  // réelles). Seul un rejet-clôture (clore=true, terminal) laisse les tâches
+  // antérieures intactes : c'est le seul cas où « rejeté ultérieurement »
+  // peut être détecté ici, et c'est précisément ce que ce mécanisme cherche.
+  // Clé = TacheVue.id (pas demandeId) : une même personne peut, dans de rares
+  // cas, avoir décidé deux étapes non consécutives du même dossier (R3/SoD
+  // n'interdit que N-1→N), chacune avec son propre `ordre` à comparer.
+  const [rejeteesApres, setRejeteesApres] = useState<Record<string, string>>({});
 
   const chargerDecidees = useCallback(async () => {
     if (!roleActif) return;
@@ -58,6 +76,24 @@ export function CorbeillesScreen({ utilisateur, onOuvrirDossier }: CorbeillesScr
         .sort((a, b) => new Date(b.dateDecision ?? 0).getTime() - new Date(a.dateDecision ?? 0).getTime());
       setDecidees(mesDecisions);
       setErreurDecidees(null);
+
+      // Une chaîne par DOSSIER, pas par tâche décidée — dédupliquée, jamais
+      // un appel redondant si plusieurs de mes décisions portent sur le même
+      // dossier. `.catch(() => null)` : un dossier introuvable (cas
+      // structurellement impossible ici, la tâche référencée existe) ne doit
+      // jamais faire échouer l'affichage des décisions elles-mêmes.
+      const demandeIds = [...new Set(mesDecisions.map((t) => t.demandeId))];
+      const chaines = await Promise.all(demandeIds.map((id) => listerTachesDemande(id).catch(() => null)));
+      const chaineParDemande = new Map(demandeIds.map((id, i) => [id, chaines[i]]));
+
+      const rejets: Record<string, string> = {};
+      for (const t of mesDecisions) {
+        const rejetPosterieur = chaineParDemande
+          .get(t.demandeId)
+          ?.find((e) => e.ordre > t.ordre && e.etat === "REJETEE");
+        if (rejetPosterieur) rejets[t.id] = rejetPosterieur.roleLibelle;
+      }
+      setRejeteesApres(rejets);
     } catch (e) {
       setErreurDecidees(e instanceof ApiError ? e.message : "Erreur inattendue.");
     }
@@ -274,6 +310,19 @@ export function CorbeillesScreen({ utilisateur, onOuvrirDossier }: CorbeillesScr
                         </Badge>
                       </div>
                       <div className="mt-1 text-13 font-semibold">{t.nomClient}</div>
+                      {/* Rejet postérieur (08/09/2026, demande explicite) —
+                          le sort final du dossier une fois qu'il a quitté ma
+                          vue, pas seulement mon propre statut de décision.
+                          Affiché même sur une ligne « Approuvée » : c'est
+                          précisément le cas qui manque d'information sans ce
+                          signal (ma décision reste correcte, le dossier,
+                          lui, n'a pas prospéré). */}
+                      {rejeteesApres[t.id] && (
+                        <div className="mt-1.5 flex items-center gap-1.5 text-12 font-semibold text-rouge700">
+                          <Icon nom="alert" taille={13} />
+                          Rejeté ultérieurement par {rejeteesApres[t.id]}
+                        </div>
+                      )}
                     </div>
                     <div className="flex flex-col items-end gap-1">
                       <div className="text-12 text-gris600">Montant TTC</div>
