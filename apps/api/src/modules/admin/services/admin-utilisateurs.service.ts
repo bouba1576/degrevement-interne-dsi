@@ -91,6 +91,9 @@ export class AdminUtilisateursService {
         data: {
           identifiantAd: dto.identifiantAd,
           nom: dto.nom,
+          matricule: dto.matricule,
+          email: dto.email,
+          contact: dto.contact,
           directionId: dto.directionId,
           serviceId: dto.serviceId,
           sousFluxId: dto.sousFluxId
@@ -119,6 +122,9 @@ export class AdminUtilisateursService {
         where: { id },
         data: {
           nom: dto.nom,
+          matricule: dto.matricule,
+          email: dto.email,
+          contact: dto.contact,
           directionId: dto.directionId,
           serviceId: dto.serviceId,
           sousFluxId: dto.sousFluxId,
@@ -154,6 +160,8 @@ export class AdminUtilisateursService {
       identifiantAd: u.identifiantAd,
       nom: u.nom,
       matricule: u.matricule,
+      email: u.email,
+      contact: u.contact,
       actif: u.actif,
       directionId: u.directionId,
       directionLibelle: u.direction?.libelle ?? null,

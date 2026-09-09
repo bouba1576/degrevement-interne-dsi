@@ -6,6 +6,9 @@ import type { DirectionResponsabiliteVue, RoleVue, SousFluxVue, UtilisateurAdmin
 
 export interface UtilisateurModalValeur {
   nom: string;
+  matricule: string;
+  email: string;
+  contact: string;
   roles: string[];
   directionId: string;
   serviceId: string;
@@ -45,13 +48,26 @@ export function UtilisateurModal({
     utilisateur
       ? {
           nom: utilisateur.nom,
+          matricule: utilisateur.matricule ?? "",
+          email: utilisateur.email ?? "",
+          contact: utilisateur.contact ?? "",
           roles: utilisateur.roles.map((r) => r.code),
           directionId: utilisateur.directionId ?? "",
           serviceId: utilisateur.serviceId ?? "",
           sousFluxId: utilisateur.sousFluxId ?? "",
           actif: utilisateur.actif
         }
-      : { nom: nomInitial, roles: [], directionId: "", serviceId: "", sousFluxId: "", actif: true }
+      : {
+          nom: nomInitial,
+          matricule: "",
+          email: "",
+          contact: "",
+          roles: [],
+          directionId: "",
+          serviceId: "",
+          sousFluxId: "",
+          actif: true
+        }
   );
 
   const set = <K extends keyof UtilisateurModalValeur>(k: K, v: UtilisateurModalValeur[K]) =>
@@ -105,6 +121,31 @@ export function UtilisateurModal({
           <label className="flex flex-col gap-1 text-13">
             Nom
             <input value={valeur.nom} onChange={(e) => set("nom", e.target.value)} className="rounded border border-gris300 px-2 py-1 text-13" />
+          </label>
+          <label className="flex flex-col gap-1 text-13">
+            Matricule
+            <input
+              value={valeur.matricule}
+              onChange={(e) => set("matricule", e.target.value)}
+              className="rounded border border-gris300 px-2 py-1 text-13"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-13">
+            Email
+            <input
+              type="email"
+              value={valeur.email}
+              onChange={(e) => set("email", e.target.value)}
+              className="rounded border border-gris300 px-2 py-1 text-13"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-13">
+            Contact
+            <input
+              value={valeur.contact}
+              onChange={(e) => set("contact", e.target.value)}
+              className="rounded border border-gris300 px-2 py-1 text-13"
+            />
           </label>
           <label className="flex flex-col gap-1 text-13">
             Direction de rattachement

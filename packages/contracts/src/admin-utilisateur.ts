@@ -32,6 +32,8 @@ export const utilisateurAdminVueSchema = z.object({
   identifiantAd: z.string(),
   nom: z.string(),
   matricule: z.string().nullable(),
+  email: z.string().nullable(),
+  contact: z.string().nullable(),
   actif: z.boolean(),
   directionId: z.string().uuid().nullable(),
   directionLibelle: z.string().nullable(),
@@ -63,6 +65,26 @@ export function estFormeIdentifiantAdValide(valeur: string): boolean {
   return formatEmailRegex.test(valeur) || (!valeur.includes("@") && !/\s/.test(valeur));
 }
 
+// Matricule/email/contact (09/09/2026, formulaire de pré-enregistrement) —
+// tous les trois optionnels et nullables (mêmes colonnes Utilisateur, jamais
+// une contrainte métier connue au-delà de la forme d'un e-mail réel) :
+// `""` est normalisé en `null` (jamais une chaîne vide stockée), même
+// convention que les champs optionnels de `champsCircuit` ailleurs dans ce
+// dépôt.
+const champTexteOptionnel = z
+  .string()
+  .trim()
+  .transform((v) => (v.length === 0 ? null : v))
+  .nullable()
+  .optional();
+const emailOptionnel = z
+  .string()
+  .trim()
+  .transform((v) => (v.length === 0 ? null : v))
+  .refine((v) => v === null || formatEmailRegex.test(v), "Adresse e-mail invalide.")
+  .nullable()
+  .optional();
+
 export const preEnregistrerUtilisateurRequeteSchema = z.object({
   identifiantAd: z
     .string()
@@ -72,6 +94,9 @@ export const preEnregistrerUtilisateurRequeteSchema = z.object({
       "Forme attendue : identifiant@domaine (ex. jean.kouassi@orange.com), ou un identifiant AD brut sans espace (ex. c_afofana6)."
     ),
   nom: z.string().min(1),
+  matricule: champTexteOptionnel,
+  email: emailOptionnel,
+  contact: champTexteOptionnel,
   roles: z.array(z.string().min(1)).min(1, "Au moins un rôle est requis."),
   directionId: z.string().uuid().optional(),
   serviceId: z.string().uuid().optional(),

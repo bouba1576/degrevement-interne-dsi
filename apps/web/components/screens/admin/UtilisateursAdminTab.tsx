@@ -88,6 +88,9 @@ export function UtilisateursAdminTab() {
     try {
       const payload = {
         nom: valeur.nom,
+        matricule: valeur.matricule.trim() || null,
+        email: valeur.email.trim() || null,
+        contact: valeur.contact.trim() || null,
         roles: valeur.roles,
         directionId: valeur.directionId || undefined,
         serviceId: valeur.serviceId || undefined,

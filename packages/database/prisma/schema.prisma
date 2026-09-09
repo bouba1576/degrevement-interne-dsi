@@ -236,6 +236,13 @@ model Utilisateur {
   // admin, claim Keycloak, ou autre) non tranchée à ce stade — colonne
   // ajoutée seule, sur demande explicite, rien de plus construit dessus.
   email         String?
+  // Contact téléphonique (09/09/2026, formulaire de pré-enregistrement) —
+  // même nullabilité/absence de contrainte que matricule/email : source de
+  // peuplement non tranchée (saisie admin manuelle pour l'instant), jamais
+  // dérivée du champ `mobile` de l'API AD réelle (celle-ci n'est de toute
+  // façon consultée par aucun code applicatif à ce jour, cf. CLAUDE.md
+  // « API AD réelle »).
+  contact       String?
   actif         Boolean   @default(true)
   // Pré-enregistrement (analyse du 12/08/2026, CLAUDE.md « Pré-enregistrement
   // des utilisateurs AD ») — même référentiel que Demande.directionRespId/
