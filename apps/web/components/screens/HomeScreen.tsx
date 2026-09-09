@@ -5,6 +5,7 @@ import { Badge, Icon, type NomIcone } from "@pgd/ui";
 import type { SessionUtilisateur } from "@pgd/contracts";
 import { ApiError, fetchTachesTotal, listerDemandes, listerTachesControle } from "@/lib/api";
 import { SectionPilotage } from "@/components/screens/pilotage/SectionPilotage";
+import { SectionAttentionInitiateur } from "@/components/screens/pilotage/SectionAttentionInitiateur";
 import { SectionSynthese } from "@/components/screens/pilotage/SectionSynthese";
 import { SectionStatistiquesMotif } from "@/components/screens/pilotage/SectionStatistiquesMotif";
 import { GRANULARITES, calculerPeriode, type Granularite } from "@/lib/periode";
@@ -224,6 +225,7 @@ export function HomeScreen({ utilisateur, onNaviguer, compteMesDemandes, compteC
       {onglet === "initiateur" && (estInitiateur || estAdmin) && (
         <>
           <SectionSynthese profil="initiateur" circuit={null} periode={periode} />
+          <SectionAttentionInitiateur />
           <SectionStatistiquesMotif profil="initiateur" circuit={null} periode={periode} />
         </>
       )}

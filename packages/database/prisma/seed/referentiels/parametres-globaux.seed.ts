@@ -64,6 +64,16 @@ export async function seedParametresGlobaux(prisma: PrismaClient): Promise<void>
       cle: "retention_journal_activite_jours",
       valeur: { jours: 180 },
       libelle: "Durée de rétention du journal d'activité avant agrégation et purge, en jours"
+    },
+    // 09/09/2026, « Mes dossiers nécessitant attention » (tableau de bord
+    // Initiateur, demande explicite) — seuil d'ancienneté en circuit,
+    // jamais codé en dur (R11). Cinq jours calendaires proposé comme défaut
+    // raisonnable, ajustable sans redéploiement (même mécanisme que
+    // tache_verrou_ttl_secondes ci-dessus).
+    {
+      cle: "seuil_alerte_dossier_ancien_jours",
+      valeur: { jours: 5 },
+      libelle: "Ancienneté en circuit (jours, sans décision) à partir de laquelle un dossier initiateur apparaît « nécessitant attention »"
     }
   ];
 

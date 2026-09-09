@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { Button, Icon, Modal, SlaTimer, TypeActeurBadge, useToast } from "@pgd/ui";
-import type { ChampAnomalie, Demande, EtapeDossier, MembreRoleVue, RevueChamp, SessionUtilisateur, TacheVue } from "@pgd/contracts";
+import type { ChampAnomalie, Demande, EtapeDossier, JournalAuditVue, MembreRoleVue, RevueChamp, SessionUtilisateur, TacheVue } from "@pgd/contracts";
 import {
   ApiError,
   approuverTache,
   claimTache,
   deleguerTache,
+  journalAuditDemande,
   listerMembresRole,
   prolongerVerrouTache,
   rejeterTache,
@@ -57,6 +58,37 @@ export function TacheActionBanner({
   // pour le second besoin.
   const [membres, setMembres] = useState<MembreRoleVue[] | null>(null);
   const [motifRejet, setMotifRejet] = useState("");
+  // Ancienne valeur des champs signalés au dernier rejet (09/09/2026,
+  // demande explicite) — best-effort, jamais bloquant : un échec de ce
+  // fetch laisse simplement ExaminerModal sans « avant correction » à
+  // afficher, ne bloque jamais l'examen lui-même. Recalculé à chaque
+  // ouverture du bandeau sur un dossier donné (demande.id), pas seulement
+  // au montage — un rejet peut survenir entre deux ouvertures.
+  const [anciennesAnomalies, setAnciennesAnomalies] = useState<ChampAnomalie[] | null>(null);
+
+  useEffect(() => {
+    let annule = false;
+    journalAuditDemande(demande.id)
+      .then((entrees: JournalAuditVue[]) => {
+        if (annule) return;
+        const rejets = entrees
+          .filter((e) => e.action === "rejet")
+          .sort((a, b) => new Date(b.horodatage).getTime() - new Date(a.horodatage).getTime());
+        const detail = rejets[0]?.detail as { champsAnomalies?: unknown } | null | undefined;
+        const brut = Array.isArray(detail?.champsAnomalies) ? detail.champsAnomalies : [];
+        const valides = brut.filter(
+          (c): c is ChampAnomalie =>
+            typeof c === "object" && c !== null && typeof (c as ChampAnomalie).champ === "string" && typeof (c as ChampAnomalie).motif === "string"
+        );
+        setAnciennesAnomalies(valides);
+      })
+      .catch(() => {
+        if (!annule) setAnciennesAnomalies(null);
+      });
+    return () => {
+      annule = true;
+    };
+  }, [demande.id]);
   // Décision métier du 12/08/2026 (docs/12, CLAUDE.md « PRIORITÉ ») : par
   // défaut un rejet renvoie le dossier à l'initiateur pour correction ;
   // « clore » bascule vers l'ancien comportement terminal, choisi
@@ -377,6 +409,7 @@ export function TacheActionBanner({
           motifLibelle={motifLibelle}
           circuitLibelle={circuitLibelle}
           isFinal={isFinal}
+          anciennesAnomalies={anciennesAnomalies}
           onFermer={() => setModalExamen(false)}
           onApprouver={handleApprouver}
           onRejeter={handleRejeterDepuisExamen}

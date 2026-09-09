@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   HttpCode,
+  InternalServerErrorException,
   NotFoundException,
   Param,
   Patch,
@@ -23,6 +24,7 @@ import {
   creerDemandeRequeteSchema,
   definirLignesRequeteSchema,
   demandeDetailSchema,
+  dossiersAttentionReponseSchema,
   echeanceCorrectionReponseSchema,
   listerDemandesQuerySchema,
   modifierDemandeRequeteSchema,
@@ -33,6 +35,7 @@ import {
   type ApercuRoutageReponse,
   type Demande,
   type DemandeDetail,
+  type DossierAttentionVue,
   type EcheanceCorrectionReponse,
   type EtapeDossier,
   type PieceJointeVue,
@@ -128,6 +131,118 @@ export class DemandesController {
     const dto = listerDemandesQuerySchema.parse(query);
     const { demandes, total } = await this.demandeService.lister(dto, utilisateur.id);
     return { data: demandes, meta: { total } };
+  }
+
+  // GET /api/demandes/attention (09/09/2026, tableau de bord Initiateur —
+  // demande explicite) — route LITTÉRALE déclarée AVANT `:id` ci-dessous,
+  // même discipline que le bug d'ordre de routes déjà trouvé sur
+  // AuditController (Phase 8, cf. CLAUDE.md) : sans ça, `GET
+  // /api/demandes/attention` serait intercepté par `obtenirDetail("attention")`
+  // et planterait en tentant de parser "attention" comme un UUID.
+  // `initiateurId` JAMAIS un paramètre client — forcé à l'appelant, même
+  // discipline que `profil=initiateur` sur `lister()` ci-dessus.
+  @Authenticated()
+  @Get("attention")
+  @ApiZodResponse(200, dossiersAttentionReponseSchema)
+  async attention(@CurrentUser() utilisateur: UtilisateurRequete): Promise<DossierAttentionVue[]> {
+    const rejetes = await this.dossiersRejetesEnAttente(utilisateur.id);
+    const anciens = await this.dossiersAnciensSansDecision(utilisateur.id);
+    return [...rejetes, ...anciens];
+  }
+
+  // Critère 1 — dossiers renvoyés pour correction (même détection que
+  // l'onglet Rejetées, MesDemandesScreen : action JournalAudit
+  // "renvoi-correction"), triés par échéance croissante (le plus urgent en
+  // premier). Réutilise exactement le calcul d'echeanceCorrection ci-dessous
+  // — jamais un second calcul divergent.
+  private async dossiersRejetesEnAttente(initiateurId: string): Promise<DossierAttentionVue[]> {
+    const dossiers = await this.prisma.demande.findMany({
+      where: {
+        initiateurId,
+        statut: "BROUILLON",
+        dateSoumission: { not: null },
+        journalAudit: { some: { action: "renvoi-correction" } }
+      }
+    });
+
+    const avecEcheance = await Promise.all(
+      dossiers.map(async (d) => {
+        const echeance = await this.calculerEcheanceCorrection(d);
+        return {
+          id: d.id,
+          reference: d.reference,
+          nomClient: d.nomClient,
+          circuit: d.circuit,
+          montantTtc: Number(d.montantTtc),
+          type: "rejete" as const,
+          echeance,
+          depuis: (d.dateSoumission as Date).toISOString()
+        };
+      })
+    );
+    return avecEcheance.sort((a, b) => (a.echeance ?? "").localeCompare(b.echeance ?? ""));
+  }
+
+  // Critère 2 — dossiers soumis depuis plus que le seuil configuré, sans
+  // aucune décision (statut toujours SOUMIS) — jamais un seuil codé en dur
+  // (R11), lu depuis ParametreGlobal comme ttlVerrouSecondes (TacheService).
+  private async dossiersAnciensSansDecision(initiateurId: string): Promise<DossierAttentionVue[]> {
+    const parametre = await this.prisma.parametreGlobal.findUnique({
+      where: { cle: "seuil_alerte_dossier_ancien_jours" }
+    });
+    const jours = (parametre?.valeur as { jours?: unknown } | null)?.jours;
+    if (typeof jours !== "number" || !Number.isInteger(jours) || jours <= 0) {
+      throw new InternalServerErrorException({
+        code: "PARAMETRE_GLOBAL_INVALIDE",
+        message: "seuil_alerte_dossier_ancien_jours est absent ou invalide en base."
+      });
+    }
+    const seuil = new Date(Date.now() - jours * 24 * 60 * 60 * 1000);
+
+    const dossiers = await this.prisma.demande.findMany({
+      where: { initiateurId, statut: "SOUMIS", dateSoumission: { lt: seuil } }
+    });
+    return dossiers
+      .map((d) => ({
+        id: d.id,
+        reference: d.reference,
+        nomClient: d.nomClient,
+        circuit: d.circuit,
+        montantTtc: Number(d.montantTtc),
+        type: "ancien" as const,
+        echeance: null,
+        depuis: (d.dateSoumission as Date).toISOString()
+      }))
+      .sort((a, b) => a.depuis.localeCompare(b.depuis));
+  }
+
+  // Factorisation du calcul déjà écrit dans echeanceCorrection ci-dessous —
+  // extrait ici pour être réutilisable par dossiersRejetesEnAttente
+  // ci-dessus, comportement strictement identique, jamais dupliqué.
+  private async calculerEcheanceCorrection(demande: { id: string; circuit: string; segment: string; sousFlux: string | null; montantTtc: unknown }): Promise<string | null> {
+    const dernierRejet = await this.prisma.journalAudit.findFirst({
+      where: { demandeId: demande.id, action: "rejet" },
+      orderBy: { horodatage: "desc" }
+    });
+    if (!dernierRejet) return null;
+
+    let configuration;
+    try {
+      configuration = await this.ruleEngine.selectionnerConfiguration({
+        circuit: demande.circuit as never,
+        segment: demande.segment,
+        sousFlux: demande.sousFlux,
+        montantTtc: Number(demande.montantTtc)
+      });
+    } catch {
+      return null;
+    }
+
+    const sommeSlaHeures = configuration.etapesRegle.filter((e) => e.bloquant).reduce((total, e) => total + e.slaHeures, 0);
+    if (sommeSlaHeures === 0) return null;
+
+    const echeance = await this.calendrierSla.calculerEcheance(dernierRejet.horodatage, sommeSlaHeures);
+    return echeance.toISOString();
   }
 
   @Authenticated()
@@ -292,33 +407,7 @@ export class DemandesController {
     if (demande.statut !== "BROUILLON" || demande.dateSoumission === null) {
       return { echeance: null };
     }
-
-    const dernierRejet = await this.prisma.journalAudit.findFirst({
-      where: { demandeId: id, action: "rejet" },
-      orderBy: { horodatage: "desc" }
-    });
-    if (!dernierRejet) return { echeance: null };
-
-    let configuration;
-    try {
-      configuration = await this.ruleEngine.selectionnerConfiguration({
-        circuit: demande.circuit,
-        segment: demande.segment,
-        sousFlux: demande.sousFlux,
-        montantTtc: Number(demande.montantTtc)
-      });
-    } catch {
-      // AUCUN_PALIER_CORRESPONDANT (montant hors palier depuis le rejet,
-      // configuration retirée entre-temps, etc.) — un badge d'échéance
-      // absent, jamais une erreur qui casserait l'affichage de la liste.
-      return { echeance: null };
-    }
-
-    const sommeSlaHeures = configuration.etapesRegle.filter((e) => e.bloquant).reduce((total, e) => total + e.slaHeures, 0);
-    if (sommeSlaHeures === 0) return { echeance: null };
-
-    const echeance = await this.calendrierSla.calculerEcheance(dernierRejet.horodatage, sommeSlaHeures);
-    return { echeance: echeance.toISOString() };
+    return { echeance: await this.calculerEcheanceCorrection(demande) };
   }
 
   // @SansJournalActivite() — écrit déjà JournalAudit (action "soumission",

@@ -16,6 +16,12 @@ export interface ExaminerModalProps {
   // le mécanisme lui-même. Calculé par l'appelant (TacheActionBanner, qui a
   // déjà `etapes`), pas recalculé ici.
   isFinal: boolean;
+  // Anomalies du DERNIER rejet de ce dossier (09/09/2026, demande explicite)
+  // — jamais recalculé ici, fourni par l'appelant (TacheActionBanner, qui
+  // lit déjà le journal d'audit pour d'autres besoins). `null` tant que le
+  // chargement n'a pas abouti ou qu'aucun rejet n'existe — dans les deux
+  // cas, aucune ancienne valeur à afficher, jamais une erreur bloquante.
+  anciennesAnomalies?: ChampAnomalie[] | null;
   onFermer: () => void;
   onApprouver: (revue: RevueChamp[]) => void | Promise<void>;
   onRejeter: (motifCompile: string, champsAnomalies: ChampAnomalie[]) => void | Promise<void>;
@@ -52,6 +58,7 @@ export function ExaminerModal({
   motifLibelle,
   circuitLibelle,
   isFinal,
+  anciennesAnomalies,
   onFermer,
   onApprouver,
   onRejeter,
@@ -96,7 +103,20 @@ export function ExaminerModal({
   // que `lignes[i][0]` (construireLignesCommunes/construireChampsCircuit,
   // ApercuTab.tsx) — c'est ce même libellé que la fiche de correction
   // (NouvelleDemandeScreen, mode reprise) comparera pour la surbrillance.
-  const champsAnomalies = indicesSignales.map((i) => ({ champ: lignes[i]![0], motif: (commentaires[i] ?? "").trim() }));
+  const champsAnomalies = indicesSignales.map((i) => ({
+    champ: lignes[i]![0],
+    motif: (commentaires[i] ?? "").trim(),
+    valeur: String(lignes[i]![1])
+  }));
+
+  // Ancienne valeur (09/09/2026, demande explicite) — même fragilité assumée
+  // que ChampCorrige (NouvelleDemandeScreen) : couplage par égalité de
+  // chaîne exacte sur le libellé, jamais un id de champ stable. `undefined`
+  // (jamais affiché) si aucune anomalie précédente ne porte ce libellé, ou
+  // si `anciennesAnomalies` est absent/vide.
+  function ancienneValeur(libelle: string): string | undefined {
+    return anciennesAnomalies?.find((a) => a.champ === libelle)?.valeur;
+  }
 
   function confirmer() {
     if (hasAnomalie && anomalieSansMotif) {
@@ -165,12 +185,22 @@ export function ExaminerModal({
 
       {!detail ? (
         <div className="overflow-hidden rounded-6 border border-gris200">
-          {lignes.slice(0, 8).map(([libelle, valeur], i) => (
-            <div key={i} className="flex items-start gap-4 border-b border-gris100 px-3 py-2 text-13 last:border-none">
-              <div className="w-44 shrink-0 text-gris600">{libelle}</div>
-              <div className="flex-1 font-semibold">{valeur}</div>
-            </div>
-          ))}
+          {lignes.slice(0, 8).map(([libelle, valeur], i) => {
+            const ancienne = ancienneValeur(libelle);
+            return (
+              <div key={i} className="flex items-start gap-4 border-b border-gris100 px-3 py-2 text-13 last:border-none">
+                <div className="w-44 shrink-0 text-gris600">{libelle}</div>
+                <div className="flex-1">
+                  <span className="font-semibold">{valeur}</span>
+                  {ancienne !== undefined && (
+                    <span className="ml-2 text-12 text-gris500">
+                      (avant correction : <span className="line-through">{ancienne}</span>)
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
           {lignes.length > 8 && (
             <div className="p-2 text-center text-12 text-gris600">
               + {lignes.length - 8} autres champs — « Examiner champ par champ » pour tout voir
@@ -182,6 +212,7 @@ export function ExaminerModal({
           {lignes.map(([libelle, valeur], i) => {
             const ko = !!flags[i];
             const manquant = showErr && ko && !(commentaires[i] && commentaires[i]!.trim());
+            const ancienne = ancienneValeur(libelle);
             return (
               <div
                 key={i}
@@ -191,6 +222,11 @@ export function ExaminerModal({
                   <div className="flex-1">
                     <div className="text-12 text-gris600">{libelle}</div>
                     <div className="text-13 font-semibold">{valeur}</div>
+                    {ancienne !== undefined && (
+                      <div className="mt-0.5 text-12 text-gris500">
+                        Avant correction : <span className="line-through">{ancienne}</span>
+                      </div>
+                    )}
                   </div>
                   <button
                     type="button"

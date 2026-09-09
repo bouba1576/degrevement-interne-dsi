@@ -12,6 +12,7 @@ export * from "./CircuitPill";
 export * from "./TypeActeurBadge";
 export * from "./Avatar";
 export * from "./Money";
+export * from "./MontantInput";
 export * from "./Field";
 export * from "./Empty";
 export * from "./BarChart";

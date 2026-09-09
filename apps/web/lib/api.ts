@@ -11,6 +11,7 @@ import {
   demandeDetailSchema,
   demandesListeReponseSchema,
   directionResponsabiliteVueSchema,
+  dossiersAttentionReponseSchema,
   echeanceCorrectionReponseSchema,
   facteurDegrevementVueSchema,
   journalActiviteVueSchema,
@@ -70,6 +71,7 @@ import {
   type Demande,
   type DemandeDetail,
   type DirectionResponsabiliteVue,
+  type DossierAttentionVue,
   type EcheanceCorrectionReponse,
   type EnumCircuit,
   type EtapeDossier,
@@ -394,6 +396,14 @@ export function apercuRoutage(demandeId: string): Promise<ApercuRoutageReponse> 
 // si le dossier n'est pas dans l'état « renvoyé, correction possible ».
 export function obtenirEcheanceCorrection(demandeId: string): Promise<EcheanceCorrectionReponse> {
   return requete(`/api/demandes/${demandeId}/echeance-correction`, echeanceCorrectionReponseSchema);
+}
+
+// « Mes dossiers nécessitant attention » (tableau de bord Initiateur,
+// 09/09/2026, demande explicite) — jamais de paramètre initiateurId côté
+// client, la portée est forcée serveur (session réelle), même discipline
+// que profil=initiateur ailleurs.
+export function listerDossiersAttention(): Promise<DossierAttentionVue[]> {
+  return requete(`/api/demandes/attention`, dossiersAttentionReponseSchema);
 }
 
 export function soumettreDemande(demandeId: string): Promise<SoumissionReponse> {

@@ -72,7 +72,15 @@ export type ApprouverRequete = z.infer<typeof approuverRequeteSchema>;
 // d'atteindre le serveur). Optionnel : le bouton « Rejeter » dédié
 // (TacheActionBanner, sans revue champ par champ) continue d'envoyer un
 // rejet sans cette liste, `motif` seul reste le contrat minimal.
-export const champAnomalieSchema = z.object({ champ: z.string(), motif: z.string() });
+// `valeur` (09/09/2026, demande explicite) — la valeur du champ AU MOMENT du
+// rejet, capturée depuis la même revue champ par champ (ExaminerModal a déjà
+// cette valeur affichée quand l'anomalie est signalée, jamais recalculée).
+// Optionnelle : un champ vide au moment du rejet reste un rejet valide, pas
+// une raison de bloquer la saisie. But : au prochain examen du dossier
+// corrigé, le validateur voit l'ancienne valeur à côté de la nouvelle pour
+// juger si la correction est réellement pertinente — sans ça, il ne peut
+// que faire confiance à la correction sans pouvoir la comparer.
+export const champAnomalieSchema = z.object({ champ: z.string(), motif: z.string(), valeur: z.string().optional() });
 export type ChampAnomalie = z.infer<typeof champAnomalieSchema>;
 
 export const rejeterRequeteSchema = z

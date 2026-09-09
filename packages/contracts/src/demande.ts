@@ -253,6 +253,35 @@ export type EcheanceCorrectionReponse = z.infer<typeof echeanceCorrectionReponse
 export const demandesListeReponseSchema = z.array(demandeSchema);
 export type DemandesListeReponse = z.infer<typeof demandesListeReponseSchema>;
 
+// GET /api/demandes/attention (09/09/2026, tableau de bord Initiateur —
+// demande explicite, deux critères combinés) — jamais un paramètre
+// `initiateurId` côté client, forcé à l'appelant côté service (même
+// discipline que profil=initiateur ailleurs). Deux familles, jamais
+// fusionnées en un seul type flou :
+// - "rejete" : BROUILLON renvoyé pour correction (même détection que
+//   l'onglet Rejetées, action journalAudit "renvoi-correction") — `echeance`
+//   réutilise exactement echeance-correction ci-dessus (SLA du processus,
+//   heures ouvrées, jamais un délai inventé).
+// - "ancien" : SOUMIS depuis plus que ParametreGlobal
+//   seuil_alerte_dossier_ancien_jours (jamais un seuil codé en dur, R11) —
+//   `echeance` toujours `null` ici, il n'y a pas d'échéance contractuelle
+//   pour une simple alerte d'ancienneté, seulement `depuis` (dateSoumission)
+//   pour que l'écran calcule l'ancienneté affichée.
+export const dossierAttentionVueSchema = z.object({
+  id: z.string().uuid(),
+  reference: z.string(),
+  nomClient: z.string(),
+  circuit: enumCircuit,
+  montantTtc: z.number(),
+  type: z.enum(["rejete", "ancien"]),
+  echeance: z.string().nullable(),
+  depuis: z.string()
+});
+export type DossierAttentionVue = z.infer<typeof dossierAttentionVueSchema>;
+
+export const dossiersAttentionReponseSchema = z.array(dossierAttentionVueSchema);
+export type DossiersAttentionReponse = z.infer<typeof dossiersAttentionReponseSchema>;
+
 // PUT /api/demandes/{id}/lignes (SF-PGD-311) — définit les lignes retenues.
 // montantHtLigne est optionnel : fourni, il fait foi (l'utilisateur l'a
 // ajusté) ; omis, le serveur l'établit par prorata (SF-PGD-062, requiert alors

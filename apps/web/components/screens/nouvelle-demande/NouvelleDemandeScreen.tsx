@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
-import { Badge, Button, Card, Icon, Modal, Money, useToast } from "@pgd/ui";
+import { Badge, Button, Card, Icon, Modal, Money, MontantInput, useToast } from "@pgd/ui";
 import type {
   CircuitVue,
   CompteClient,
@@ -1529,15 +1529,7 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
               <div>
                 <label className="mb-1 block text-13 font-bold text-gris800">Montant récurrent mensuel (HT)</label>
                 <div className="flex items-center gap-2">
-                  <input
-                    className="w-full rounded border border-gris300 px-3 py-2 text-13 font-mono"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={recurrentMensuel}
-                    onChange={(e) => setRecurrentMensuel(e.target.value)}
-                    placeholder="0"
-                  />
+                  <MontantInput value={recurrentMensuel} onChange={setRecurrentMensuel} />
                   <span className="text-12 text-gris600">FCFA</span>
                 </div>
                 <p className="mt-1 text-12 text-gris600">Laisser à 0 si non récurrent.</p>
@@ -1774,15 +1766,7 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
                 Montant à ajuster HT (FCFA) <span className="text-rouge">*</span>
               </label>
               <div className="flex items-center gap-2">
-                <input
-                  className="w-full rounded border border-gris300 px-3 py-2 text-13 font-mono"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={montantHt}
-                  onChange={(e) => setMontantHt(e.target.value)}
-                  placeholder="0"
-                />
+                <MontantInput value={montantHt} onChange={setMontantHt} />
                 <span className="text-12 text-gris600">FCFA</span>
               </div>
             </div>
@@ -1943,13 +1927,10 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
               </label>
               {taxesEdition.tscManuelle && (
                 <>
-                  <input
+                  <MontantInput
                     className="mt-1 w-full rounded border border-gris300 px-3 py-2 text-13"
-                    type="number"
-                    min="0"
-                    step="0.01"
                     value={taxesEdition.montantTscManuel}
-                    onChange={(e) => mettreAJourTaxes((s) => ({ ...s, montantTscManuel: e.target.value }))}
+                    onChange={(v) => mettreAJourTaxes((s) => ({ ...s, montantTscManuel: v }))}
                   />
                   <p className="mt-1 text-12 text-gris600">Remplace le calcul automatique pour ce dossier.</p>
                 </>
@@ -1970,13 +1951,10 @@ export function NouvelleDemandeScreen({ utilisateur, demandeId }: NouvelleDemand
               </label>
               {taxesEdition.tvaManuelle && (
                 <>
-                  <input
+                  <MontantInput
                     className="mt-1 w-full rounded border border-gris300 px-3 py-2 text-13"
-                    type="number"
-                    min="0"
-                    step="0.01"
                     value={taxesEdition.montantTvaManuel}
-                    onChange={(e) => mettreAJourTaxes((s) => ({ ...s, montantTvaManuel: e.target.value }))}
+                    onChange={(v) => mettreAJourTaxes((s) => ({ ...s, montantTvaManuel: v }))}
                   />
                   <p className="mt-1 text-12 text-gris600">Remplace le calcul automatique pour ce dossier.</p>
                 </>
