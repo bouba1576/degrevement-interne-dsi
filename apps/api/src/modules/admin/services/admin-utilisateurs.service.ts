@@ -85,6 +85,7 @@ export class AdminUtilisateursService {
         message: "Un compte existe déjà pour cet identifiant — utilisez la modification."
       });
     }
+    await this.verifierEmailDisponible(dto.email);
 
     const cree = await this.prisma.$transaction(async (tx) => {
       const utilisateur = await tx.utilisateur.create({
@@ -116,6 +117,7 @@ export class AdminUtilisateursService {
   async modifier(id: string, dto: ModifierUtilisateurAdminRequete): Promise<UtilisateurAdminVue> {
     await this.trouver(id);
     if (dto.roles) await this.validerRoles(dto.roles);
+    if (dto.email !== undefined) await this.verifierEmailDisponible(dto.email, id);
 
     const modifie = await this.prisma.$transaction(async (tx) => {
       await tx.utilisateur.update({
@@ -141,6 +143,26 @@ export class AdminUtilisateursService {
       });
     });
     return this.versVue(modifie);
+  }
+
+  // E2.5 (docs/15_Conformite_Exigences_Securite_OCIT.md) — pas de compte
+  // multiple sur la même adresse e-mail. Utilisateur.email porte désormais
+  // @unique (migration 20260910150000) : ce pré-contrôle évite qu'un P2002
+  // brut ne remonte tel quel au client (500 ERREUR_INTERNE, HttpExceptionFilter
+  // ne sait normaliser que ZodError/HttpException) — 422 explicite à la
+  // place. `email` null/undefined n'a jamais de conflit possible (NULL est
+  // distinct de tout autre NULL pour un index unique Postgres).
+  private async verifierEmailDisponible(email: string | null | undefined, excluireId?: string): Promise<void> {
+    if (!email) return;
+    const existant = await this.prisma.utilisateur.findFirst({
+      where: { email, ...(excluireId ? { id: { not: excluireId } } : {}) }
+    });
+    if (existant) {
+      throw new UnprocessableEntityException({
+        code: "EMAIL_DEJA_UTILISE",
+        message: "Cette adresse e-mail est déjà associée à un autre compte."
+      });
+    }
   }
 
   private async validerRoles(codes: string[]): Promise<void> {

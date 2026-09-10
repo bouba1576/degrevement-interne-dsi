@@ -231,11 +231,15 @@ model Utilisateur {
   // « Envoi d'e-mail réel ») — identifiantAd n'est pas garanti être une
   // adresse e-mail (comptes réels bruts type c_afofana6/wrtm9736, confirmé
   // 19/08/2026 « identifiantAd = username brut »), donc pas fiable comme
-  // destinataire d'envoi réel. Nullable, jamais unique imposé (pas de
-  // contrainte métier connue là-dessus) : source de peuplement (saisie
-  // admin, claim Keycloak, ou autre) non tranchée à ce stade — colonne
-  // ajoutée seule, sur demande explicite, rien de plus construit dessus.
-  email         String?
+  // destinataire d'envoi réel. Nullable, source de peuplement (saisie admin,
+  // claim Keycloak, ou autre) non tranchée à ce stade.
+  // @unique ajouté le 10/09/2026 — E2.5, docs/15_Conformite_Exigences_Securite_OCIT.md
+  // (« pas de compte multiple sur la même adresse e-mail »). Vérifié en base
+  // avant migration : 32 lignes Utilisateur, 1 seule porte un email non nul,
+  // zéro doublon — aucune donnée en conflit à résoudre. NULL reste autorisé
+  // sans limite (Postgres traite chaque NULL comme distinct dans un index
+  // unique) : seule une VALEUR renseignée doit être unique.
+  email         String?   @unique
   // Contact téléphonique (09/09/2026, formulaire de pré-enregistrement) —
   // même nullabilité/absence de contrainte que matricule/email : source de
   // peuplement non tranchée (saisie admin manuelle pour l'instant), jamais

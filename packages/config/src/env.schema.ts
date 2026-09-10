@@ -88,7 +88,10 @@ export const envSchema = z.object({
   KEYCLOAK_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
 
   // --- Phase 2 : rate limiting anti-bruteforce (SF-PGD-005) --------------
-  RATE_LIMIT_LOGIN_MAX_TENTATIVES: z.coerce.number().int().positive().default(5),
+  // Défaut 3 (pas 5) — E2.1, docs/15_Conformite_Exigences_Securite_OCIT.md,
+  // audit du 10/09/2026 (docs/Audit_Conformite_Securite_OCIT_2026-09-10.md) :
+  // "3 tentatives infructueuses max".
+  RATE_LIMIT_LOGIN_MAX_TENTATIVES: z.coerce.number().int().positive().default(3),
   RATE_LIMIT_LOGIN_FENETRE_SECONDES: z.coerce.number().int().positive().default(300),
   RATE_LIMIT_LOGIN_VERROUILLAGE_SECONDES: z.coerce.number().int().positive().default(900),
 
