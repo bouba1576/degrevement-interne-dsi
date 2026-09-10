@@ -43,7 +43,8 @@ export class InitiateurDemandeGuard implements CanActivate {
       utilisateurId: utilisateur.id,
       evenement: "RBAC_REFUS",
       facteur: "SESSION",
-      succes: false
+      succes: false,
+      ip: request.ip
     });
 
     throw new ForbiddenException({

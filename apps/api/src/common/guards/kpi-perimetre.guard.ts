@@ -38,7 +38,13 @@ export class KpiPerimetreGuard implements CanActivate {
     const autorisePilotage = utilisateur.roles.includes(ROLE_ADMIN_KPI) || utilisateur.profils.includes("VALIDATEUR");
 
     if (profil === "pilotage" && !autorisePilotage) {
-      await this.journal.consigner({ utilisateurId: utilisateur.id, evenement: "RBAC_REFUS", facteur: "SESSION", succes: false });
+      await this.journal.consigner({
+        utilisateurId: utilisateur.id,
+        evenement: "RBAC_REFUS",
+        facteur: "SESSION",
+        succes: false,
+        ip: request.ip
+      });
       throw new ForbiddenException({
         code: "PERIMETRE_KPI_REFUSE",
         message: "Le profil « pilotage » (agrégats inter-circuits) est réservé aux validateurs et à l'administration.",

@@ -53,6 +53,14 @@ export const journalSecuriteVueSchema = z.object({
   // ne les peuple jamais non plus, cf. commentaire du modèle Prisma.
   codeEchec: z.string().nullable(),
   messageEchec: z.string().nullable(),
+  // E7.2 (10/09/2026) — distinct d'`identifiantAd` ci-dessus : celui-là
+  // n'est jamais renseigné quand `utilisateurId` est NULL (rien à
+  // résoudre par jointure). `identifiantTente` porte la chaîne brute
+  // saisie par le client, capturée précisément sur les échecs où
+  // l'identité n'a jamais pu être résolue — jamais peuplé sur
+  // succes=true, jamais peuplé non plus quand `identifiantAd` l'est déjà
+  // (redondant).
+  identifiantTente: z.string().nullable(),
   horodatage: z.string()
 });
 export type JournalSecuriteVue = z.infer<typeof journalSecuriteVueSchema>;

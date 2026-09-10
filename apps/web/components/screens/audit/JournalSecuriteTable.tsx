@@ -81,11 +81,22 @@ export function JournalSecuriteTable({ entrees }: JournalSecuriteTableProps) {
                 {new Date(e.horodatage).toLocaleString("fr-FR")}
               </td>
               <td className="px-3 py-2">
-                {/* Fallback rendu ici, pas seulement prévu côté requête —
-                    identifiantAd est nullable pour deux cas indistinguables
-                    en base (jamais résolu / compte depuis supprimé), cf.
-                    packages/contracts/src/audit.ts. */}
-                {e.identifiantAd ?? <span className="italic text-gris500">Compte inconnu ou supprimé</span>}
+                {/* E7.2 (10/09/2026) — l'ambiguïté « jamais résolu / compte
+                    supprimé » (packages/contracts/src/audit.ts) se résout
+                    désormais dans le cas le plus fréquent : un identifiant
+                    jamais résolu porte identifiantTente (chaîne brute
+                    saisie, jamais un compte réel — distingué visuellement,
+                    jamais confondu avec identifiantAd). Le fallback
+                    générique ne reste la norme que pour un compte
+                    effectivement supprimé après coup (identifiantAd et
+                    identifiantTente tous deux absents). */}
+                {e.identifiantAd ?? (e.identifiantTente ? (
+                  <span className="italic text-gris500" title="Identifiant saisi, jamais résolu en compte réel">
+                    {e.identifiantTente} <span className="text-gris400">(tenté)</span>
+                  </span>
+                ) : (
+                  <span className="italic text-gris500">Compte inconnu ou supprimé</span>
+                ))}
               </td>
               <td className="px-3 py-2">
                 <Badge ton={TON_EVENEMENT[e.evenement]}>{LIBELLE_EVENEMENT[e.evenement]}</Badge>

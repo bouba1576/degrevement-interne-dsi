@@ -45,7 +45,8 @@ export class SodGuard implements CanActivate {
         utilisateurId: utilisateur.id,
         evenement: "SOD_REFUS",
         facteur: "SESSION",
-        succes: false
+        succes: false,
+        ip: request.ip
       });
       throw new ForbiddenException({
         code: "SOD_VIOLATION",

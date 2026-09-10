@@ -387,6 +387,15 @@ model JournalSecurite {
   // structuré comparable à celui de l'API AD réelle.
   codeEchec     String?               @map("code_echec")
   messageEchec  String?               @map("message_echec")
+  // E7.2 (docs/15_Conformite_Exigences_Securite_OCIT.md), ajouté le
+  // 10/09/2026 — comble le trou déjà signalé (audit du même jour) : sur un
+  // échec où l'identité n'a jamais pu être résolue (mauvais mot de passe,
+  // identifiant inconnu), utilisateurId reste NULL et aucun autre champ ne
+  // porte l'identifiant réellement saisi. Chaîne brute, jamais liée par FK
+  // (contrairement à utilisateurId) — un identifiant tenté peut ne
+  // correspondre à aucun compte réel, ce n'est pas une relation. Jamais
+  // peuplé sur succes=true, même discipline que codeEchec/messageEchec.
+  identifiantTente String?            @map("identifiant_tente")
   horodatage    DateTime              @default(now()) @db.Timestamptz
 
   utilisateur Utilisateur? @relation(fields: [utilisateurId], references: [id])

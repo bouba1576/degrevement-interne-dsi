@@ -57,7 +57,11 @@ export class AuthController {
   @HttpCode(200)
   @ApiZodBody(connexionRequeteSchema)
   @ApiZodResponse(200, connexionReponseSchema)
-  async login(@Body() body: unknown, @Res({ passthrough: true }) res: Response): Promise<ConnexionReponse> {
+  async login(
+    @Body() body: unknown,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response
+  ): Promise<ConnexionReponse> {
     const { identifiantAd, motDePasse } = connexionRequeteSchema.parse(body);
 
     if (await this.rateLimit.estVerrouille("login", identifiantAd)) {
@@ -74,8 +78,7 @@ export class AuthController {
     // AdApiProvider ».
     const facteurAuth = loadEnv().AUTH_PROVIDER === "ad-api" ? "AD" : "KEYCLOAK";
     const resultatAuth = await this.keycloak.authentifier(identifiantAd, motDePasse);
-    console.log(`Resultat Auth: ${resultatAuth.statut}`)
-    
+
     if (resultatAuth.statut === "ECHEC") {
       const { verrouille } = await this.rateLimit.enregistrerEchec("login", identifiantAd);
       // codeEchec/messageEchec : détail interne (JOURNAL_SECURITE
@@ -88,7 +91,9 @@ export class AuthController {
         facteur: facteurAuth,
         succes: false,
         codeEchec: resultatAuth.codeEchec,
-        messageEchec: resultatAuth.messageEchec
+        messageEchec: resultatAuth.messageEchec,
+        ip: req.ip,
+        identifiantTente: identifiantAd
       });
       if (verrouille) {
         throw limiteAtteinte("Trop de tentatives. Compte temporairement verrouillé.");
@@ -109,7 +114,12 @@ export class AuthController {
         utilisateurId: resolution.utilisateurId ?? undefined,
         evenement: "ACCES_NON_PROVISIONNE",
         facteur: facteurAuth,
-        succes: false
+        succes: false,
+        ip: req.ip,
+        // Redondant si utilisateurId est déjà résolu (l'identifiant se lit
+        // alors via la relation) — seulement quand l'identité reste
+        // totalement inconnue.
+        identifiantTente: resolution.utilisateurId ? undefined : identifiantAd
       });
       throw new UnauthorizedException({
         code: "COMPTE_NON_PROVISIONNE",
@@ -117,12 +127,12 @@ export class AuthController {
       });
     }
     const { utilisateur, roles, profils } = resolution;
-    console.log(`Données resolues: ${JSON.stringify(resolution)}`)
     await this.journal.consigner({
       utilisateurId: utilisateur.id,
       evenement: "LOGIN",
       facteur: facteurAuth,
-      succes: true
+      succes: true,
+      ip: req.ip
     });
 
     const jetons = await this.sessionService.creerSession({
@@ -132,7 +142,6 @@ export class AuthController {
       sousFluxId: utilisateur.sousFluxId,
       profils
     });
-    console.log(`Jetons: ${JSON.stringify(jetons)}`)
     poserCookiesSession(res, jetons);
     return { connecte: true };
   }
@@ -161,10 +170,17 @@ export class AuthController {
   @HttpCode(200)
   async logout(
     @CurrentUser() utilisateur: UtilisateurRequete,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response
   ): Promise<{ deconnecte: true }> {
     await this.sessionService.revoquer(utilisateur.jti);
-    await this.journal.consigner({ utilisateurId: utilisateur.id, evenement: "LOGOUT", facteur: "SESSION", succes: true });
+    await this.journal.consigner({
+      utilisateurId: utilisateur.id,
+      evenement: "LOGOUT",
+      facteur: "SESSION",
+      succes: true,
+      ip: req.ip
+    });
     effacerCookiesSession(res);
     return { deconnecte: true };
   }

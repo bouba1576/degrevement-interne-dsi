@@ -260,6 +260,7 @@ export class AuditService {
     ip: string | null;
     codeEchec: string | null;
     messageEchec: string | null;
+    identifiantTente: string | null;
     horodatage: Date;
   }): JournalSecuriteVue {
     return {
@@ -272,6 +273,7 @@ export class AuditService {
       ip: e.ip,
       codeEchec: e.codeEchec,
       messageEchec: e.messageEchec,
+      identifiantTente: e.identifiantTente,
       horodatage: e.horodatage.toISOString()
     };
   }

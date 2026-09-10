@@ -69,6 +69,44 @@ describe("JournalSecuriteService — codeEchec/messageEchec (SF-PGD-006, JOURNAL
     await prisma.journalSecurite.deleteMany({ where: { ip: ipMarqueur } });
   });
 
+  // E7.2 (10/09/2026) — même discipline que codeEchec/messageEchec ci-dessus :
+  // preuve que identifiantTente est réellement persisté, réellement NULL
+  // quand omis, jamais écrit sur succes=true.
+  it("persiste identifiantTente quand fourni (échec d'authentification, identité jamais résolue)", async () => {
+    await journal.consigner({
+      evenement: "LOGIN",
+      facteur: "AD",
+      succes: false,
+      codeEchec: `${marqueur}_identifiantTente`,
+      identifiantTente: "e2e.tentative.inconnue@orange.com"
+    });
+
+    const entree = await prisma.journalSecurite.findFirst({
+      where: { codeEchec: `${marqueur}_identifiantTente` },
+      orderBy: { horodatage: "desc" }
+    });
+    expect(entree).not.toBeNull();
+    expect(entree?.identifiantTente).toBe("e2e.tentative.inconnue@orange.com");
+  });
+
+  it("écrit NULL pour identifiantTente quand omis (identité déjà résolue via utilisateurId)", async () => {
+    await journal.consigner({
+      evenement: "LOGIN",
+      facteur: "AD",
+      succes: false,
+      codeEchec: `${marqueur}_sans_identifiantTente`
+      // identifiantTente volontairement omis — cas où utilisateurId est
+      // déjà connu, redondant.
+    });
+
+    const entree = await prisma.journalSecurite.findFirst({
+      where: { codeEchec: `${marqueur}_sans_identifiantTente` },
+      orderBy: { horodatage: "desc" }
+    });
+    expect(entree).not.toBeNull();
+    expect(entree?.identifiantTente).toBeNull();
+  });
+
   it("n'écrit jamais codeEchec/messageEchec sur un événement réussi (succes:true)", async () => {
     await journal.consigner({
       evenement: "LOGIN",

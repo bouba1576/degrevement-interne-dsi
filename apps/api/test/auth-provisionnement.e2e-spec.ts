@@ -80,6 +80,10 @@ describe("E2E — POST /api/auth/login, refus d'un compte non pré-enregistré",
     });
     expect(entreeJournal).not.toBeNull();
     expect(entreeJournal?.succes).toBe(false);
+    // E7.2 (10/09/2026) — identité totalement inconnue (utilisateurId
+    // jamais résolu) : identifiantTente doit porter la chaîne brute tentée.
+    expect(entreeJournal?.utilisateurId).toBeNull();
+    expect(entreeJournal?.identifiantTente).toBe(identifiantInconnu);
   });
 
   it("refuse 401 COMPTE_NON_PROVISIONNE pour un Utilisateur déjà en base mais sans aucun MembreRole", async () => {
@@ -100,6 +104,9 @@ describe("E2E — POST /api/auth/login, refus d'un compte non pré-enregistré",
       where: { utilisateurId: utilisateur.id, evenement: "ACCES_NON_PROVISIONNE" }
     });
     expect(entreeJournal).not.toBeNull();
+    // E7.2 (10/09/2026) — utilisateurId déjà résolu (le compte existe, sans
+    // rôle) : identifiantTente doit rester NULL, redondant avec la relation.
+    expect(entreeJournal?.identifiantTente).toBeNull();
   });
 
   it("accorde une session pour un Utilisateur pré-enregistré avec au moins un MembreRole", async () => {
